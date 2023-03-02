@@ -1,0 +1,10 @@
+FROM openjdk:17-alpine
+
+ARG JAR_FILE
+ARG MAIN_CLASS
+
+ENV MAIN_CLASS_ENV=$MAIN_CLASS
+
+ADD target/$JAR_FILE ./app.jar
+
+ENTRYPOINT java -cp app.jar $MAIN_CLASS_ENV
