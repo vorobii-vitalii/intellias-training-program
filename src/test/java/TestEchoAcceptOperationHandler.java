@@ -13,6 +13,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
 import org.junit.jupiter.api.Test;
+import echo.EchoAcceptOperationHandler;
 
 class TestEchoAcceptOperationHandler {
 

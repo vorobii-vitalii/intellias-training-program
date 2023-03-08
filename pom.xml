@@ -82,7 +82,7 @@
                             <tag>${project.version}</tag>
                             <buildArgs>
                                 <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>
-                                <MAIN_CLASS>EchoClient</MAIN_CLASS>
+                                <MAIN_CLASS>echo.EchoClient</MAIN_CLASS>
                             </buildArgs>
                         </configuration>
                     </execution>
@@ -97,7 +97,7 @@
                             <tag>${project.version}</tag>
                             <buildArgs>
                                 <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>
-                                <MAIN_CLASS>EchoServer</MAIN_CLASS>
+                                <MAIN_CLASS>echo.EchoServer</MAIN_CLASS>
                             </buildArgs>
                         </configuration>
                     </execution>

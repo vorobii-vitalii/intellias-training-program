@@ -1,3 +1,5 @@
+package server;
+
 import java.net.ProtocolFamily;
 
 public final class TCPServerConfig {

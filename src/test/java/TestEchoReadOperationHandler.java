@@ -8,6 +8,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
 import org.junit.jupiter.api.Test;
+import echo.EchoReadOperationHandler;
 
 class TestEchoReadOperationHandler {
 	EchoReadOperationHandler echoReadOperationHandler = new EchoReadOperationHandler();
