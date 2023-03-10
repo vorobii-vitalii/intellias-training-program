@@ -2,8 +2,6 @@ version: "3.3"
 services:
   echo-client:
     image: my-repo/echo-client:1.0-SNAPSHOT
-    depends_on:
-      - echo-server
     networks:
       - net
     environment:
