@@ -1,4 +1,4 @@
-package tcp;
+package tcp.server;
 
 import java.net.ProtocolFamily;
 

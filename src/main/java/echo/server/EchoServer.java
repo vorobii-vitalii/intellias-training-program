@@ -1,12 +1,16 @@
-package echo;
+package echo.server;
 
-import tcp.ServerOperationType;
-import tcp.TCPServer;
-import tcp.TCPServerConfig;
+import echo.handler.EchoAcceptOperationHandler;
+import echo.handler.EchoReadOperationHandler;
+import echo.handler.EchoWriteOperationHandler;
+import tcp.server.TCPServer;
+import tcp.server.TCPServerConfig;
 
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Map;
 import java.util.function.Consumer;
+
+import static java.nio.channels.SelectionKey.*;
 
 public class EchoServer {
 	private final TCPServer tcpServer;
@@ -22,18 +26,13 @@ public class EchoServer {
 			selectorProvider,
 			errorHandler,
 			Map.of(
-					ServerOperationType.ACCEPT, new EchoAcceptOperationHandler(bufferCapacity),
-					ServerOperationType.READ, new EchoReadOperationHandler(),
-					ServerOperationType.WRITE, new EchoWriteOperationHandler()
+					OP_ACCEPT, new EchoAcceptOperationHandler(bufferCapacity),
+					OP_READ, new EchoReadOperationHandler(),
+					OP_WRITE, new EchoWriteOperationHandler()
 			));
 	}
 
 	public void start() {
 		tcpServer.start();
 	}
-
-	public void stop(int timeout) throws InterruptedException {
-		tcpServer.stop(timeout);
-	}
-
 }

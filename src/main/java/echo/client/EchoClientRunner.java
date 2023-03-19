@@ -1,6 +1,8 @@
-package echo;
+package echo.client;
 
-import tcp.TCPClientConfig;
+import retry.ThreadSleepWaiter;
+import retry.strategy.ConstantDelayRetryExecutor;
+import tcp.client.TCPClientConfig;
 
 import java.net.StandardProtocolFamily;
 import java.nio.channels.spi.SelectorProvider;
@@ -18,11 +20,16 @@ public class EchoClientRunner {
 						.setPort(Integer.parseInt(System.getenv("SERVER_PORT")))
 						.setProtocolFamily(StandardProtocolFamily.INET)
 						.setBufferSize(BUFFER_SIZE)
-						.setNumRetries(NUM_RETRIES)
-						.setWaitBeforeAttemptsInMilliseconds(WAIT_BEFORE_ATTEMPTS_IN_MILLISECONDS)
 						.build();
 
-		var echoClient = new EchoClient(tcpClientConfig, SelectorProvider.provider());
+		var echoClient = new EchoClient(
+						tcpClientConfig,
+						SelectorProvider.provider(),
+						new ConstantDelayRetryExecutor(
+							new ThreadSleepWaiter(),
+							NUM_RETRIES,
+							WAIT_BEFORE_ATTEMPTS_IN_MILLISECONDS
+						));
 
 		try (var connection = echoClient.createConnection()) {
 			var reply = connection.sendMessage(message);

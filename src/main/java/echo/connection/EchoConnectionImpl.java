@@ -1,6 +1,8 @@
-package echo;
+package echo.connection;
 
-import tcp.TCPConnection;
+import tcp.client.TCPConnection;
+import tcp.client.command.TCPReadBufferNetworkCommand;
+import tcp.client.command.TCPWriteBufferNetworkCommand;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -16,12 +18,8 @@ public class EchoConnectionImpl implements EchoConnection {
 	@Override
 	public String sendMessage(String message) throws IOException {
 		var bufferToSend = ByteBuffer.wrap(message.getBytes(StandardCharsets.UTF_8));
-		tcpConnection.write(bufferToSend);
-		var receiveBuffer = ByteBuffer.allocate(bufferToSend.capacity());
-		tcpConnection.read(buffer -> {
-			receiveBuffer.put(buffer);
-			return receiveBuffer.position() < receiveBuffer.capacity();
-		});
+		new TCPWriteBufferNetworkCommand(tcpConnection, bufferToSend).execute();
+		var receiveBuffer = new TCPReadBufferNetworkCommand(tcpConnection, bufferToSend.capacity()).execute();
 		return bufferToString(receiveBuffer);
 	}
 

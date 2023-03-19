@@ -1,12 +1,9 @@
-package echo;
+package echo.server;
 
-import tcp.ServerOperationType;
-import tcp.TCPServer;
-import tcp.TCPServerConfig;
+import tcp.server.TCPServerConfig;
 
 import java.net.StandardProtocolFamily;
 import java.nio.channels.spi.SelectorProvider;
-import java.util.Map;
 
 public class EchoServerRunner {
     private static final int BUFFER_CAPACITY = 1000;

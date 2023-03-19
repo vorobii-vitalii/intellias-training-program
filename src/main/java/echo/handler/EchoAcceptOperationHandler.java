@@ -1,4 +1,4 @@
-package echo;
+package echo.handler;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

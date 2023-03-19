@@ -1,4 +1,4 @@
-package tcp;
+package tcp.server;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -12,14 +12,14 @@ public class TCPServer {
 	private final TCPServerConfig serverConfig;
 	private final Consumer<Throwable> errorHandler;
 	private final SelectorProvider selectorProvider;
-	private final Map<ServerOperationType, Consumer<SelectionKey>> operationHandlerByType;
+	private final Map<Integer, Consumer<SelectionKey>> operationHandlerByType;
 	private Thread serverThread;
 
 	public TCPServer(
 			TCPServerConfig serverConfig,
 			SelectorProvider selectorProvider,
 			Consumer<Throwable> errorHandler,
-			Map<ServerOperationType, Consumer<SelectionKey>> operationHandlerByType
+			Map<Integer, Consumer<SelectionKey>> operationHandlerByType
 	) {
 		this.serverConfig = serverConfig;
 		this.errorHandler = errorHandler;
@@ -54,8 +54,7 @@ public class TCPServer {
 			serverSocketChannel.bind(new InetSocketAddress(serverConfig.getHost(), serverConfig.getPort()));
 			while (!Thread.currentThread().isInterrupted()) {
 				selector.select(selectionKey -> {
-					var operationType = calcOperationType(selectionKey);
-					var operationHandler = operationHandlerByType.get(operationType);
+					var operationHandler = operationHandlerByType.get(selectionKey.readyOps());
 					if (operationHandler != null) {
 						operationHandler.accept(selectionKey);
 					}
@@ -64,17 +63,6 @@ public class TCPServer {
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
-	}
-
-	private ServerOperationType calcOperationType(SelectionKey selectionKey) {
-		if (selectionKey.isAcceptable()) {
-			return ServerOperationType.ACCEPT;
-		} else if (selectionKey.isWritable()) {
-			return ServerOperationType.WRITE;
-		} else if (selectionKey.isReadable()) {
-			return ServerOperationType.READ;
-		}
-		return null;
 	}
 
 }

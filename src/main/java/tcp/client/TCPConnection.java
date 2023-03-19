@@ -1,7 +1,8 @@
-package tcp;
+package tcp.client;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.util.function.Function;
 
 public interface TCPConnection extends AutoCloseable {
@@ -17,4 +18,7 @@ public interface TCPConnection extends AutoCloseable {
 	 * and returns true if more data is needed from socket, false otherwise
 	 */
 	void read(Function<ByteBuffer, Boolean> function) throws IOException;
+
+	SocketChannel getSocketChannel();
+
 }

@@ -5,8 +5,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import tcp.TCPClientImpl;
-import tcp.TCPClientConfig;
+import tcp.client.TCPClientImpl;
+import tcp.client.TCPClientConfig;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

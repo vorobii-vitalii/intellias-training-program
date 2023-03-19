@@ -1,22 +1,21 @@
 package echo;
 
+import echo.connection.EchoConnectionImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import tcp.TCPConnection;
+import tcp.client.TCPConnection;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
-import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class EchoConnectionImplTest {
@@ -24,22 +23,30 @@ class EchoConnectionImplTest {
 	@Mock
 	private TCPConnection tcpConnection;
 
+	@Mock
+	private SocketChannel socketChannel;
+
 	@InjectMocks
 	private EchoConnectionImpl echoConnection;
 
 	@Test
 	void sendMessage() throws IOException {
 		var message = "Message";
-		doAnswer(invocation -> {
-			Function<ByteBuffer, Boolean> function = invocation.getArgument(0);
-			for (var c : message.toCharArray()) {
-				function.apply(ByteBuffer.wrap(new byte[]{(byte) c}));
-			}
-			return null;
-		}).when(tcpConnection).read(any());
+		when(tcpConnection.getSocketChannel()).thenReturn(socketChannel);
+		when(socketChannel.write(any(ByteBuffer.class)))
+						.thenAnswer(invocation -> {
+							ByteBuffer buffer = invocation.getArgument(0);
+							buffer.position(buffer.capacity());
+							return buffer.capacity();
+						});
+		when(socketChannel.read(any(ByteBuffer.class)))
+						.thenAnswer(invocation -> {
+							ByteBuffer buffer = invocation.getArgument(0);
+							buffer.put(message.getBytes(StandardCharsets.UTF_8));
+							return buffer.capacity();
+						});
 		var receivedMessage = echoConnection.sendMessage(message);
 		assertThat(receivedMessage).isEqualTo(message);
-		verify(tcpConnection).write(ByteBuffer.wrap(message.getBytes(StandardCharsets.UTF_8)));
 	}
 
 	@Test

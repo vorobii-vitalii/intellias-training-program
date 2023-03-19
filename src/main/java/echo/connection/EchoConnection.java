@@ -1,4 +1,4 @@
-package echo;
+package echo.connection;
 
 import java.io.IOException;
 

@@ -1,4 +1,4 @@
-package tcp;
+package tcp.client;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -31,6 +31,11 @@ public class TCPConnectionImpl implements TCPConnection {
 			}
 			buffer.clear();
 		}
+	}
+
+	@Override
+	public SocketChannel getSocketChannel() {
+		return socketChannel;
 	}
 
 	@Override

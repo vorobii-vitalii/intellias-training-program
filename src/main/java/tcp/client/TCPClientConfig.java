@@ -1,4 +1,4 @@
-package tcp;
+package tcp.client;
 
 import java.net.ProtocolFamily;
 
@@ -7,8 +7,6 @@ public class TCPClientConfig {
 	private int port;
 	private ProtocolFamily protocolFamily;
 	private int bufferSize;
-	private int numRetries = 1;
-	private int waitBeforeAttemptsMs = 50;
 
 	private TCPClientConfig() {
 	}
@@ -25,13 +23,6 @@ public class TCPClientConfig {
 		return bufferSize;
 	}
 
-	public int getNumRetries() {
-		return numRetries;
-	}
-
-	public int getWaitBeforeAttemptsInMilliseconds() {
-		return waitBeforeAttemptsMs;
-	}
 
 	public ProtocolFamily getProtocolFamily() {
 		return protocolFamily;
@@ -64,16 +55,6 @@ public class TCPClientConfig {
 
 		public TCPClientConfig.Builder setProtocolFamily(ProtocolFamily protocolFamily) {
 			config.protocolFamily = protocolFamily;
-			return this;
-		}
-
-		public TCPClientConfig.Builder setNumRetries(int numRetries) {
-			config.numRetries = numRetries;
-			return this;
-		}
-
-		public TCPClientConfig.Builder setWaitBeforeAttemptsInMilliseconds(int waitBeforeAttemptsInMilliseconds) {
-			config.waitBeforeAttemptsMs = waitBeforeAttemptsInMilliseconds;
 			return this;
 		}
 
