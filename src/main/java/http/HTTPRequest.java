@@ -16,4 +16,11 @@ public class HTTPRequest {
 		this.httpRequestLine = httpRequestLine;
 	}
 
+	@Override
+	public String toString() {
+		return "HTTPRequest{" +
+						"httpRequestLine=" + httpRequestLine +
+						", headers=" + headers +
+						'}';
+	}
 }

@@ -23,9 +23,10 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import server.ServerOperationType;
-import server.TCPServer;
-import server.TCPServerConfig;
+import tcp.server.TCPServer;
+import tcp.server.TCPServerConfig;
+
+import static java.nio.channels.SelectionKey.*;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -64,9 +65,9 @@ class TestTCPServer {
 				selectorProvider,
 				errorHandler,
 				Map.of(
-						ServerOperationType.ACCEPT, acceptConsumer,
-						ServerOperationType.READ, readConsumer,
-						ServerOperationType.WRITE, writeConsumer
+						OP_ACCEPT, acceptConsumer,
+						OP_READ, readConsumer,
+						OP_WRITE, writeConsumer
 				));
 	}
 
@@ -76,8 +77,7 @@ class TestTCPServer {
 		when(selectorProvider.openServerSocketChannel(PROTOCOL_FAMILY)).thenReturn(serverSocketChannel);
 		when(selector.select(any())).thenAnswer(invocationOnMock -> {
 			Consumer<SelectionKey> selectionKeyConsumer = invocationOnMock.getArgument(0);
-			when(selectionKey.isValid()).thenReturn(true);
-			when(selectionKey.isAcceptable()).thenReturn(true);
+			when(selectionKey.readyOps()).thenReturn(OP_ACCEPT);
 			selectionKeyConsumer.accept(selectionKey);
 			return null;
 		});
@@ -94,8 +94,7 @@ class TestTCPServer {
 		when(selectorProvider.openServerSocketChannel(PROTOCOL_FAMILY)).thenReturn(serverSocketChannel);
 		when(selector.select(any())).thenAnswer(invocationOnMock -> {
 			Consumer<SelectionKey> selectionKeyConsumer = invocationOnMock.getArgument(0);
-			when(selectionKey.isValid()).thenReturn(true);
-			when(selectionKey.isReadable()).thenReturn(true);
+			when(selectionKey.readyOps()).thenReturn(OP_READ);
 			selectionKeyConsumer.accept(selectionKey);
 			return null;
 		});
@@ -112,8 +111,7 @@ class TestTCPServer {
 		when(selectorProvider.openServerSocketChannel(PROTOCOL_FAMILY)).thenReturn(serverSocketChannel);
 		when(selector.select(any())).thenAnswer(invocationOnMock -> {
 			Consumer<SelectionKey> selectionKeyConsumer = invocationOnMock.getArgument(0);
-			when(selectionKey.isValid()).thenReturn(true);
-			when(selectionKey.isWritable()).thenReturn(true);
+			when(selectionKey.readyOps()).thenReturn(OP_WRITE);
 			selectionKeyConsumer.accept(selectionKey);
 			return null;
 		});

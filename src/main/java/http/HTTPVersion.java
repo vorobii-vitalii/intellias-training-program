@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
 public record HTTPVersion(int majorVersion, int minorVersion) implements Serializable {
-	private static final Pattern HTTP_VERSION_PATTERN = Pattern.compile("HTTP/\\d+.\\d+", Pattern.CASE_INSENSITIVE);
+	private static final Pattern HTTP_VERSION_PATTERN = Pattern.compile("HTTP/(\\d+)\\.(\\d+)", Pattern.CASE_INSENSITIVE);
 
 	public static HTTPVersion parse(String httpVersion) throws ParseException {
 		var matcher = HTTP_VERSION_PATTERN.matcher(httpVersion);
@@ -17,7 +17,7 @@ public record HTTPVersion(int majorVersion, int minorVersion) implements Seriali
 							HTTP-version  = HTTP-name "/" DIGIT "." DIGIT
 							HTTP-name     = %x48.54.54.50 ; "HTTP", case-sensitive""");
 		}
-		return new HTTPVersion(Integer.parseInt(matcher.group(0)), Integer.parseInt(matcher.group(1)));
+		return new HTTPVersion(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)));
 	}
 
 	@Override

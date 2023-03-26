@@ -1,11 +1,15 @@
 package http;
 
+import util.Serializable;
+
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
-public class HTTPHeaders {
+public class HTTPHeaders implements Serializable {
 
 	/**
 	 * header-field   = field-name ":" OWS field-value OWS
@@ -33,12 +37,30 @@ public class HTTPHeaders {
 	 */
 	private final Map<String, List<String>> headers = new HashMap<>();
 
-	public void addHeader(String key, String value) {
-		headers.put(key, Collections.singletonList(value));
+	public HTTPHeaders addHeader(String key, String value) {
+		headers.put(key, Collections.singletonList(value.trim()));
+		return this;
 	}
 
 	public List<String> getHeaderValues(String header) {
 		return headers.getOrDefault(header, Collections.emptyList());
 	}
 
+	@Override
+	public byte[] serialize() {
+		return (this.headers.entrySet().stream()
+						.map(e -> {
+							String value = String.join(" ", e.getValue());
+							String key = e.getKey();
+							return key + ":" + value;
+						})
+						.collect(Collectors.joining("\r\n", "", "\r\n\r\n"))).getBytes(StandardCharsets.US_ASCII);
+	}
+
+	@Override
+	public String toString() {
+		return "HTTPHeaders{" +
+						"headers=" + headers +
+						'}';
+	}
 }

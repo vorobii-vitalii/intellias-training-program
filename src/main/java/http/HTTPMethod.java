@@ -18,10 +18,10 @@ public enum HTTPMethod {
 					.collect(Collectors.toMap(httpMethod -> httpMethod.name().toLowerCase(), Function.identity()));
 
 	public static HTTPMethod parse(String method) throws ParseException {
-		if (!METHOD_BY_STRING.containsKey(method)) {
+		if (!METHOD_BY_STRING.containsKey(method.toLowerCase())) {
 			throw new ParseException("Method " + method + " is not supported!");
 		}
-		return METHOD_BY_STRING.get(method);
+		return METHOD_BY_STRING.get(method.toLowerCase());
 	}
 
 }

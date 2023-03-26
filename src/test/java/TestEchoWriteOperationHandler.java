@@ -8,8 +8,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
+import echo.handler.EchoWriteOperationHandler;
 import org.junit.jupiter.api.Test;
-import echo.EchoWriteOperationHandler;
 
 class TestEchoWriteOperationHandler {
 	EchoWriteOperationHandler echoWriteOperationHandler = new EchoWriteOperationHandler();

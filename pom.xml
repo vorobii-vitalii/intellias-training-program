@@ -18,6 +18,14 @@
     </properties>
 
     <dependencies>
+        <!-- https://mvnrepository.com/artifact/commons-codec/commons-codec -->
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.15</version>
+        </dependency>
+
+
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
@@ -46,6 +54,12 @@
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
             <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <version>${junit-jupiter.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -82,7 +96,7 @@
                             <tag>${project.version}</tag>
                             <buildArgs>
                                 <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>
-                                <MAIN_CLASS>echo.EchoClient</MAIN_CLASS>
+                                <MAIN_CLASS>echo.client.EchoClientRunner</MAIN_CLASS>
                             </buildArgs>
                         </configuration>
                     </execution>
@@ -97,7 +111,7 @@
                             <tag>${project.version}</tag>
                             <buildArgs>
                                 <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>
-                                <MAIN_CLASS>echo.EchoServer</MAIN_CLASS>
+                                <MAIN_CLASS>echo.server.EchoServerRunner</MAIN_CLASS>
                             </buildArgs>
                         </configuration>
                     </execution>
