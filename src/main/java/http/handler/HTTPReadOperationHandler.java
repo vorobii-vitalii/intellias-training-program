@@ -1,63 +1,73 @@
 package http.handler;
 
+import exception.ParseException;
 import http.HTTPRequest;
 import http.HTTPResponse;
-import http.reader.HTTPRequestLineMessageReader;
-import tcp.server.handler.GenericRequestResponseReadOperationHandler;
-import util.Constants;
+import http.reader.HTTPRequestMessageReader;
+import tcp.server.SocketMessageReader;
 import request_handler.ProcessingRequest;
-import tcp.server.ServerAttachmentObject;
-import writer.MessageWriter;
+import tcp.server.ServerAttachment;
 
-import java.nio.ByteBuffer;
+import java.io.IOException;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class HTTPReadOperationHandler extends GenericRequestResponseReadOperationHandler<HTTPRequest, HTTPResponse> {
+public class HTTPReadOperationHandler implements Consumer<SelectionKey> {
 	private final Map<String, ProtocolChanger> protocolChangerMap;
+	private final SocketMessageReader<HTTPRequest> socketMessageReader =
+					new SocketMessageReader<>(new HTTPRequestMessageReader((name, val) -> Collections.singletonList(val.trim())));
+//	private final BlockingQueue<ProcessingRequest<HTTPRequest, HTTPResponse>> requestQueue;
+	private final HTTPRequestHandler httpRequestHandler;
 
 	public HTTPReadOperationHandler(
-					BlockingQueue<ProcessingRequest<HTTPRequest, HTTPResponse>> requestQueue,
+//					BlockingQueue<ProcessingRequest<HTTPRequest, HTTPResponse>> requestQueue,
+					HTTPRequestHandler httpRequestHandler,
 					Collection<ProtocolChanger> protocolChangers
 	) {
-		super(requestQueue);
 		this.protocolChangerMap = protocolChangers.stream()
 						.collect(Collectors.toMap(ProtocolChanger::getProtocolName, Function.identity()));
+		this.httpRequestHandler = httpRequestHandler;
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
-	public void onMessageResponse(HTTPResponse httpResponse, SelectionKey selectionKey) {
-		var attachmentObject = (ServerAttachmentObject<HTTPRequest>) (selectionKey.attachment());
-		System.out.println("Response: " + httpResponse);
-		if (!httpResponse.isUpgradeResponse()) {
-			selectionKey.attach(new ServerAttachmentObject<>(
-							Constants.Protocol.HTTP,
-							attachmentObject.readBuffer(),
-							new HTTPRequestLineMessageReader(new HTTPRequest()),
-							new MessageWriter(ByteBuffer.wrap(httpResponse.serialize()), () -> {
-								System.out.println("Message was written");
-								selectionKey.interestOps(SelectionKey.OP_READ);
-							})
-			));
-		} else {
-			ProtocolChanger protocolChanger = protocolChangerMap.get(httpResponse.getUpgradeProtocol());
-			if (protocolChanger == null) {
-				throw new IllegalArgumentException("Not supported protocol " + httpResponse.getUpgradeProtocol());
+	public void accept(SelectionKey selectionKey) {
+		var serverAttachment = ((ServerAttachment) selectionKey.attachment());
+		try {
+			var socketChannel = (SocketChannel) selectionKey.channel();
+			var request = socketMessageReader.readMessage(serverAttachment.readBufferContext(), socketChannel);
+			if (request != null) {
+				selectionKey.interestOps(SelectionKey.OP_WRITE);
+				httpRequestHandler.handle(new ProcessingRequest<>(request) {
+					@Override
+					public void onResponse(HTTPResponse responseMessage) {
+						onMessageResponse(request, responseMessage, selectionKey);
+					}
+				});
 			}
-			selectionKey.attach(new ServerAttachmentObject<>(
-							Constants.Protocol.HTTP,
-							attachmentObject.readBuffer(),
-							null,
-							new MessageWriter(ByteBuffer.wrap(httpResponse.serialize()), () -> {
-								System.out.println("Message was written");
-								protocolChanger.changeProtocol(selectionKey);
-							})
-			));
 		}
+		catch (Exception e) {
+			selectionKey.cancel();
+			e.printStackTrace();
+		}
+	}
+
+	private void onMessageResponse(HTTPRequest request, HTTPResponse response, SelectionKey selectionKey) {
+		System.out.println("Response: " + response);
+		if (response.isUpgradeResponse()) {
+			var protocolChanger = protocolChangerMap.get(response.getUpgradeProtocol());
+			if (protocolChanger == null) {
+				throw new IllegalArgumentException("Not supported protocol " + response.getUpgradeProtocol());
+			}
+			protocolChanger.changeProtocol(new ProtocolChangeContext(request, response, selectionKey));
+		}
+		var attachmentObject = (ServerAttachment) (selectionKey.attachment());
+		attachmentObject.responses().add(response);
 	}
 }

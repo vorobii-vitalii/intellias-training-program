@@ -39,8 +39,8 @@ public class HTTPRequestHandler implements RequestHandler<HTTPRequest, HTTPRespo
 															"Not found"
 											),
 											new HTTPHeaders()
-															.addHeader("Content-Type", "text/html")
-															.addHeader("Content-Length", String.valueOf(bytes.length)),
+															.addSingleHeader("Content-Type", "text/html")
+															.addSingleHeader("Content-Length", String.valueOf(bytes.length)),
 											bytes
 							);
 						});

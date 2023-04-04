@@ -3,10 +3,7 @@ package http;
 import util.Serializable;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class HTTPHeaders implements Serializable {
@@ -37,13 +34,26 @@ public class HTTPHeaders implements Serializable {
 	 */
 	private final Map<String, List<String>> headers = new HashMap<>();
 
-	public HTTPHeaders addHeader(String key, String value) {
+	public HTTPHeaders addSingleHeader(String key, String value) {
 		headers.put(key, Collections.singletonList(value.trim()));
+		return this;
+	}
+
+	public HTTPHeaders addHeaders(String key, List<String> values) {
+		headers.put(key, values);
 		return this;
 	}
 
 	public List<String> getHeaderValues(String header) {
 		return headers.getOrDefault(header, Collections.emptyList());
+	}
+
+	public Optional<String> getHeaderValue(String header) {
+		List<String> headerValues = getHeaderValues(header);
+		if (headerValues.isEmpty()) {
+			return Optional.empty();
+		}
+		return Optional.of(headerValues.get(0));
 	}
 
 	@Override

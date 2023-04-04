@@ -1,5 +1,7 @@
 package websocket;
 
+import exception.ParseException;
+
 import java.util.Arrays;
 import java.util.Map;
 import java.util.function.Function;
@@ -26,9 +28,9 @@ public enum OpCode {
 		return code;
 	}
 
-	public static OpCode getByCode(int code) {
+	public static OpCode getByCode(int code) throws ParseException {
 		if (!OP_CODE_MAP.containsKey(code)) {
-			throw new IllegalArgumentException("OpCode " + code + " is not supported");
+			throw new ParseException("OpCode " + code + " is not supported");
 		}
 		return OP_CODE_MAP.get(code);
 	}

@@ -47,7 +47,7 @@ public class TCPServer {
 
 	private void runServer() {
 		try (var selector = selectorProvider.openSelector();
-				var serverSocketChannel = selectorProvider.openServerSocketChannel(serverConfig.getProtocolFamily())
+		     var serverSocketChannel = selectorProvider.openServerSocketChannel(serverConfig.getProtocolFamily())
 		) {
 			serverSocketChannel.configureBlocking(false);
 			serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
@@ -62,6 +62,8 @@ public class TCPServer {
 			}
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 

@@ -3,8 +3,13 @@ package websocket.handler;
 import http.*;
 import http.handler.HTTPRequestHandlerStrategy;
 import org.apache.commons.codec.digest.DigestUtils;
+import util.Constants;
+import websocket.endpoint.WebSocketEndpointProvider;
 
 import java.util.Base64;
+import java.util.Collection;
+import java.util.Set;
+import java.util.function.Predicate;
 
 /*
 
@@ -24,51 +29,82 @@ import java.util.Base64;
  */
 public class WebSocketChangeProtocolHTTPHandlerStrategy implements HTTPRequestHandlerStrategy {
 	private static final int PRIORITY = 100;
-	private static final Integer WS_VERSION = 13;
-	private static final int CODE_SWITCHING_PROTOCOL = 101;
+
+	private final Collection<Predicate<HTTPRequest>> requestValidators;
+	private final Set<String> supportedWebSocketProtocols;
+	private final WebSocketEndpointProvider webSocketEndpointProvider;
+
+	public WebSocketChangeProtocolHTTPHandlerStrategy(
+					Collection<Predicate<HTTPRequest>> requestValidators,
+					Set<String> supportedWebSocketProtocols,
+					WebSocketEndpointProvider webSocketEndpointProvider
+	) {
+		this.requestValidators = requestValidators;
+		this.supportedWebSocketProtocols = supportedWebSocketProtocols;
+		this.webSocketEndpointProvider = webSocketEndpointProvider;
+	}
 
 	@Override
 	public boolean supports(HTTPRequest httpRequest) {
-		var requestLine = httpRequest.getHttpRequestLine();
-		if (requestLine.httpMethod() != HTTPMethod.GET) {
-			return false;
-		}
-		var headers = httpRequest.getHeaders();
-		// TODO: Add validation of value
-		if (headers.getHeaderValues("Host").isEmpty()) {
-			return false;
-		}
-		// TODO: Check origin to implement CORS
-		if (!headers.getHeaderValues("Upgrade").contains("websocket")) {
-			return false;
-		}
-		if (!headers.getHeaderValues("Connection").contains("Upgrade")) {
-			return false;
-		}
-		if (headers.getHeaderValues("Sec-WebSocket-Key").isEmpty()) {
-			return false;
-		}
-		if (!headers.getHeaderValues("Sec-WebSocket-Version").contains(String.valueOf(WS_VERSION))) {
-			return false;
-		}
-		return true;
+		return requestValidators.stream().allMatch(predicate -> predicate.test(httpRequest));
 	}
 
 	@Override
 	public HTTPResponse handleRequest(HTTPRequest request) {
-		var webSocketKey = request.getHeaders().getHeaderValues("Sec-WebSocket-Key").get(0);
-		return new HTTPResponse(
-						new HTTPResponseLine(
-							new HTTPVersion(1, 1),
-							CODE_SWITCHING_PROTOCOL,
-							"Switching protocol"
-						),
-						new HTTPHeaders()
-								.addHeader("Upgrade", "websocket")
-								.addHeader("Connection", "upgrade")
-								.addHeader("Sec-WebSocket-Accept", calcSecWebSocketAccept(webSocketKey)),
-						new byte[] {}
-		);
+		var endpoint = request.getHttpRequestLine().path();
+		if (webSocketEndpointProvider.getEndpoint(endpoint) == null) {
+			return new HTTPResponse(
+							new HTTPResponseLine(
+											new HTTPVersion(1, 1),
+											Constants.HTTPStatusCode.NOT_FOUND,
+											"Server doesn't have mapping for " + endpoint + " endpoint"
+							),
+							new HTTPHeaders(),
+							new byte[]{}
+			);
+		}
+		var webSocketKey = request.getHeaders().getHeaderValue(Constants.HTTPHeaders.WEBSOCKET_KEY).orElseThrow();
+		var supportedClientSubProtocols = request.getHeaders().getHeaderValues(Constants.HTTPHeaders.WEBSOCKET_PROTOCOLS);
+		if (supportedClientSubProtocols.isEmpty()) {
+			return new HTTPResponse(
+							new HTTPResponseLine(
+											new HTTPVersion(1, 1),
+											Constants.HTTPStatusCode.SWITCHING_PROTOCOL,
+											"Switching protocol"
+							),
+							new HTTPHeaders()
+											.addSingleHeader(Constants.HTTPHeaders.UPGRADE, "websocket")
+											.addSingleHeader(Constants.HTTPHeaders.CONNECTION, "upgrade")
+											.addSingleHeader(Constants.HTTPHeaders.WEBSOCKET_ACCEPT, calcSecWebSocketAccept(webSocketKey)),
+							new byte[]{}
+			);
+		}
+		return supportedClientSubProtocols
+						.stream()
+						.filter(supportedWebSocketProtocols::contains)
+						.findFirst()
+						.map(protocol -> new HTTPResponse(
+										new HTTPResponseLine(
+														new HTTPVersion(1, 1),
+														Constants.HTTPStatusCode.SWITCHING_PROTOCOL,
+														"Switching protocol"
+										),
+										new HTTPHeaders()
+														.addSingleHeader(Constants.HTTPHeaders.UPGRADE, "websocket")
+														.addSingleHeader(Constants.HTTPHeaders.CONNECTION, "upgrade")
+														.addSingleHeader(Constants.HTTPHeaders.WEBSOCKET_PROTOCOLS, protocol)
+														.addSingleHeader(Constants.HTTPHeaders.WEBSOCKET_ACCEPT, calcSecWebSocketAccept(webSocketKey)),
+										new byte[]{}
+						))
+						.orElseGet(() -> new HTTPResponse(
+										new HTTPResponseLine(
+														new HTTPVersion(1, 1),
+														Constants.HTTPStatusCode.BAD_REQUEST,
+														"Server doesn't support any of protocols proposed by client"
+										),
+										new HTTPHeaders(),
+										new byte[]{}
+						));
 	}
 
 	@Override

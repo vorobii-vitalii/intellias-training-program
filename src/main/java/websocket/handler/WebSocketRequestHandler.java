@@ -1,44 +1,50 @@
 package websocket.handler;
 
-import tcp.server.ServerAttachmentObject;
-import tcp.server.handler.AbstractionMessageReaderReadOperationHandler;
-import websocket.OpCode;
+import exception.ParseException;
+import tcp.server.ServerAttachment;
+import tcp.server.SocketMessageReader;
+import util.Constants;
 import websocket.WebSocketMessage;
-import websocket.reader.InitialMetadataMessageReader;
-import writer.MessageWriter;
+import websocket.endpoint.WebSocketEndpointProvider;
+import websocket.reader.WebSocketMessageReader;
 
-import java.nio.ByteBuffer;
+import java.io.IOException;
 import java.nio.channels.SelectionKey;
-import java.nio.charset.StandardCharsets;
+import java.nio.channels.SocketChannel;
+import java.util.function.Consumer;
 
-public class WebSocketRequestHandler extends AbstractionMessageReaderReadOperationHandler<WebSocketMessage> {
+public class WebSocketRequestHandler implements Consumer<SelectionKey> {
+	private final SocketMessageReader<WebSocketMessage> socketMessageReader =
+					new SocketMessageReader<>(new WebSocketMessageReader());
+	private final WebSocketEndpointProvider webSocketEndpointProvider;
 
-	@SuppressWarnings("unchecked")
-	@Override
-	public void onMessageRead(WebSocketMessage message, SelectionKey selectionKey) {
-		var attachmentObject = (ServerAttachmentObject<WebSocketMessage>) (selectionKey.attachment());
-		System.out.println("Read websocket message: " + message);
-		if (message.getOpCode().equals(OpCode.TEXT)) {
-			System.out.println("Text = " + new String(message.getPayload()));
-		}
-		var messageToWrite = new WebSocketMessage();
-		messageToWrite.setFin(true);
-		messageToWrite.setOpCode(OpCode.TEXT);
-		var replyMessage = message.getOpCode().equals(OpCode.TEXT)
-						? new String(message.getPayload()) + " Reply"
-						: "Message 1234567";
-		messageToWrite.setPayload(replyMessage.getBytes(StandardCharsets.UTF_8));
-
-		selectionKey.interestOps(SelectionKey.OP_WRITE);
-
-		selectionKey.attach(new ServerAttachmentObject<>(
-						attachmentObject.protocol(),
-						attachmentObject.readBuffer(),
-						new InitialMetadataMessageReader(new WebSocketMessage()),
-						new MessageWriter(ByteBuffer.wrap(messageToWrite.serialize()), () -> {
-							System.out.println("WS Message written");
-							selectionKey.interestOps(SelectionKey.OP_READ);
-						})
-		));
+	public WebSocketRequestHandler(WebSocketEndpointProvider webSocketEndpointProvider) {
+		this.webSocketEndpointProvider = webSocketEndpointProvider;
 	}
+
+	@Override
+	public void accept(SelectionKey selectionKey) {
+		var serverAttachment = ((ServerAttachment) selectionKey.attachment());
+		try {
+			var socketChannel = (SocketChannel) selectionKey.channel();
+			var webSocketMessage = socketMessageReader.readMessage(serverAttachment.readBufferContext(), socketChannel);
+			if (webSocketMessage != null) {
+				onMessageRead(webSocketMessage, selectionKey);
+			}
+		}
+		catch (Exception e) {
+			selectionKey.cancel();
+			e.printStackTrace();
+		}
+	}
+
+	private void onMessageRead(WebSocketMessage message, SelectionKey selectionKey) {
+		var attachmentObject = (ServerAttachment) (selectionKey.attachment());
+		var context = attachmentObject.context();
+		// TODO: Do it in another thread!
+		var endpoint =
+						webSocketEndpointProvider.getEndpoint(context.get(Constants.WebSocketMetadata.ENDPOINT).toString());
+		endpoint.onMessage(selectionKey, message);
+	}
+
 }

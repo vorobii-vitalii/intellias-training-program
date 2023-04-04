@@ -1,6 +1,6 @@
 package tcp.server.handler;
 
-import tcp.server.ServerAttachmentObject;
+import tcp.server.ServerAttachment;
 
 import java.nio.channels.SelectionKey;
 import java.util.Map;
@@ -15,7 +15,7 @@ public class DelegatingReadOperationHandler implements Consumer<SelectionKey> {
 
 	@Override
 	public void accept(SelectionKey selectionKey) {
-		var serverAttachmentObject = (ServerAttachmentObject<?>) selectionKey.attachment();
+		var serverAttachmentObject = (ServerAttachment) selectionKey.attachment();
 		readHandlerByProtocolName.get(serverAttachmentObject.protocol()).accept(selectionKey);
 	}
 }

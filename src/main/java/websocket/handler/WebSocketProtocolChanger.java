@@ -1,25 +1,34 @@
 package websocket.handler;
 
+import http.handler.ProtocolChangeContext;
 import http.handler.ProtocolChanger;
-import tcp.server.ServerAttachmentObject;
+import tcp.server.ServerAttachment;
 import util.Constants;
-import websocket.WebSocketMessage;
-import websocket.reader.InitialMetadataMessageReader;
+import websocket.endpoint.WebSocketEndpointProvider;
 
-import java.nio.channels.SelectionKey;
+import java.util.ArrayDeque;
+import java.util.Map;
 
 public class WebSocketProtocolChanger implements ProtocolChanger {
+	private final WebSocketEndpointProvider webSocketEndpointProvider;
+
+	public WebSocketProtocolChanger(WebSocketEndpointProvider webSocketEndpointProvider) {
+		this.webSocketEndpointProvider = webSocketEndpointProvider;
+	}
+
 	@Override
-	public void changeProtocol(SelectionKey selectionKey) {
-		var attachmentObject = (ServerAttachmentObject<?>) (selectionKey.attachment());
-		attachmentObject.readBuffer().position(attachmentObject.readBuffer().limit());
-		selectionKey.attach(new ServerAttachmentObject<>(
+	public void changeProtocol(ProtocolChangeContext protocolChangeContext) {
+		var selectionKey = protocolChangeContext.selectionKey();
+		var request = protocolChangeContext.request();
+		var attachmentObject = (ServerAttachment) (selectionKey.attachment());
+		var endpoint = request.getHttpRequestLine().path();
+		selectionKey.attach(new ServerAttachment(
 						Constants.Protocol.WEB_SOCKET,
-						attachmentObject.readBuffer(),
-						new InitialMetadataMessageReader(new WebSocketMessage()),
-						null
+						attachmentObject.readBufferContext(),
+						new ArrayDeque<>(),
+						Map.of(Constants.WebSocketMetadata.ENDPOINT, endpoint)
 		));
-		selectionKey.interestOps(SelectionKey.OP_READ);
+		webSocketEndpointProvider.getEndpoint(endpoint).onConnect(selectionKey);
 	}
 
 	@Override

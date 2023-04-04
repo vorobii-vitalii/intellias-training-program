@@ -4,6 +4,10 @@ public class HTTPRequest {
 	private HTTPRequestLine httpRequestLine;
 	private final HTTPHeaders headers = new HTTPHeaders();
 
+	public HTTPRequest(HTTPRequestLine httpRequestLine) {
+		this.httpRequestLine = httpRequestLine;
+	}
+
 	public HTTPHeaders getHeaders() {
 		return headers;
 	}
