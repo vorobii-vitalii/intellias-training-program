@@ -1,6 +1,9 @@
 package websocket;
 
-import http.*;
+import http.HTTPMethod;
+import http.HTTPRequest;
+import http.HTTPResponse;
+import http.handler.HTTPAcceptOperationHandler;
 import http.handler.HTTPReadOperationHandler;
 import http.handler.HTTPRequestHandler;
 import request_handler.ProcessingRequest;
@@ -11,7 +14,6 @@ import tcp.server.TCPServerConfig;
 import tcp.server.handler.DelegatingReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
 import util.Constants;
-import http.handler.HTTPAcceptOperationHandler;
 import websocket.endpoint.WebSocketEndpoint;
 import websocket.endpoint.WebSocketEndpointProvider;
 import websocket.handler.WebSocketChangeProtocolHTTPHandlerStrategy;
@@ -30,12 +32,10 @@ import static java.nio.channels.SelectionKey.*;
 
 
 public class HttpServer {
+	public static final int QUEUE_SIZE = 1000;
 	private static final Integer WS_VERSION = 13;
-	private static final int BUFFER_CAPACITY = 1000;
 	private static final int PORT = 8000;
 	private static final String HOSTNAME = "127.0.0.1";
-	public static final int QUEUE_SIZE = 1000;
-
 
 	public static void main(String[] args) {
 		var blockingQueue = new ArrayBlockingQueue<ProcessingRequest<HTTPRequest, HTTPResponse>>(QUEUE_SIZE);
@@ -59,6 +59,47 @@ public class HttpServer {
 								messageToWrite.setPayload(replyMessage.getBytes(StandardCharsets.UTF_8));
 								attachmentObject.responses().add(messageToWrite);
 								selectionKey.interestOps(OP_WRITE);
+							}
+						},
+						"/documents", new WebSocketEndpoint() {
+							private final Set<SelectionKey> connections = new HashSet<>();
+
+							@Override
+							public void onConnect(SelectionKey selectionKey) {
+								ServerAttachment attachmentObject = (ServerAttachment) selectionKey.attachment();
+								System.out.println("New websocket connection " + selectionKey + " object = " + attachmentObject);
+								connections.add(selectionKey);
+							}
+
+							@Override
+							public void onMessage(SelectionKey selectionKey, WebSocketMessage message) {
+								switch (message.getOpCode()) {
+									case CONNECTION_CLOSE -> {
+										System.out.println("Client request close of connection " + selectionKey);
+										connections.remove(selectionKey);
+										selectionKey.cancel();
+									}
+									case TEXT -> {
+										System.out.println("New document update: " + message);
+										var messageToBroadcast = new WebSocketMessage();
+										messageToBroadcast.setFin(true);
+										messageToBroadcast.setOpCode(OpCode.TEXT);
+										messageToBroadcast.setPayload(message.getPayload());
+										for (SelectionKey connection : connections) {
+											if (connection != selectionKey) {
+												((ServerAttachment) connection.attachment()).responses().add(messageToBroadcast);
+												connection.interestOps(OP_WRITE);
+											}
+										}
+										var messageToAuthor = new WebSocketMessage();
+										messageToAuthor.setFin(true);
+										messageToAuthor.setOpCode(OpCode.TEXT);
+										messageToAuthor.setPayload("Change was broadcast-ed".getBytes(StandardCharsets.UTF_8));
+										((ServerAttachment) selectionKey.attachment()).responses().add(messageToAuthor);
+										selectionKey.interestOps(OP_WRITE);
+										selectionKey.selector().wakeup();
+									}
+								}
 							}
 						}
 		));
@@ -84,6 +125,7 @@ public class HttpServer {
 										.filter(String.valueOf(WS_VERSION)::equals)
 										.isPresent()
 		), Set.of(), webSocketEndpointProvider))));
+
 		var requestProcessor = new RequestProcessor<>(
 						blockingQueue,
 						Executors.newCachedThreadPool(),
@@ -100,22 +142,24 @@ public class HttpServer {
 						SelectorProvider.provider(),
 						System.err::println,
 						Map.of(
-										OP_ACCEPT, new HTTPAcceptOperationHandler(BUFFER_CAPACITY),
+										OP_ACCEPT, new HTTPAcceptOperationHandler(),
 										OP_READ, new DelegatingReadOperationHandler(Map.of(
 														Constants.Protocol.HTTP, new HTTPReadOperationHandler(
-																		handler,
+																		blockingQueue,
 																		List.of(new WebSocketProtocolChanger(webSocketEndpointProvider))
 														),
 														Constants.Protocol.WEB_SOCKET, new WebSocketRequestHandler(webSocketEndpointProvider)
 										)),
 										OP_WRITE, new WriteOperationHandler(Map.of(
 														Constants.Protocol.HTTP, (selectionKey, msg) -> {
+															System.out.println("On message written " + msg + " " + selectionKey);
 															ServerAttachment attachment = (ServerAttachment) selectionKey.attachment();
 															if (isEmpty(attachment.responses())) {
 																selectionKey.interestOps(OP_READ);
 															}
 														},
 														Constants.Protocol.WEB_SOCKET, (selectionKey, msg) -> {
+															System.out.println("On message written " + msg + " " + selectionKey);
 															ServerAttachment attachment = (ServerAttachment) selectionKey.attachment();
 															if (isEmpty(attachment.responses())) {
 																selectionKey.interestOps(OP_READ);

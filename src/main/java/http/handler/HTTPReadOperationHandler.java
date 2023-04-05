@@ -1,6 +1,5 @@
 package http.handler;
 
-import exception.ParseException;
 import http.HTTPRequest;
 import http.HTTPResponse;
 import http.reader.HTTPRequestMessageReader;
@@ -8,7 +7,6 @@ import tcp.server.SocketMessageReader;
 import request_handler.ProcessingRequest;
 import tcp.server.ServerAttachment;
 
-import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Collection;
@@ -23,17 +21,15 @@ public class HTTPReadOperationHandler implements Consumer<SelectionKey> {
 	private final Map<String, ProtocolChanger> protocolChangerMap;
 	private final SocketMessageReader<HTTPRequest> socketMessageReader =
 					new SocketMessageReader<>(new HTTPRequestMessageReader((name, val) -> Collections.singletonList(val.trim())));
-//	private final BlockingQueue<ProcessingRequest<HTTPRequest, HTTPResponse>> requestQueue;
-	private final HTTPRequestHandler httpRequestHandler;
+	private final BlockingQueue<ProcessingRequest<HTTPRequest, HTTPResponse>> requestQueue;
 
 	public HTTPReadOperationHandler(
-//					BlockingQueue<ProcessingRequest<HTTPRequest, HTTPResponse>> requestQueue,
-					HTTPRequestHandler httpRequestHandler,
+					BlockingQueue<ProcessingRequest<HTTPRequest, HTTPResponse>> requestQueue,
 					Collection<ProtocolChanger> protocolChangers
 	) {
 		this.protocolChangerMap = protocolChangers.stream()
 						.collect(Collectors.toMap(ProtocolChanger::getProtocolName, Function.identity()));
-		this.httpRequestHandler = httpRequestHandler;
+		this.requestQueue = requestQueue;
 	}
 
 	@Override
@@ -41,10 +37,9 @@ public class HTTPReadOperationHandler implements Consumer<SelectionKey> {
 		var serverAttachment = ((ServerAttachment) selectionKey.attachment());
 		try {
 			var socketChannel = (SocketChannel) selectionKey.channel();
-			var request = socketMessageReader.readMessage(serverAttachment.readBufferContext(), socketChannel);
+			var request = socketMessageReader.readMessage(serverAttachment.bufferContext(), socketChannel);
 			if (request != null) {
-				selectionKey.interestOps(SelectionKey.OP_WRITE);
-				httpRequestHandler.handle(new ProcessingRequest<>(request) {
+				requestQueue.add(new ProcessingRequest<>(request) {
 					@Override
 					public void onResponse(HTTPResponse responseMessage) {
 						onMessageResponse(request, responseMessage, selectionKey);
@@ -69,5 +64,7 @@ public class HTTPReadOperationHandler implements Consumer<SelectionKey> {
 		}
 		var attachmentObject = (ServerAttachment) (selectionKey.attachment());
 		attachmentObject.responses().add(response);
+		selectionKey.interestOps(SelectionKey.OP_WRITE);
+		selectionKey.selector().wakeup();
 	}
 }

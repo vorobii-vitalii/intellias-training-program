@@ -1,20 +1,17 @@
 package http.handler;
 
-import tcp.server.ReadBufferContext;
+import tcp.server.BufferContext;
 import tcp.server.ServerAttachment;
 import util.Constants;
 
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
-import java.util.ArrayDeque;
 import java.util.HashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Consumer;
 
 public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
-
-	public HTTPAcceptOperationHandler(int bufferCapacity) {
-	}
 
 	@Override
 	public void accept(SelectionKey selectionKey) {
@@ -28,11 +25,10 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 							SelectionKey.OP_READ,
 							new ServerAttachment(
 											Constants.Protocol.HTTP,
-											new ReadBufferContext(),
-											new ArrayDeque<>(),
+											new BufferContext(),
+											new LinkedBlockingQueue<>(),
 											new HashMap<>()
-							)
-			);
+							));
 		} catch (IOException e) {
 			selectionKey.cancel();
 			e.printStackTrace();

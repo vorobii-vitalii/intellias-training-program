@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ReadBufferContext {
+public class BufferContext {
 	// TODO: Make it configurable
 	private static final int SINGLE_BUFFER_SIZE = 1536;
 	private static final int NUM_BUFFERS_TO_KEEP_ON_RESET = 1;

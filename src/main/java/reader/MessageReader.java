@@ -1,8 +1,8 @@
 package reader;
 
 import exception.ParseException;
-import tcp.server.ReadBufferContext;
+import tcp.server.BufferContext;
 
 public interface MessageReader<MessageObject> {
-	MessageObject read(ReadBufferContext readBufferContext) throws ParseException;
+	MessageObject read(BufferContext bufferContext) throws ParseException;
 }

@@ -14,7 +14,7 @@ public class SocketMessageReader<Message> {
 	}
 
 	public Message readMessage(
-					ReadBufferContext bufferContext,
+					BufferContext bufferContext,
 					SocketChannel socketChannel
 	) throws IOException, ParseException {
 		var buffer = bufferContext.getAvailableBuffer();

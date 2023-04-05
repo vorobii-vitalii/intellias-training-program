@@ -24,7 +24,7 @@ public class WebSocketProtocolChanger implements ProtocolChanger {
 		var endpoint = request.getHttpRequestLine().path();
 		selectionKey.attach(new ServerAttachment(
 						Constants.Protocol.WEB_SOCKET,
-						attachmentObject.readBufferContext(),
+						attachmentObject.bufferContext(),
 						new ArrayDeque<>(),
 						Map.of(Constants.WebSocketMetadata.ENDPOINT, endpoint)
 		));

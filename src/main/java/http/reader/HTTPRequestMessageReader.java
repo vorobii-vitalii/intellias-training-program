@@ -4,7 +4,7 @@ import exception.ParseException;
 import http.HTTPRequest;
 import http.HTTPRequestLine;
 import reader.MessageReader;
-import tcp.server.ReadBufferContext;
+import tcp.server.BufferContext;
 import util.Utils;
 
 import java.util.List;
@@ -24,8 +24,8 @@ public class HTTPRequestMessageReader implements MessageReader<HTTPRequest> {
 	}
 
 	@Override
-	public HTTPRequest read(ReadBufferContext readBufferContext) throws ParseException {
-		var indexes = Utils.findAllMatches(readBufferContext, CLRF_BYTES);
+	public HTTPRequest read(BufferContext bufferContext) throws ParseException {
+		var indexes = Utils.findAllMatches(bufferContext, CLRF_BYTES);
 		var headerEndIndex = -1;
 		for (var i = 0; i < indexes.size() - 1; i++) {
 			if (indexes.get(i + 1) == indexes.get(i) + CLRF_BYTES.length) {
@@ -37,9 +37,9 @@ public class HTTPRequestMessageReader implements MessageReader<HTTPRequest> {
 			return null;
 		}
 		// TODO: Iterate over headers and try to find Content-Length parameter, if not null -> validate
-		var request = new HTTPRequest(HTTPRequestLine.parse(extract(readBufferContext, 0, indexes.get(0))));
+		var request = new HTTPRequest(HTTPRequestLine.parse(extract(bufferContext, 0, indexes.get(0))));
 		for (int i = 1; i != headerEndIndex; i++) {
-			var line = extract(readBufferContext, indexes.get(i - 1) + CLRF_BYTES.length, indexes.get(i));
+			var line = extract(bufferContext, indexes.get(i - 1) + CLRF_BYTES.length, indexes.get(i));
 			var headerDelimiterIndex = line.indexOf(HEADER_DELIMITER);
 			if (headerDelimiterIndex == NOT_FOUND_INDEX) {
 				throw new ParseException("HTTP header key-value pair should be delimiter-ed by : character");
@@ -51,7 +51,7 @@ public class HTTPRequestMessageReader implements MessageReader<HTTPRequest> {
 		return request;
 	}
 
-	private String extract(ReadBufferContext context, int start, int end) {
+	private String extract(BufferContext context, int start, int end) {
 		var builder = new StringBuilder();
 		for (var i = start; i < end; i++) {
 			builder.append((char) (context.get(i)));

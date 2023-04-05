@@ -1,6 +1,6 @@
 package util;
 
-import tcp.server.ReadBufferContext;
+import tcp.server.BufferContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,7 +11,7 @@ public final class Utils {
 		// Utility classes should not be instantiated
 	}
 
-	public static List<Integer> findAllMatches(ReadBufferContext bufferContext, byte[] sequence) {
+	public static List<Integer> findAllMatches(BufferContext bufferContext, byte[] sequence) {
 		var matches = new ArrayList<Integer>();
 		var N = bufferContext.size();
 		for (var i = 0; i < N - sequence.length + 1; i++) {

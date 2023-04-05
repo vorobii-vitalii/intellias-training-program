@@ -2,7 +2,7 @@ package websocket.reader;
 
 import exception.ParseException;
 import reader.MessageReader;
-import tcp.server.ReadBufferContext;
+import tcp.server.BufferContext;
 import websocket.OpCode;
 import websocket.WebSocketMessage;
 
@@ -15,13 +15,13 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 	public static final int METADATA_IN_BYTES = 2;
 
 	@Override
-	public WebSocketMessage read(ReadBufferContext readBufferContext) throws ParseException {
-		int N = readBufferContext.size();
+	public WebSocketMessage read(BufferContext bufferContext) throws ParseException {
+		int N = bufferContext.size();
 		if (N < METADATA_IN_BYTES) {
 			return null;
 		}
-		byte firstByte = readBufferContext.get(0);
-		byte secondByte = readBufferContext.get(1);
+		byte firstByte = bufferContext.get(0);
+		byte secondByte = bufferContext.get(1);
 		var isFin = (firstByte & 0b10000000) != 0;
 		var isMasked = (secondByte & 0b10000000) != 0;
 		var opCode = OpCode.getByCode(firstByte & 0b00001111);
@@ -41,7 +41,7 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 		}
 		if (extraBytes != 0) {
 			var extendedSize =
-							new BigInteger(extractBytes(readBufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraBytes));
+							new BigInteger(extractBytes(bufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraBytes));
 			expectedMinLength += extendedSize.intValue();
 			payloadLength = extendedSize.intValue();
 		}
@@ -49,14 +49,14 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 			return null;
 		}
 		var maskingKey = isMasked
-						? extractBytes(readBufferContext,
+						? extractBytes(bufferContext,
 						METADATA_IN_BYTES + extraBytes,
 						METADATA_IN_BYTES + MASKING_KEY_IN_BYTES + extraBytes)
 						: null;
 
 		var payloadStart = (isMasked ? METADATA_IN_BYTES : 0) + MASKING_KEY_IN_BYTES + extraBytes;
 
-		var payload = extractBytes(readBufferContext, payloadStart, payloadStart + payloadLength);
+		var payload = extractBytes(bufferContext, payloadStart, payloadStart + payloadLength);
 		if (isMasked) {
 			for (int i = 0; i < payload.length; i++) {
 				payload[i] = (byte) (payload[i] ^ maskingKey[i % MASKING_KEY_IN_BYTES]);
@@ -70,10 +70,10 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 		return webSocketMessage;
 	}
 
-	private byte[] extractBytes(ReadBufferContext readBufferContext, int start, int end) {
+	private byte[] extractBytes(BufferContext bufferContext, int start, int end) {
 		byte[] arr = new byte[end - start];
 		for (int i = start; i < end; i++) {
-			arr[i - start] = readBufferContext.get(i);
+			arr[i - start] = bufferContext.get(i);
 		}
 		return arr;
 	}

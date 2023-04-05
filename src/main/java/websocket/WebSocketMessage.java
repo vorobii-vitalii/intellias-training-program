@@ -8,8 +8,6 @@ import java.util.Arrays;
 public class WebSocketMessage implements Serializable {
 	private boolean isFin;
 	private OpCode opCode;
-	private boolean isMasked;
-	private int payloadLength;
 	private byte[] maskingKey;
 	private byte[] payload;
 
@@ -27,22 +25,6 @@ public class WebSocketMessage implements Serializable {
 
 	public void setOpCode(OpCode opCode) {
 		this.opCode = opCode;
-	}
-
-	public boolean isMasked() {
-		return isMasked;
-	}
-
-	public void setMasked(boolean masked) {
-		isMasked = masked;
-	}
-
-	public int getPayloadLength() {
-		return payloadLength;
-	}
-
-	public void setPayloadLength(int payloadLength) {
-		this.payloadLength = payloadLength;
 	}
 
 	public byte[] getPayload() {
@@ -68,7 +50,7 @@ public class WebSocketMessage implements Serializable {
 		byte[] payloadLengthBytes = new byte[]{};
 		firstByte |= (isFin ? 1 : 0) << 7;
 		firstByte |= opCode.getCode();
-		secondByte |= (isMasked ? 1 : 0) << 7;
+		secondByte |= (maskingKey != null ? 1 : 0) << 7;
 		if (payload.length <= 125) {
 			secondByte |= payload.length;
 		}
@@ -86,7 +68,7 @@ public class WebSocketMessage implements Serializable {
 						maskingKey,
 						payload
 		);
-		if (isMasked) {
+		if (maskingKey != null) {
 			int payloadPos = getTotal(payloadLengthBytes, maskingKey) + 2;
 			for (int i = 0; i < payload.length; i++) {
 				arr[payloadPos + i] = (byte) (arr[payloadPos + i] ^ maskingKey[i % maskingKey.length]);
@@ -123,8 +105,6 @@ public class WebSocketMessage implements Serializable {
 		return "WebSocketMessage{" +
 						"isFin=" + isFin +
 						", opCode=" + opCode +
-						", isMasked=" + isMasked +
-						", payloadLength=" + payloadLength +
 						", maskingKey=" + Arrays.toString(maskingKey) +
 						", payload=" + Arrays.toString(payload) +
 						'}';

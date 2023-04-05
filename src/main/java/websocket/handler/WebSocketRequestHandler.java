@@ -1,6 +1,5 @@
 package websocket.handler;
 
-import exception.ParseException;
 import tcp.server.ServerAttachment;
 import tcp.server.SocketMessageReader;
 import util.Constants;
@@ -8,7 +7,6 @@ import websocket.WebSocketMessage;
 import websocket.endpoint.WebSocketEndpointProvider;
 import websocket.reader.WebSocketMessageReader;
 
-import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.function.Consumer;
@@ -27,7 +25,7 @@ public class WebSocketRequestHandler implements Consumer<SelectionKey> {
 		var serverAttachment = ((ServerAttachment) selectionKey.attachment());
 		try {
 			var socketChannel = (SocketChannel) selectionKey.channel();
-			var webSocketMessage = socketMessageReader.readMessage(serverAttachment.readBufferContext(), socketChannel);
+			var webSocketMessage = socketMessageReader.readMessage(serverAttachment.bufferContext(), socketChannel);
 			if (webSocketMessage != null) {
 				onMessageRead(webSocketMessage, selectionKey);
 			}
