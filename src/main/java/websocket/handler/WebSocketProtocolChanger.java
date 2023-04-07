@@ -6,8 +6,8 @@ import tcp.server.ServerAttachment;
 import util.Constants;
 import websocket.endpoint.WebSocketEndpointProvider;
 
-import java.util.ArrayDeque;
 import java.util.Map;
+import java.util.concurrent.LinkedBlockingDeque;
 
 public class WebSocketProtocolChanger implements ProtocolChanger {
 	private final WebSocketEndpointProvider webSocketEndpointProvider;
@@ -25,7 +25,7 @@ public class WebSocketProtocolChanger implements ProtocolChanger {
 		selectionKey.attach(new ServerAttachment(
 						Constants.Protocol.WEB_SOCKET,
 						attachmentObject.bufferContext(),
-						new ArrayDeque<>(),
+						new LinkedBlockingDeque<>(),
 						Map.of(Constants.WebSocketMetadata.ENDPOINT, endpoint)
 		));
 		webSocketEndpointProvider.getEndpoint(endpoint).onConnect(selectionKey);

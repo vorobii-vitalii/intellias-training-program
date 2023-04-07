@@ -1,18 +1,17 @@
 package http;
 
+import util.Constants;
 import util.Serializable;
 
 public record HTTPResponse(HTTPResponseLine responseLine, HTTPHeaders httpHeaders, byte[] body)
 				implements Serializable {
 
-	public static final int CODE_SWITCHING_PROTOCOL = 101;
-
 	public boolean isUpgradeResponse() {
-		return responseLine.statusCode() == CODE_SWITCHING_PROTOCOL;
+		return responseLine.statusCode() == Constants.HTTPStatusCode.SWITCHING_PROTOCOL;
 	}
 
 	public String getUpgradeProtocol() {
-		return httpHeaders.getHeaderValues("Upgrade").get(0);
+		return httpHeaders.getHeaderValues(Constants.HTTPHeaders.UPGRADE).get(0);
 	}
 
 	@Override

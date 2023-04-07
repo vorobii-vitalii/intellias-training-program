@@ -14,6 +14,7 @@ import tcp.server.TCPServerConfig;
 import tcp.server.handler.DelegatingReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
 import util.Constants;
+import websocket.endpoint.DocumentStreamingWebSocketEndpoint;
 import websocket.endpoint.WebSocketEndpoint;
 import websocket.endpoint.WebSocketEndpointProvider;
 import websocket.handler.WebSocketChangeProtocolHTTPHandlerStrategy;
@@ -61,8 +62,9 @@ public class HttpServer {
 								selectionKey.interestOps(OP_WRITE);
 							}
 						},
-						"/documents", new WebSocketEndpoint() {
-							private final Set<SelectionKey> connections = new HashSet<>();
+						"/documents", new DocumentStreamingWebSocketEndpoint(),
+						"/stream", new WebSocketEndpoint() {
+							private final Set<SelectionKey> connections = Collections.synchronizedSet(new HashSet<>());
 
 							@Override
 							public void onConnect(SelectionKey selectionKey) {
