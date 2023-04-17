@@ -10,8 +10,8 @@
     <packaging>jar</packaging>
 
     <properties>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.source>19</maven.compiler.source>
+        <maven.compiler.target>19</maven.compiler.target>
         <junit-jupiter.version>5.9.2</junit-jupiter.version>
         <mockito.version>5.1.1</mockito.version>
         <assertj.version>3.24.2</assertj.version>
@@ -62,6 +62,68 @@
             <version>${junit-jupiter.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.vitalii.vorobii</groupId>
+            <artifactId>treedoc-java</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.20.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.io7m.jcip</groupId>
+            <artifactId>jcip-annotations</artifactId>
+            <version>1.0.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.neo4j.driver</groupId>
+            <artifactId>neo4j-java-driver</artifactId>
+            <version>5.7.0</version>
+        </dependency>
+
+
+        <!-- https://mvnrepository.com/artifact/org.mongodb/mongodb-driver-sync -->
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver-sync</artifactId>
+            <version>4.9.1</version>
+        </dependency>
+
+
+
+        <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-reload4j -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-reload4j</artifactId>
+            <version>2.0.7</version>
+        </dependency>
+
+
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.12.0</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.apache.commons/commons-pool2 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+            <version>2.11.1</version>
+        </dependency>
+
+
+
 
     </dependencies>
 
@@ -86,35 +148,50 @@
                 <version>1.4.13</version>
                 <executions>
                     <execution>
-                        <id>echo-client</id>
+                        <id>http-server</id>
                         <goals>
                             <goal>build</goal>
                             <goal>push</goal>
                         </goals>
                         <configuration>
-                            <repository>my-repo/echo-client</repository>
+                            <repository>my-repo/http-server</repository>
                             <tag>${project.version}</tag>
                             <buildArgs>
                                 <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>
-                                <MAIN_CLASS>echo.client.EchoClientRunner</MAIN_CLASS>
+                                <MAIN_CLASS>websocket.HttpServer</MAIN_CLASS>
                             </buildArgs>
                         </configuration>
                     </execution>
-                    <execution>
-                        <id>echo-server</id>
-                        <goals>
-                            <goal>build</goal>
-                            <goal>push</goal>
-                        </goals>
-                        <configuration>
-                            <repository>my-repo/echo-server</repository>
-                            <tag>${project.version}</tag>
-                            <buildArgs>
-                                <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>
-                                <MAIN_CLASS>echo.server.EchoServerRunner</MAIN_CLASS>
-                            </buildArgs>
-                        </configuration>
-                    </execution>
+<!--                    <execution>-->
+<!--                        <id>echo-client</id>-->
+<!--                        <goals>-->
+<!--                            <goal>build</goal>-->
+<!--                            <goal>push</goal>-->
+<!--                        </goals>-->
+<!--                        <configuration>-->
+<!--                            <repository>my-repo/echo-client</repository>-->
+<!--                            <tag>${project.version}</tag>-->
+<!--                            <buildArgs>-->
+<!--                                <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>-->
+<!--                                <MAIN_CLASS>echo.client.EchoClientRunner</MAIN_CLASS>-->
+<!--                            </buildArgs>-->
+<!--                        </configuration>-->
+<!--                    </execution>-->
+<!--                    <execution>-->
+<!--                        <id>echo-server</id>-->
+<!--                        <goals>-->
+<!--                            <goal>build</goal>-->
+<!--                            <goal>push</goal>-->
+<!--                        </goals>-->
+<!--                        <configuration>-->
+<!--                            <repository>my-repo/echo-server</repository>-->
+<!--                            <tag>${project.version}</tag>-->
+<!--                            <buildArgs>-->
+<!--                                <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>-->
+<!--                                <MAIN_CLASS>echo.server.EchoServerRunner</MAIN_CLASS>-->
+<!--                            </buildArgs>-->
+<!--                        </configuration>-->
+<!--                    </execution>-->
                 </executions>
             </plugin>
         </plugins>

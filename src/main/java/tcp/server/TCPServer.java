@@ -54,6 +54,9 @@ public class TCPServer {
 			serverSocketChannel.bind(new InetSocketAddress(serverConfig.getHost(), serverConfig.getPort()));
 			while (!Thread.currentThread().isInterrupted()) {
 				selector.select(selectionKey -> {
+					if (!selectionKey.isValid()) {
+						return;
+					}
 					var operationHandler = operationHandlerByType.get(selectionKey.readyOps());
 					if (operationHandler != null) {
 						operationHandler.accept(selectionKey);

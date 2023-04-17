@@ -1,13 +1,9 @@
 package websocket.handler;
 
-import http.handler.ProtocolChangeContext;
-import http.handler.ProtocolChanger;
-import tcp.server.ServerAttachment;
+import http.protocol_change.ProtocolChangeContext;
+import http.protocol_change.ProtocolChanger;
 import util.Constants;
 import websocket.endpoint.WebSocketEndpointProvider;
-
-import java.util.Map;
-import java.util.concurrent.LinkedBlockingDeque;
 
 public class WebSocketProtocolChanger implements ProtocolChanger {
 	private final WebSocketEndpointProvider webSocketEndpointProvider;
@@ -18,17 +14,12 @@ public class WebSocketProtocolChanger implements ProtocolChanger {
 
 	@Override
 	public void changeProtocol(ProtocolChangeContext protocolChangeContext) {
-		var selectionKey = protocolChangeContext.selectionKey();
 		var request = protocolChangeContext.request();
-		var attachmentObject = (ServerAttachment) (selectionKey.attachment());
 		var endpoint = request.getHttpRequestLine().path();
-		selectionKey.attach(new ServerAttachment(
-						Constants.Protocol.WEB_SOCKET,
-						attachmentObject.bufferContext(),
-						new LinkedBlockingDeque<>(),
-						Map.of(Constants.WebSocketMetadata.ENDPOINT, endpoint)
-		));
-		webSocketEndpointProvider.getEndpoint(endpoint).onConnect(selectionKey);
+		var connection = protocolChangeContext.connection();
+		connection.setProtocol(Constants.Protocol.WEB_SOCKET);
+		connection.setMetadata(Constants.WebSocketMetadata.ENDPOINT, endpoint);
+		webSocketEndpointProvider.getEndpoint(endpoint).onConnect(connection);
 	}
 
 	@Override

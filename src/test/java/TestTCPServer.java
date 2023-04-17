@@ -77,6 +77,7 @@ class TestTCPServer {
 		when(selectorProvider.openServerSocketChannel(PROTOCOL_FAMILY)).thenReturn(serverSocketChannel);
 		when(selector.select(any())).thenAnswer(invocationOnMock -> {
 			Consumer<SelectionKey> selectionKeyConsumer = invocationOnMock.getArgument(0);
+			when(selectionKey.isValid()).thenReturn(true);
 			when(selectionKey.readyOps()).thenReturn(OP_ACCEPT);
 			selectionKeyConsumer.accept(selectionKey);
 			return null;
@@ -94,6 +95,7 @@ class TestTCPServer {
 		when(selectorProvider.openServerSocketChannel(PROTOCOL_FAMILY)).thenReturn(serverSocketChannel);
 		when(selector.select(any())).thenAnswer(invocationOnMock -> {
 			Consumer<SelectionKey> selectionKeyConsumer = invocationOnMock.getArgument(0);
+			when(selectionKey.isValid()).thenReturn(true);
 			when(selectionKey.readyOps()).thenReturn(OP_READ);
 			selectionKeyConsumer.accept(selectionKey);
 			return null;
@@ -111,6 +113,7 @@ class TestTCPServer {
 		when(selectorProvider.openServerSocketChannel(PROTOCOL_FAMILY)).thenReturn(serverSocketChannel);
 		when(selector.select(any())).thenAnswer(invocationOnMock -> {
 			Consumer<SelectionKey> selectionKeyConsumer = invocationOnMock.getArgument(0);
+			when(selectionKey.isValid()).thenReturn(true);
 			when(selectionKey.readyOps()).thenReturn(OP_WRITE);
 			selectionKeyConsumer.accept(selectionKey);
 			return null;

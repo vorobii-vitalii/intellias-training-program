@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.4.1/tinymce.min.js"></script>
+</head>
+
+<body>
+
+<h1>Text editor</h1>
+<div id="event-container"></div>
+
+<textarea id="editor" cols="150" rows="80">
+
+</textarea>
+
+</body>
+
+<script>
+
+    const socket = new WebSocket("wss://localhost/documents");
+
+    let connectionId;
+    let arr;
+
+    // private int compareAt(int pos, TreeDocPath<D> leftPath, TreeDocPath<D> rightPath) {
+    //     boolean lPos = leftPath.isSet(pos);
+    //     boolean rPos = rightPath.isSet(pos);
+    //     D lDisambiguator = leftPath.disambiguatorAt(pos);
+    //     D rDisambiguator = rightPath.disambiguatorAt(pos);
+    //     if (lDisambiguator == null && rDisambiguator == null) {
+    //         if (lPos != rPos) {
+    //             return lPos ? 1 : -1;
+    //         } else {
+    //             return 0;
+    //         }
+    //     } else if (lDisambiguator != null && rDisambiguator != null) {
+    //         if (lPos != rPos) {
+    //             return lPos ? 1 : -1;
+    //         } else {
+    //             return lDisambiguator.compareTo(rDisambiguator);
+    //         }
+    //     } else if (lDisambiguator != null) {
+    //         return rPos ? -1 : 1;
+    //     } else {
+    //         return lPos ? 1 : -1;
+    //     }
+    // }
+
+    const comparePath = (a, b) => {
+        const m = Math.min(a.length, b.length);
+        // console.log("Comparing path  of " + JSON.stringify(a) + " and " + JSON.stringify(b) + " min = " + m);
+        for (let i = 0; i < m; i++) {
+            if (a[i].second && b[i].second) {
+                if (a[i].first !== b[i].first) {
+                    return a[i].first ? 1 : -1;
+                }
+                if (a[i].second !== b[i].second) {
+                    return a[i].second < b[i].second ? -1 : 1;
+                }
+            }
+            else if (!a[i].second && !b[i].second) {
+                if (a[i].first !== b[i].first) {
+                    return a[i].first ? 1 : -1;
+                }
+            }
+            else if (a[i].second) {
+                return b[i].first ? -1 : 1;
+            }
+            else {
+                return a[i].first ? 1 : -1;
+            }
+        }
+        if (a.length === b.length) {
+            return 0;
+        }
+        if (a.length === m) {
+            return b[m].first ? -1 : 1;
+        }
+        return a[m].first ? 1 : -1;
+    };
+    const textArea = document.getElementById("editor");
+
+    socket.onmessage = function(event) {
+        const eventPayload = JSON.parse(event.data);
+        // console.log('Websocket event');
+        // console.log(eventPayload);
+        // console.log(arr);
+
+        if (eventPayload.responseType === 'ON_CONNECT') {
+            // console.log('Setting value');
+            // console.log(eventPayload.payload.currentState.map(v => v.second))
+            arr = eventPayload.payload.currentState;
+            connectionId = eventPayload.payload.connectionId;
+        }
+        else if (eventPayload.responseType === 'ADD') {
+            // console.log('ADD Event');
+            arr.splice(arr.length, 0, eventPayload.payload);
+            arr = arr.sort((a, b) => {
+                return comparePath(a.first, b.first);
+            });
+        }
+        else if (eventPayload.responseType === 'DELETE') {
+            // console.log('DELETE Event');
+            arr = arr.filter(a => {
+                let c = comparePath(a.first, eventPayload.payload);
+                return c !== 0;
+            });
+        }
+        document.getElementById("editor").value = arr.map(v => v.second).join('');
+        // console.log(arr);
+    };
+    socket.onopen = () => {
+        socket.send(JSON.stringify({
+            type: 'CONNECT'
+        }));
+    };
+
+    const create = (index, c) => {
+        if (arr.length === 0) {
+            return {first: [{first: false, second: connectionId}], second: c};
+        }
+        if (c >= arr.length) {
+            return {first: [...(arr[arr.length - 1].first), {first: true, second: connectionId}], second: c};
+        }
+        if (index === 0) {
+            // return [...(arr[index].first), {first: {first: false, second: connectionId}, second: c}];
+            return {first: [...(arr[index].first), {first: false, second: connectionId}], second: c};
+        }
+        else if (index === arr.length) {
+            return {first: [...(arr[index - 1].first), {first: true, second: connectionId}], second: c};
+        }
+        const prev = arr[index - 1].first;
+        const next = arr[index].first;
+        if (isAncestor(prev, next)) {
+            return {first: [...next, {first: false, second: connectionId}], second: c};
+        }
+        return {first: [...prev, {first: true, second: connectionId}], second: c};
+    };
+
+    const isAncestor = (a, b) => {
+        if (b.length < a.length) {
+            return false;
+        }
+        for (let i = 0; i < a.length; i++) {
+            if (a[i].first !== b[i].first || a[i].second !== b[i].second) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    let changes = [];
+
+    textArea.addEventListener("input", event => {
+        const char = event.data;
+        const index = textArea.selectionStart - 1;
+
+        if (!char && index < arr.length) {
+            // deletedIndex + 1
+            // console.log(arr[index + 1].first)
+            socket.send(JSON.stringify({
+                type: 'DELETE',
+                payload: arr[index + 1].first
+            }));
+            // changes.splice(changes.length, 0, {
+            //     type: 'DELETE',
+            //     payload: arr[index + 1].first
+            // });
+            arr.splice(index + 1, 1);
+            // console.log(`Deleted character ${char} ${index}`)
+        } else {
+            // console.log(`Inserted character ${char} ${index}`)
+            const a = create(index, char || '\n');
+            socket.send(JSON.stringify({
+                type: 'ADD',
+                payload: a
+            }));
+            // changes.splice(changes.length, 0, {
+            //     type: 'ADD',
+            //     payload: a
+            // });
+            arr.splice(index, 0, a);
+        }
+        // console.log(arr)
+    });
+
+    setInterval(() => {
+        for (const change of changes) {
+            console.log('Sending ' + JSON.stringify(change))
+            socket.send(JSON.stringify(change));
+        }
+        changes = [];
+    }, 5000);
+
+</script>
+
+</html>

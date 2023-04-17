@@ -1,4 +1,4 @@
-FROM openjdk:17-alpine
+FROM openjdk:19-alpine
 
 ARG JAR_FILE
 ARG MAIN_CLASS

@@ -1,5 +1,7 @@
 package tcp.server.handler;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import tcp.server.ServerAttachment;
 import util.Serializable;
 
@@ -12,11 +14,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class WriteOperationHandler implements Consumer<SelectionKey> {
-	private final Map<String, BiConsumer<SelectionKey, Serializable>> onWriteHandlerByProtocolName;
-
-	public WriteOperationHandler(Map<String, BiConsumer<SelectionKey, Serializable>> onWriteHandlerByProtocolName) {
-		this.onWriteHandlerByProtocolName = onWriteHandlerByProtocolName;
-	}
+	private static final Logger LOGGER = LogManager.getLogger(WriteOperationHandler.class);
 
 	@Override
 	public void accept(SelectionKey selectionKey) {
@@ -26,20 +24,19 @@ public class WriteOperationHandler implements Consumer<SelectionKey> {
 		if (responses == null) {
 			return;
 		}
-		while (selectionKey.isWritable() && !responses.isEmpty()) {
-			var response = responses.poll();
-			var buffer = ByteBuffer.wrap(response.serialize());
-			while (buffer.hasRemaining()) {
-				try {
+		try {
+			while (selectionKey.isWritable() && !responses.isEmpty()) {
+				var response = responses.poll();
+				var buffer = ByteBuffer.wrap(response.serialize());
+				while (buffer.hasRemaining()) {
 					socketChannel.write(buffer);
-				} catch (IOException e) {
-					throw new RuntimeException(e);
 				}
 			}
-			var handler = onWriteHandlerByProtocolName.get(attachmentObject.protocol());
-			if (handler != null) {
-				handler.accept(selectionKey, response);
-			}
+			selectionKey.interestOps(SelectionKey.OP_READ);
+		}
+		catch (IOException e) {
+			selectionKey.cancel();
+			e.printStackTrace();
 		}
 	}
 

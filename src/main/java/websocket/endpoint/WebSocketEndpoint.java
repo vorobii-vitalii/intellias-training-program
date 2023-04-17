@@ -1,10 +1,9 @@
 package websocket.endpoint;
 
-import websocket.WebSocketMessage;
-
-import java.nio.channels.SelectionKey;
+import tcp.server.SocketConnection;
+import websocket.domain.WebSocketMessage;
 
 public interface WebSocketEndpoint {
-	void onConnect(SelectionKey selectionKey);
-	void onMessage(SelectionKey selectionKey, WebSocketMessage message);
+	void onConnect(SocketConnection connection);
+	void onMessage(SocketConnection connection, WebSocketMessage message);
 }

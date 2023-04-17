@@ -1,7 +1,7 @@
 package http.handler;
 
-import http.HTTPRequest;
-import http.HTTPResponse;
+import http.domain.HTTPRequest;
+import http.domain.HTTPResponse;
 
 public interface HTTPRequestHandlerStrategy {
 	boolean supports(HTTPRequest httpRequest);

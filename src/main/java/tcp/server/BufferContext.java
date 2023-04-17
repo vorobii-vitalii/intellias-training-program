@@ -29,12 +29,16 @@ public class BufferContext {
 		return byteBuffers.get(bufferPos).get(pos % SINGLE_BUFFER_SIZE);
 	}
 
-	public void reset() {
+	public void free(int bytesToFree) {
+		ByteBuffer lastBuffer = byteBuffers.get(byteBuffers.size() - 1);
+		ByteBuffer firstBuffer = byteBuffers.get(0);
+		int r = lastBuffer.position() - bytesToFree % SINGLE_BUFFER_SIZE;
+		for (int i = 0; i < r; i++) {
+			firstBuffer.put(i, lastBuffer.get(lastBuffer.position() - r + i));
+		}
+		firstBuffer.position(r);
 		while (byteBuffers.size() > NUM_BUFFERS_TO_KEEP_ON_RESET) {
 			byteBuffers.remove(byteBuffers.size() - 1);
-		}
-		for (var byteBuffer : byteBuffers) {
-			byteBuffer.clear();
 		}
 	}
 

@@ -1,33 +1,42 @@
 package websocket;
 
-import http.HTTPMethod;
-import http.HTTPRequest;
-import http.HTTPResponse;
-import http.handler.HTTPAcceptOperationHandler;
-import http.handler.HTTPReadOperationHandler;
-import http.handler.HTTPRequestHandler;
-import request_handler.ProcessingRequest;
-import request_handler.RequestProcessor;
-import tcp.server.ServerAttachment;
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
+import com.mongodb.ServerApi;
+import com.mongodb.ServerApiVersion;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoDatabase;
+import http.domain.HTTPMethod;
+import http.domain.HTTPRequest;
+import http.handler.*;
+import http.post_processor.HTTPResponsePostProcessor;
+import http.post_processor.ProtocolChangerHTTPResponsePostProcessor;
+import http.reader.HTTPRequestMessageReader;
+import mongo.MongoDBAtomBuffer;
+import org.apache.log4j.BasicConfigurator;
+import request_handler.NetworkRequest;
+import request_handler.NetworkRequestProcessor;
+import tcp.server.SocketMessageReader;
 import tcp.server.TCPServer;
 import tcp.server.TCPServerConfig;
 import tcp.server.handler.DelegatingReadOperationHandler;
+import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
 import util.Constants;
-import websocket.endpoint.DocumentStreamingWebSocketEndpoint;
-import websocket.endpoint.WebSocketEndpoint;
+import websocket.domain.WebSocketMessage;
+import websocket.endpoint.document.DocumentStreamingWebSocketEndpoint;
 import websocket.endpoint.WebSocketEndpointProvider;
+import websocket.handler.FileDownloadHTTPHandlerStrategy;
 import websocket.handler.WebSocketChangeProtocolHTTPHandlerStrategy;
 import websocket.handler.WebSocketProtocolChanger;
 import websocket.handler.WebSocketRequestHandler;
+import websocket.reader.WebSocketMessageReader;
 
 import java.net.StandardProtocolFamily;
-import java.nio.channels.SelectionKey;
 import java.nio.channels.spi.SelectorProvider;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.Executors;
 
 import static java.nio.channels.SelectionKey.*;
 
@@ -38,76 +47,48 @@ public class HttpServer {
 	private static final int PORT = 8000;
 	private static final String HOSTNAME = "127.0.0.1";
 
+	private static String getMongoConnectionURL() {
+		return Optional.ofNullable(System.getenv("MONGO_URL"))
+						.orElse("mongodb://localhost:27017");
+	}
+
+
+	private static int getPort() {
+		return Optional.ofNullable(System.getenv("PORT"))
+						.map(Integer::parseInt)
+						.orElse(8000);
+	}
+
+	private static String getHost() {
+		return Optional.ofNullable(System.getenv("HOST"))
+						.orElse("127.0.0.1");
+	}
+
 	public static void main(String[] args) {
-		var blockingQueue = new ArrayBlockingQueue<ProcessingRequest<HTTPRequest, HTTPResponse>>(QUEUE_SIZE);
+		BasicConfigurator.configure();
+		var httpRequestQueue = new ArrayBlockingQueue<NetworkRequest<HTTPRequest>>(QUEUE_SIZE);
+		var webSocketRequestQueue = new ArrayBlockingQueue<NetworkRequest<WebSocketMessage>>(QUEUE_SIZE);
+
+		ConnectionString connString = new ConnectionString(getMongoConnectionURL());
+		ServerApi serverApi = ServerApi.builder()
+						.version(ServerApiVersion.V1)
+						.build();
+		MongoClientSettings settings = MongoClientSettings.builder()
+						.applyConnectionString(connString)
+						.serverApi(serverApi)
+						.build();
+		MongoClient mongoClient = MongoClients.create(settings);
+
+		MongoDatabase mongoClientDatabase = mongoClient.getDatabase("test");
+
+//		var driver = GraphDatabase.driver("bolt://0.0.0.0:7687", AuthTokens.basic("neo4j", "password"));
 
 		WebSocketEndpointProvider webSocketEndpointProvider = new WebSocketEndpointProvider(Map.of(
-						"/example", new WebSocketEndpoint() {
-							@Override
-							public void onConnect(SelectionKey selectionKey) {
-								ServerAttachment attachmentObject = (ServerAttachment) selectionKey.attachment();
-								System.out.println("New websocket connection " + selectionKey + " object = " + attachmentObject);
-							}
-
-							@Override
-							public void onMessage(SelectionKey selectionKey, WebSocketMessage message) {
-								ServerAttachment attachmentObject = (ServerAttachment) selectionKey.attachment();
-								System.out.println("Read websocket message: " + message);
-								var messageToWrite = new WebSocketMessage();
-								messageToWrite.setFin(true);
-								messageToWrite.setOpCode(OpCode.TEXT);
-								var replyMessage = new String(message.getPayload()) + " Reply";
-								messageToWrite.setPayload(replyMessage.getBytes(StandardCharsets.UTF_8));
-								attachmentObject.responses().add(messageToWrite);
-								selectionKey.interestOps(OP_WRITE);
-							}
-						},
-						"/documents", new DocumentStreamingWebSocketEndpoint(),
-						"/stream", new WebSocketEndpoint() {
-							private final Set<SelectionKey> connections = Collections.synchronizedSet(new HashSet<>());
-
-							@Override
-							public void onConnect(SelectionKey selectionKey) {
-								ServerAttachment attachmentObject = (ServerAttachment) selectionKey.attachment();
-								System.out.println("New websocket connection " + selectionKey + " object = " + attachmentObject);
-								connections.add(selectionKey);
-							}
-
-							@Override
-							public void onMessage(SelectionKey selectionKey, WebSocketMessage message) {
-								switch (message.getOpCode()) {
-									case CONNECTION_CLOSE -> {
-										System.out.println("Client request close of connection " + selectionKey);
-										connections.remove(selectionKey);
-										selectionKey.cancel();
-									}
-									case TEXT -> {
-										System.out.println("New document update: " + message);
-										var messageToBroadcast = new WebSocketMessage();
-										messageToBroadcast.setFin(true);
-										messageToBroadcast.setOpCode(OpCode.TEXT);
-										messageToBroadcast.setPayload(message.getPayload());
-										for (SelectionKey connection : connections) {
-											if (connection != selectionKey) {
-												((ServerAttachment) connection.attachment()).responses().add(messageToBroadcast);
-												connection.interestOps(OP_WRITE);
-											}
-										}
-										var messageToAuthor = new WebSocketMessage();
-										messageToAuthor.setFin(true);
-										messageToAuthor.setOpCode(OpCode.TEXT);
-										messageToAuthor.setPayload("Change was broadcast-ed".getBytes(StandardCharsets.UTF_8));
-										((ServerAttachment) selectionKey.attachment()).responses().add(messageToAuthor);
-										selectionKey.interestOps(OP_WRITE);
-										selectionKey.selector().wakeup();
-									}
-								}
-							}
-						}
+						"/documents", new DocumentStreamingWebSocketEndpoint(new MongoDBAtomBuffer(mongoClientDatabase.getCollection("docCol"), 13))
 		));
 
 
-		HTTPRequestHandler handler = new HTTPRequestHandler(new ArrayList<>(List.of(new WebSocketChangeProtocolHTTPHandlerStrategy(List.of(
+		WebSocketChangeProtocolHTTPHandlerStrategy webSocketChangeProtocolHTTPHandlerStrategy = new WebSocketChangeProtocolHTTPHandlerStrategy(List.of(
 						request -> request.getHttpRequestLine().httpMethod() == HTTPMethod.GET,
 						request -> request.getHeaders()
 										.getHeaderValue(Constants.HTTPHeaders.HOST)
@@ -118,7 +99,7 @@ public class HttpServer {
 										.isPresent(),
 						request -> request.getHeaders()
 										.getHeaderValue(Constants.HTTPHeaders.CONNECTION)
-										.filter("Upgrade"::equals)
+										.filter("Upgrade"::equalsIgnoreCase)
 										.isPresent(),
 						request -> request.getHeaders()
 										.getHeaderValue(Constants.HTTPHeaders.WEBSOCKET_KEY)
@@ -126,19 +107,33 @@ public class HttpServer {
 						request -> request.getHeaders().getHeaderValue(Constants.HTTPHeaders.WEBSOCKET_VERSION)
 										.filter(String.valueOf(WS_VERSION)::equals)
 										.isPresent()
-		), Set.of(), webSocketEndpointProvider))));
+		), webSocketEndpointProvider);
 
-		var requestProcessor = new RequestProcessor<>(
-						blockingQueue,
-						Executors.newCachedThreadPool(),
-						handler
+		Collection<HTTPResponsePostProcessor> httpResponsePostProcessors = List.of(
+			new ProtocolChangerHTTPResponsePostProcessor(List.of(new WebSocketProtocolChanger(webSocketEndpointProvider)))
 		);
-		new Thread(requestProcessor).start();
+
+
+		HTTPRequestHandler handler = new HTTPRequestHandler(
+						List.of(
+										webSocketChangeProtocolHTTPHandlerStrategy,
+										new FileDownloadHTTPHandlerStrategy(p -> p.isEmpty() || p.equals("/"), "index.html", "text/html")
+						),
+						httpResponsePostProcessors
+		);
+
+		var httpRequestProcessor = new NetworkRequestProcessor<>(httpRequestQueue, handler);
+		var webSocketRequestProcessor = new NetworkRequestProcessor<>(
+						webSocketRequestQueue,
+						new WebSocketRequestHandler(webSocketEndpointProvider)
+		);
+		new Thread(httpRequestProcessor).start();
+		new Thread(webSocketRequestProcessor).start();
 
 		var server = new TCPServer(
 						TCPServerConfig.builder()
-										.setHost(HOSTNAME)
-										.setPort(PORT)
+										.setHost(getHost())
+										.setPort(getPort())
 										.setProtocolFamily(StandardProtocolFamily.INET)
 										.build(),
 						SelectorProvider.provider(),
@@ -146,34 +141,18 @@ public class HttpServer {
 						Map.of(
 										OP_ACCEPT, new HTTPAcceptOperationHandler(),
 										OP_READ, new DelegatingReadOperationHandler(Map.of(
-														Constants.Protocol.HTTP, new HTTPReadOperationHandler(
-																		blockingQueue,
-																		List.of(new WebSocketProtocolChanger(webSocketEndpointProvider))
+														Constants.Protocol.HTTP, new GenericReadOperationHandler<>(
+																		httpRequestQueue,
+																		new SocketMessageReader<>(new HTTPRequestMessageReader((name, val) -> Collections.singletonList(val.trim())))
 														),
-														Constants.Protocol.WEB_SOCKET, new WebSocketRequestHandler(webSocketEndpointProvider)
+														Constants.Protocol.WEB_SOCKET, new GenericReadOperationHandler<>(
+																		webSocketRequestQueue,
+																		new SocketMessageReader<>(new WebSocketMessageReader())
+														)
 										)),
-										OP_WRITE, new WriteOperationHandler(Map.of(
-														Constants.Protocol.HTTP, (selectionKey, msg) -> {
-															System.out.println("On message written " + msg + " " + selectionKey);
-															ServerAttachment attachment = (ServerAttachment) selectionKey.attachment();
-															if (isEmpty(attachment.responses())) {
-																selectionKey.interestOps(OP_READ);
-															}
-														},
-														Constants.Protocol.WEB_SOCKET, (selectionKey, msg) -> {
-															System.out.println("On message written " + msg + " " + selectionKey);
-															ServerAttachment attachment = (ServerAttachment) selectionKey.attachment();
-															if (isEmpty(attachment.responses())) {
-																selectionKey.interestOps(OP_READ);
-															}
-														}
-										))
+										OP_WRITE, new WriteOperationHandler()
 						));
 		server.start();
-	}
-
-	private static boolean isEmpty(Collection<?> collection) {
-		return collection == null || collection.isEmpty();
 	}
 
 }

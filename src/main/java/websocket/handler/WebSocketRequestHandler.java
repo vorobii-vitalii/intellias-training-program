@@ -1,19 +1,12 @@
 package websocket.handler;
 
-import tcp.server.ServerAttachment;
-import tcp.server.SocketMessageReader;
+import request_handler.NetworkRequest;
+import request_handler.RequestHandler;
 import util.Constants;
-import websocket.WebSocketMessage;
+import websocket.domain.WebSocketMessage;
 import websocket.endpoint.WebSocketEndpointProvider;
-import websocket.reader.WebSocketMessageReader;
 
-import java.nio.channels.SelectionKey;
-import java.nio.channels.SocketChannel;
-import java.util.function.Consumer;
-
-public class WebSocketRequestHandler implements Consumer<SelectionKey> {
-	private final SocketMessageReader<WebSocketMessage> socketMessageReader =
-					new SocketMessageReader<>(new WebSocketMessageReader());
+public class WebSocketRequestHandler implements RequestHandler<WebSocketMessage> {
 	private final WebSocketEndpointProvider webSocketEndpointProvider;
 
 	public WebSocketRequestHandler(WebSocketEndpointProvider webSocketEndpointProvider) {
@@ -21,28 +14,9 @@ public class WebSocketRequestHandler implements Consumer<SelectionKey> {
 	}
 
 	@Override
-	public void accept(SelectionKey selectionKey) {
-		var serverAttachment = ((ServerAttachment) selectionKey.attachment());
-		try {
-			var socketChannel = (SocketChannel) selectionKey.channel();
-			var webSocketMessage = socketMessageReader.readMessage(serverAttachment.bufferContext(), socketChannel);
-			if (webSocketMessage != null) {
-				onMessageRead(webSocketMessage, selectionKey);
-			}
-		}
-		catch (Exception e) {
-			selectionKey.cancel();
-			e.printStackTrace();
-		}
+	public void handle(NetworkRequest<WebSocketMessage> networkRequest) {
+		var socketConnection = networkRequest.socketConnection();
+		var endpoint = socketConnection.getMetadata(Constants.WebSocketMetadata.ENDPOINT);
+		webSocketEndpointProvider.getEndpoint(endpoint).onMessage(socketConnection, networkRequest.request());
 	}
-
-	private void onMessageRead(WebSocketMessage message, SelectionKey selectionKey) {
-		var attachmentObject = (ServerAttachment) (selectionKey.attachment());
-		var context = attachmentObject.context();
-		// TODO: Do it in another thread!
-		var endpoint =
-						webSocketEndpointProvider.getEndpoint(context.get(Constants.WebSocketMetadata.ENDPOINT).toString());
-		endpoint.onMessage(selectionKey, message);
-	}
-
 }

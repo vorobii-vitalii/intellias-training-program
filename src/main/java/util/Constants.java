@@ -6,6 +6,7 @@ public interface Constants {
 		int SWITCHING_PROTOCOL = 101;
 		int BAD_REQUEST = 400;
 		int NOT_FOUND = 404;
+		int OK = 200;
 	}
 
 	interface HTTPHeaders {
@@ -15,12 +16,12 @@ public interface Constants {
 		String WEBSOCKET_KEY = "Sec-WebSocket-Key";
 		String WEBSOCKET_VERSION = "Sec-WebSocket-Version";
 		String WEBSOCKET_ACCEPT = "Sec-WebSocket-Accept";
-		String WEBSOCKET_PROTOCOLS = "Sec-WebSocket-Protocol";
+		String CONTENT_TYPE = "Content-Type";
+		String CONTENT_LENGTH = "Content-Length";
 	}
 
 	interface WebSocketMetadata {
 		String ENDPOINT = "endpoint";
-		String PROTOCOL = "protocol";
 	}
 
 	interface Protocol {
