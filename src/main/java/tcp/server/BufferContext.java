@@ -1,9 +1,12 @@
 package tcp.server;
 
+import net.jcip.annotations.NotThreadSafe;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+@NotThreadSafe
 public class BufferContext {
 	// TODO: Make it configurable
 	private static final int SINGLE_BUFFER_SIZE = 1536;
