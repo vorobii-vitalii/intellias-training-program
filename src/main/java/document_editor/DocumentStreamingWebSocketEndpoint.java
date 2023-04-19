@@ -1,4 +1,4 @@
-package websocket.endpoint.document;
+package document_editor;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -57,7 +57,10 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 	private record Response(ResponseType responseType, Object payload) {
 	}
 
-	private record ConnectDocumentReply(Integer connectionId, List<Pair<List<Pair<Boolean, Integer>>, Character>> currentState) {
+	private record ConnectDocumentReply(
+					Integer connectionId,
+					List<Pair<List<Pair<Boolean, Integer>>, Character>> currentState
+	) {
 	}
 
 	private record Request(RequestType type, Object payload) {
@@ -148,7 +151,6 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 			Pair<List<Pair<Boolean, Integer>>, Character> pair = request.getTypedPayload(new TypeToken<>() {
 			});
 			atomBuffer.insert(toPath(pair.first()), pair.second());
-//					LOGGER.info("INSERT {}", pair);
 			var webSocketMessage = new WebSocketMessage();
 			webSocketMessage.setFin(true);
 			webSocketMessage.setPayload(new Gson()
@@ -159,20 +161,6 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 				if (!connection.equals(socketConnection)) {
 					connection.appendResponse(webSocketMessage);
 					connection.changeOperation(OP_WRITE);
-				}
-			}
-		}
-		else if (request.type == RequestType.CHANGES) {
-			List<Request> requests = request.getTypedPayload(new TypeToken<>() {
-			});
-			List<Pair<TreeDocPath<Integer>, Character>> pairs = new ArrayList<>(requests.size());
-			for (Request r : requests) {
-				if (r.type == RequestType.ADD) {
-					Pair<List<Pair<Boolean, Integer>>, Character> pair = r.getTypedPayload(new TypeToken<>() {
-					});
-					pairs.add(new Pair<>(toPath(pair.first()), pair.second()));
-				} else {
-
 				}
 			}
 		}

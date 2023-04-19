@@ -1,12 +1,14 @@
 package http.reader;
 
-import tcp.server.reader.exception.ParseException;
+import http.domain.HTTPHeaders;
 import http.domain.HTTPRequest;
 import http.domain.HTTPRequestLine;
-import tcp.server.reader.MessageReader;
 import tcp.server.BufferContext;
-import util.Pair;
+import tcp.server.reader.MessageReader;
+import tcp.server.reader.exception.ParseException;
 import util.ByteUtils;
+import util.Constants;
+import util.Pair;
 
 import java.util.List;
 import java.util.function.BiFunction;
@@ -31,22 +33,36 @@ public class HTTPRequestMessageReader implements MessageReader<HTTPRequest> {
 		if (headerEndIndex == NOT_FOUND) {
 			return null;
 		}
-		// TODO: Iterate over headers and try to find Content-Length parameter, if not null -> validate
-		var request = new HTTPRequest(HTTPRequestLine.parse(getSubsequence(bufferContext, indexes, 0)));
+		var requestLine = HTTPRequestLine.parse(getStringSubsequence(bufferContext, indexes, 0));
+		var httpHeaders = new HTTPHeaders();
 		for (var i = 1; i < indexes.size() - 1; i++) {
-			var line = getSubsequence(bufferContext, indexes, i);
+			var line = getStringSubsequence(bufferContext, indexes, i);
 			var headerDelimiterIndex = line.indexOf(HEADER_DELIMITER);
 			if (headerDelimiterIndex == NOT_FOUND) {
 				throw new ParseException("HTTP header key-value pair should be delimiter-ed by : character " + line);
 			}
 			var headerName = line.substring(0, headerDelimiterIndex);
 			var headerValues = headerValuesExtractor.apply(headerName, line.substring(headerDelimiterIndex + 1));
-			request.getHeaders().addHeaders(headerName, headerValues);
+			httpHeaders.addHeaders(headerName, headerValues);
 		}
-		return new Pair<>(request, bufferContext.size());
+		int payloadSize = httpHeaders
+						.getHeaderValue(Constants.HTTPHeaders.CONTENT_LENGTH)
+						.map(Integer::parseInt)
+						.orElse(0);
+
+		int bodyStartIndex = indexes.get(headerEndIndex) + CLRF_BYTES.length;
+		int readPayloadBytes = bufferContext.size() - bodyStartIndex;
+		if (readPayloadBytes < payloadSize) {
+			return null;
+		}
+		var body = new byte[payloadSize];
+		for (var i = 0; i < payloadSize; i++) {
+			body[i] = bufferContext.get(bodyStartIndex + i);
+		}
+		return new Pair<>(new HTTPRequest(requestLine, httpHeaders, body), bodyStartIndex + payloadSize);
 	}
 
-	private String getSubsequence(BufferContext context, List<Integer> indexes, int subsequenceNum) {
+	private String getStringSubsequence(BufferContext context, List<Integer> indexes, int subsequenceNum) {
 		return ByteUtils.extractSubsequence(
 						context,
 						indexes,

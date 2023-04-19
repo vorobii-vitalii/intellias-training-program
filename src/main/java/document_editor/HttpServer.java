@@ -1,4 +1,4 @@
-package websocket;
+package document_editor;
 
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
@@ -13,7 +13,7 @@ import http.handler.*;
 import http.post_processor.HTTPResponsePostProcessor;
 import http.post_processor.ProtocolChangerHTTPResponsePostProcessor;
 import http.reader.HTTPRequestMessageReader;
-import mongo.MongoDBAtomBuffer;
+import document_editor.mongo.MongoDBAtomBuffer;
 import org.apache.log4j.BasicConfigurator;
 import request_handler.NetworkRequest;
 import request_handler.NetworkRequestProcessor;
@@ -25,9 +25,8 @@ import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
 import util.Constants;
 import websocket.domain.WebSocketMessage;
-import websocket.endpoint.document.DocumentStreamingWebSocketEndpoint;
 import websocket.endpoint.WebSocketEndpointProvider;
-import websocket.handler.FileDownloadHTTPHandlerStrategy;
+import http.handler.FileDownloadHTTPHandlerStrategy;
 import websocket.handler.WebSocketChangeProtocolHTTPHandlerStrategy;
 import websocket.handler.WebSocketProtocolChanger;
 import websocket.handler.WebSocketRequestHandler;

@@ -1,4 +1,4 @@
-package neo4j;
+package document_editor.neo4j;
 
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.pool2.BasePooledObjectFactory;
@@ -64,7 +64,7 @@ public class Neo4jDocumentsAtomBuffer implements AtomBuffer<Character, Integer> 
 		MATCH (doc: Document {documentId: 2}) -[:REF]-> (p:Path {dis: 1, v: 0})
 MERGE (p)-[:REF]->(r:Path {dis: 2, v: 0})
 		 */
-		Driver driver = GraphDatabase.driver("bolt://localhost:7689", AuthTokens.basic("neo4j", "password"));
+		Driver driver = GraphDatabase.driver("bolt://localhost:7689", AuthTokens.basic("document_editor/neo4j", "password"));
 		try (var session = driver.session()) {
 			var greeting = session.executeWrite(tx -> {
 				var query = new Query("CREATE (a:Greeting) SET a.message = $message RETURN a.message + ', from node ' + id(a)",
@@ -160,10 +160,6 @@ MERGE (p)-[:REF]->(r:Path {dis: 2, v: 0})
 						+ " SET n" + (treeDocPath.length() - 1) + ".s = " + updatedValue;
 	}
 
-	private String getNodePath(TreeDocPath<Integer> treeDocPath, int index) {
-		return getNodeReference(treeDocPath, index) + "(" + getNodeAlias(treeDocPath, index) + ":NODE)";
-	}
-
 	private String getNodeReference(TreeDocPath<Integer> treeDocPath, int index) {
 		var d = treeDocPath.disambiguatorAt(index);
 		var s = d == null ? "null" : "'" + d + "'";
@@ -175,14 +171,6 @@ MERGE (p)-[:REF]->(r:Path {dis: 2, v: 0})
 			return LAST_NODE_NAME;
 		}
 		return i == treeDocPath.length() - 2 ? BEFORE_LAST_NODE_NAME : EMPTY_NODE_ALIAS;
-	}
-
-	private String getPathNode(TreeDocPath<Integer> treeDocPath, int index, String alias) {
-		return "(%s:PATH {d: '%s', v: %d})".formatted(
-						alias,
-						treeDocPath.disambiguatorAt(index),
-						treeDocPath.isSet(index) ? 1 : 0
-		);
 	}
 
 }

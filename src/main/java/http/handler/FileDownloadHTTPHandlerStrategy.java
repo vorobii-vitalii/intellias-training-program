@@ -1,4 +1,4 @@
-package websocket.handler;
+package http.handler;
 
 import http.domain.*;
 import http.handler.HTTPRequestHandlerStrategy;
