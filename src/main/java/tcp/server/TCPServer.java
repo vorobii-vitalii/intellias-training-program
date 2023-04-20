@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 public class TCPServer {
+	public static final int TIMEOUT = 100;
 	private final TCPServerConfig serverConfig;
 	private final Consumer<Throwable> errorHandler;
 	private final SelectorProvider selectorProvider;
@@ -61,7 +62,7 @@ public class TCPServer {
 					if (operationHandler != null) {
 						operationHandler.accept(selectionKey);
 					}
-				});
+				}, TIMEOUT);
 			}
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);

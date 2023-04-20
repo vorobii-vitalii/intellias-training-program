@@ -26,7 +26,7 @@ public class ConnectionImpl implements SocketConnection {
 	@Override
 	public void changeOperation(int operation) {
 		selectionKey.interestOps(operation);
-		selectionKey.selector().wakeup();
+//		selectionKey.selector().wakeup();
 	}
 
 	@Override

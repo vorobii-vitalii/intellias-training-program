@@ -1,4 +1,5 @@
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
@@ -75,7 +76,7 @@ class TestTCPServer {
 	void testGivenAcceptOperation() throws IOException {
 		when(selectorProvider.openSelector()).thenReturn(selector);
 		when(selectorProvider.openServerSocketChannel(PROTOCOL_FAMILY)).thenReturn(serverSocketChannel);
-		when(selector.select(any())).thenAnswer(invocationOnMock -> {
+		when(selector.select(any(), anyLong())).thenAnswer(invocationOnMock -> {
 			Consumer<SelectionKey> selectionKeyConsumer = invocationOnMock.getArgument(0);
 			when(selectionKey.isValid()).thenReturn(true);
 			when(selectionKey.readyOps()).thenReturn(OP_ACCEPT);
@@ -83,7 +84,7 @@ class TestTCPServer {
 			return null;
 		});
 		tCPServer.start();
-		verify(selector, timeout(1000).atLeastOnce()).select(any());
+		verify(selector, timeout(1000).atLeastOnce()).select(any(), anyLong());
 		verify(acceptConsumer, atLeastOnce()).accept(selectionKey);
 		verify(readConsumer, never()).accept(selectionKey);
 		verify(writeConsumer, never()).accept(selectionKey);
@@ -93,7 +94,7 @@ class TestTCPServer {
 	void testGivenReadOperation() throws IOException {
 		when(selectorProvider.openSelector()).thenReturn(selector);
 		when(selectorProvider.openServerSocketChannel(PROTOCOL_FAMILY)).thenReturn(serverSocketChannel);
-		when(selector.select(any())).thenAnswer(invocationOnMock -> {
+		when(selector.select(any(), anyLong())).thenAnswer(invocationOnMock -> {
 			Consumer<SelectionKey> selectionKeyConsumer = invocationOnMock.getArgument(0);
 			when(selectionKey.isValid()).thenReturn(true);
 			when(selectionKey.readyOps()).thenReturn(OP_READ);
@@ -101,7 +102,7 @@ class TestTCPServer {
 			return null;
 		});
 		tCPServer.start();
-		verify(selector, timeout(1000).atLeastOnce()).select(any());
+		verify(selector, timeout(1000).atLeastOnce()).select(any(), anyLong());
 		verify(readConsumer, atLeastOnce()).accept(selectionKey);
 		verify(acceptConsumer, never()).accept(selectionKey);
 		verify(writeConsumer, never()).accept(selectionKey);
@@ -111,7 +112,7 @@ class TestTCPServer {
 	void testGivenWriteOperation() throws IOException {
 		when(selectorProvider.openSelector()).thenReturn(selector);
 		when(selectorProvider.openServerSocketChannel(PROTOCOL_FAMILY)).thenReturn(serverSocketChannel);
-		when(selector.select(any())).thenAnswer(invocationOnMock -> {
+		when(selector.select(any(), anyLong())).thenAnswer(invocationOnMock -> {
 			Consumer<SelectionKey> selectionKeyConsumer = invocationOnMock.getArgument(0);
 			when(selectionKey.isValid()).thenReturn(true);
 			when(selectionKey.readyOps()).thenReturn(OP_WRITE);
@@ -119,7 +120,7 @@ class TestTCPServer {
 			return null;
 		});
 		tCPServer.start();
-		verify(selector, timeout(1000).atLeastOnce()).select(any());
+		verify(selector, timeout(1000).atLeastOnce()).select(any(), anyLong());
 		verify(writeConsumer, atLeastOnce()).accept(selectionKey);
 		verify(readConsumer, never()).accept(selectionKey);
 		verify(acceptConsumer, never()).accept(selectionKey);
@@ -130,7 +131,7 @@ class TestTCPServer {
 		when(selectorProvider.openSelector()).thenReturn(selector);
 		when(selectorProvider.openServerSocketChannel(PROTOCOL_FAMILY)).thenReturn(serverSocketChannel);
 		tCPServer.start();
-		verify(selector, timeout(1000).atLeastOnce()).select(any());
+		verify(selector, timeout(1000).atLeastOnce()).select(any(), anyLong());
 		tCPServer.stop(TIMEOUT);
 		Mockito.clearInvocations(selector);
 		Thread.sleep(100);

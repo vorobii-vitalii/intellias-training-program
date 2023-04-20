@@ -50,8 +50,7 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 	enum RequestType {
 		CONNECT,
 		DELETE,
-		ADD,
-		CHANGES
+		ADD
 	}
 
 	private record Response(ResponseType responseType, Object payload) {
@@ -114,7 +113,6 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 			var webSocketMessage = new WebSocketMessage();
 			webSocketMessage.setFin(true);
 			List<Pair<TreeDocPath<Integer>, Character>> entries = atomBuffer.getEntries();
-//					LOGGER.info("Current = {}", entries);
 			String s1 = new Gson().toJson(new Response(
 							ResponseType.ON_CONNECT,
 							new ConnectDocumentReply(id.incrementAndGet(), entries.stream()
@@ -122,7 +120,6 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 											.collect(Collectors.toList())
 							))
 			);
-//					LOGGER.info("Current = {}", s1);
 			webSocketMessage.setPayload(s1.getBytes(StandardCharsets.UTF_8));
 			webSocketMessage.setOpCode(OpCode.TEXT);
 			socketConnection.appendResponse(webSocketMessage);
@@ -132,7 +129,6 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 		else if (request.type == RequestType.DELETE) {
 			List<Pair<Boolean, Integer>> list = request.getTypedPayload(new TypeToken<>() {
 			});
-//					LOGGER.info("DELETE {}", list);
 			atomBuffer.delete(toPath(list));
 			var webSocketMessage = new WebSocketMessage();
 			webSocketMessage.setFin(true);
