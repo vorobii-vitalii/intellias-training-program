@@ -6,16 +6,41 @@ import util.Serializable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.SocketAddress;
+import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Objects;
 
 @ThreadSafe
 public class ConnectionImpl implements SocketConnection {
+
 	private final SelectionKey selectionKey;
+	private final BufferContext bufferContext = new BufferContext();
 
 	public ConnectionImpl(SelectionKey selectionKey) {
 		this.selectionKey = selectionKey;
+	}
+
+	@Override
+	public void appendBytesToContext(byte[] data) {
+		for (byte b : data) {
+			bufferContext.getAvailableBuffer().put(b);
+		}
+	}
+
+	@Override
+	public void freeContext() {
+		bufferContext.free(bufferContext.size());
+	}
+
+	@Override
+	public int getContextLength() {
+		return bufferContext.size();
+	}
+
+	@Override
+	public byte getByteFromContext(int index) {
+		return bufferContext.get(index);
 	}
 
 	@Override
@@ -25,7 +50,12 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public void changeOperation(int operation) {
-		selectionKey.interestOps(operation);
+		try {
+			selectionKey.interestOps(operation);
+		}
+		catch (CancelledKeyException cancelledKeyException) {
+			cancelledKeyException.printStackTrace();
+		}
 //		selectionKey.selector().wakeup();
 	}
 
@@ -78,4 +108,5 @@ public class ConnectionImpl implements SocketConnection {
 	private ServerAttachment getServerAttachment() {
 		return (ServerAttachment) selectionKey.attachment();
 	}
+
 }

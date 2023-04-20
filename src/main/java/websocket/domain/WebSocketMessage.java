@@ -56,7 +56,7 @@ public class WebSocketMessage implements Serializable {
 		if (payload.length <= 125) {
 			secondByte |= payload.length;
 		}
-		else if (payload.length <= 32788 * 2 - 1) {
+		else if (payload.length <= Math.pow(2, 16) - 1) {
 			secondByte |= 126;
 			payloadLengthBytes = pad(BigInteger.valueOf(payload.length).toByteArray(), 2);
 		}

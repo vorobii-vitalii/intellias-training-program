@@ -15,8 +15,7 @@
 <h1>Text editor</h1>
 <div id="event-container"></div>
 
-<textarea id="editor" cols="150" rows="80">
-
+<textarea id="editor">
 </textarea>
 
 </body>
@@ -112,7 +111,7 @@
                 return c !== 0;
             });
         }
-        document.getElementById("editor").value = arr.map(v => v.second).join('');
+      tinyMCE.activeEditor.setContent(arr.map(v => v.second).join(''));
     };
     socket.onopen = () => {
         socket.send(JSON.stringify({
@@ -157,61 +156,114 @@
 
     const dmp = new diff_match_patch();
 
-    textArea.addEventListener("change", event => {
-        console.log("Change");
-        console.log(event);
-        const curr = arr.map(v => v.second).join('');
-        const updated = textArea.value;
-        const diff = dmp.diff_main(curr, updated);
-        let prevIndex = -1;
-        let newArr = [];
-        for (const component of diff) {
-            const v = component[0];
-            const str = component[1];
-            if (v === 0) {
-                for (let i = 0; i < str.length; i++) {
-                    newArr.splice(newArr.length, 0, arr[i + prevIndex + 1]);
-                }
-                prevIndex += str.length;
-            }
-            else if (v === -1) {
-                for (let i = 0; i < str.length; i++) {
-                    socket.send(JSON.stringify({
-                        type: 'DELETE',
-                        payload: arr[i + prevIndex + 1].first
-                    }));
-                }
-                prevIndex += str.length;
-            }
-            else {
-                let prev = extract(prevIndex);
-                const next = extract(prevIndex + 1);
-                for (let i = 0; i < str.length; i++) {
-                    const c = str.charAt(i);
-                    let a = createPair(prev, next, c)
+    // textArea.addEventListener("change", event => {
+    //     console.log("Change");
+    //     console.log(event);
+    //     const curr = arr.map(v => v.second).join('');
+    //     const updated = textArea.value;
+    //     const diff = dmp.diff_main(curr, updated);
+    //     let prevIndex = -1;
+    //     let newArr = [];
+    //     for (const component of diff) {
+    //         const v = component[0];
+    //         const str = component[1];
+    //         if (v === 0) {
+    //             for (let i = 0; i < str.length; i++) {
+    //                 newArr.splice(newArr.length, 0, arr[i + prevIndex + 1]);
+    //             }
+    //             prevIndex += str.length;
+    //         }
+    //         else if (v === -1) {
+    //             for (let i = 0; i < str.length; i++) {
+    //                 socket.send(JSON.stringify({
+    //                     type: 'DELETE',
+    //                     payload: arr[i + prevIndex + 1].first
+    //                 }));
+    //             }
+    //             prevIndex += str.length;
+    //         }
+    //         else {
+    //             let prev = extract(prevIndex);
+    //             const next = extract(prevIndex + 1);
+    //             for (let i = 0; i < str.length; i++) {
+    //                 const c = str.charAt(i);
+    //                 let a = createPair(prev, next, c)
+    //
+    //                 // while (
+    //                 //     arr.filter(v => {
+    //                 //         let c = comparePath(a.first, v.first);
+    //                 //         return c === 0;
+    //                 //     }).length > 0
+    //                 // ) {
+    //                 //     a = {first: [...a.first, {first: false, second: connectionId}], second: c}
+    //                 // }
+    //                 console.log('New ' + JSON.stringify(a) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
+    //                 socket.send(JSON.stringify({
+    //                     type: 'ADD',
+    //                     payload: a
+    //                 }));
+    //                 newArr.splice(newArr.length, 0, a);
+    //                 prev = a;
+    //             }
+    //         }
+    //     }
+    //     arr = newArr;
+    // });
 
-                    // while (
-                    //     arr.filter(v => {
-                    //         let c = comparePath(a.first, v.first);
-                    //         return c === 0;
-                    //     }).length > 0
-                    // ) {
-                    //     a = {first: [...a.first, {first: false, second: connectionId}], second: c}
-                    // }
-                    console.log('New ' + JSON.stringify(a) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
-                    socket.send(JSON.stringify({
-                        type: 'ADD',
-                        payload: a
-                    }));
-                    newArr.splice(newArr.length, 0, a);
-                    prev = a;
-                }
-            }
+    const onDocumentChange = instance => {
+      console.log("Document changed...");
+      const updated = instance.getBody().innerHTML;
+      const curr = arr.map(v => v.second).join('');
+      const diff = dmp.diff_main(curr, updated);
+      let prevIndex = -1;
+      let newArr = [];
+      for (const component of diff) {
+        const v = component[0];
+        const str = component[1];
+        if (v === 0) {
+          for (let i = 0; i < str.length; i++) {
+            newArr.splice(newArr.length, 0, arr[i + prevIndex + 1]);
+          }
+          prevIndex += str.length;
         }
-        arr = newArr;
-        // console.log(curr);
-        // console.log(updated);
-        // console.log(diff);
+        else if (v === -1) {
+          for (let i = 0; i < str.length; i++) {
+            socket.send(JSON.stringify({
+              type: 'DELETE',
+              payload: arr[i + prevIndex + 1].first
+            }));
+          }
+          prevIndex += str.length;
+        }
+        else {
+          let prev = extract(prevIndex);
+          const next = extract(prevIndex + 1);
+          for (let i = 0; i < str.length; i++) {
+            const c = str.charAt(i);
+            let a = createPair(prev, next, c)
+            console.log('New ' + JSON.stringify(a) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
+            socket.send(JSON.stringify({
+              type: 'ADD',
+              payload: a
+            }));
+            newArr.splice(newArr.length, 0, a);
+            prev = a;
+          }
+        }
+      }
+      arr = newArr;
+
+    };
+
+    tinyMCE.init({
+      selector: 'textarea#editor',
+      mode : "textareas",
+      autosave_interval: '5s',
+      setup: function (instance) {
+        instance.on("change", function () {
+          onDocumentChange(instance);
+        })
+      }
     });
 
 </script>

@@ -9,9 +9,15 @@ import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
 
 import java.math.BigInteger;
+import java.util.Arrays;
 import java.util.Map;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
+	private static final Logger LOGGER = LogManager.getLogger(WebSocketMessageReader.class);
+
 	private static final Map<Integer, Integer> EXTRA_BYTES_BY_PAYLOAD_LENGTH = Map.of(126, 2, 127, 8);
 	public static final int MASKING_KEY_IN_BYTES = 4;
 	private static final int METADATA_IN_BYTES = 2;
@@ -41,8 +47,14 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 				return null;
 			}
 			if (extraPayloadLengthBytes != 0) {
-				var extendedSize =
-								new BigInteger(extractBytes(bufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraPayloadLengthBytes));
+				var extendedSize = new BigInteger(
+						1,
+						extractBytes(bufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraPayloadLengthBytes));
+				LOGGER.info("Extra payload length bytes {}, size = {}, intValue = {} - {}",
+						extraPayloadLengthBytes,
+						extendedSize,
+						extendedSize.intValue(),
+						Arrays.toString(extractBytes(bufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraPayloadLengthBytes)));
 				expectedMinLength += extendedSize.intValue();
 				payloadLength = extendedSize.intValue();
 			}
@@ -56,6 +68,8 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 							: null;
 
 			var payloadStart = METADATA_IN_BYTES + (isMasked ? MASKING_KEY_IN_BYTES : 0) + extraPayloadLengthBytes;
+
+			LOGGER.info("Payload start = {}", payloadStart);
 
 			var payload = extractBytes(bufferContext, payloadStart, payloadStart + payloadLength);
 			if (isMasked) {

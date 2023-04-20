@@ -100,10 +100,27 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 				socketConnection.close();
 			}
 			case TEXT -> {
-				var messageText = new String(message.getPayload(), StandardCharsets.UTF_8);
-				var request = new Gson().fromJson(messageText, Request.class);
-				LOGGER.info("New text message {} from connection {}", request, socketConnection);
-				onMessage(socketConnection, request);
+				var payload = message.getPayload();
+				if (message.isFin()) {
+					// To avoid additional memory allocation
+					var totalPayloadSize = payload.length + socketConnection.getContextLength();
+					var totalPayload = socketConnection.getContextLength() > 0 ? new byte[totalPayloadSize] : payload;
+					if (socketConnection.getContextLength() > 0) {
+						for (var i = 0; i < socketConnection.getContextLength(); i++) {
+							totalPayload[i] = socketConnection.getByteFromContext(i);
+						}
+						System.arraycopy(payload, 0, totalPayload,
+								socketConnection.getContextLength(), payload.length);
+						socketConnection.freeContext();
+					}
+					var messageText = new String(totalPayload, StandardCharsets.UTF_8);
+					var request = new Gson().fromJson(messageText, Request.class);
+					LOGGER.info("New text message {} from connection {}", request, socketConnection);
+					onMessage(socketConnection, request);
+				}
+				else {
+					socketConnection.appendBytesToContext(payload);
+				}
 			}
 		}
 	}
