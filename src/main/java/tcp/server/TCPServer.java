@@ -47,13 +47,16 @@ public class TCPServer {
 
 	private void runServer() {
 		try (var selector = selectorProvider.openSelector();
-				var serverSocketChannel = selectorProvider.openServerSocketChannel(serverConfig.getProtocolFamily())
+		     var serverSocketChannel = selectorProvider.openServerSocketChannel(serverConfig.getProtocolFamily())
 		) {
 			serverSocketChannel.configureBlocking(false);
 			serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
 			serverSocketChannel.bind(new InetSocketAddress(serverConfig.getHost(), serverConfig.getPort()));
 			while (!Thread.currentThread().isInterrupted()) {
 				selector.select(selectionKey -> {
+					if (!selectionKey.isValid()) {
+						return;
+					}
 					var operationHandler = operationHandlerByType.get(selectionKey.readyOps());
 					if (operationHandler != null) {
 						operationHandler.accept(selectionKey);
@@ -62,6 +65,8 @@ public class TCPServer {
 			}
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 

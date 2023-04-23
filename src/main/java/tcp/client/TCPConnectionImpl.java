@@ -3,18 +3,11 @@ package tcp.client;
 import java.io.IOException;
 import java.nio.channels.SocketChannel;
 
-public class TCPConnectionImpl implements TCPConnection {
-	private final SocketChannel socketChannel;
-
-	public TCPConnectionImpl(SocketChannel socketChannel) {
+public record TCPConnectionImpl(SocketChannel socketChannel) implements TCPConnection {
+	public TCPConnectionImpl {
 		assertNotNull(socketChannel, "socketChannel");
-		this.socketChannel = socketChannel;
 	}
 
-	@Override
-	public SocketChannel getSocketChannel() {
-		return socketChannel;
-	}
 
 	@Override
 	public void close() throws IOException {

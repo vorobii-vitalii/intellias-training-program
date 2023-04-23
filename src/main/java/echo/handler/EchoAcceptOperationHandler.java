@@ -11,7 +11,7 @@ public class EchoAcceptOperationHandler implements Consumer<SelectionKey> {
 
 	public EchoAcceptOperationHandler(int bufferCapacity) {
 		if (bufferCapacity <= 0) {
-			throw new IllegalArgumentException("buffer capacity <= 0");
+			throw new IllegalArgumentException("readBuffer capacity <= 0");
 		}
 		this.bufferCapacity = bufferCapacity;
 	}

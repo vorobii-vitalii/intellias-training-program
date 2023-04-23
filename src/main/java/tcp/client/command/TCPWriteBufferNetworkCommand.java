@@ -17,7 +17,7 @@ public class TCPWriteBufferNetworkCommand implements NetworkCommand<Void> {
 	@Override
 	public Void execute() throws IOException {
 		while (bufferToWrite.hasRemaining()) {
-			tcpConnection.getSocketChannel().write(bufferToWrite);
+			tcpConnection.socketChannel().write(bufferToWrite);
 		}
 		return null;
 	}

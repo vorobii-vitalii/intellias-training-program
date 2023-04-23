@@ -17,7 +17,7 @@ public class TCPReadBufferNetworkCommand implements NetworkCommand<ByteBuffer> {
 	@Override
 	public ByteBuffer execute() throws IOException {
 		while (!Thread.currentThread().isInterrupted() && buffer.position() != buffer.limit()) {
-			tcpConnection.getSocketChannel().read(buffer);
+			tcpConnection.socketChannel().read(buffer);
 		}
 		return buffer;
 	}

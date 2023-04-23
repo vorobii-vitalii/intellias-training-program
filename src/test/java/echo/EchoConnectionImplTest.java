@@ -32,7 +32,7 @@ class EchoConnectionImplTest {
 	@Test
 	void sendMessage() throws IOException {
 		var message = "Message";
-		when(tcpConnection.getSocketChannel()).thenReturn(socketChannel);
+		when(tcpConnection.socketChannel()).thenReturn(socketChannel);
 		when(socketChannel.write(any(ByteBuffer.class)))
 						.thenAnswer(invocation -> {
 							ByteBuffer buffer = invocation.getArgument(0);
