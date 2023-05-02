@@ -1,6 +1,8 @@
 package http.reader;
 
 import http.domain.*;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import tcp.server.reader.exception.ParseException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -9,7 +11,6 @@ import utils.BufferTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import java.util.StringJoiner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;

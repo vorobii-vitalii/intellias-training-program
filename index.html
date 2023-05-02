@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.4.1/tinymce.min.js"></script>
+<!--    <script src="https://cdnjs.cloudflare.com/ajax/libs/diff-match-patch/1.0.5/index.min.js"></script>-->
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+</head>
+
+<body>
+
+<h1>Text editor</h1>
+<div id="event-container"></div>
+
+<textarea id="editor">
+</textarea>
+
+</body>
+
+<script>
+
+    const socket = new WebSocket("wss://localhost/documents");
+
+    let connectionId;
+    let arr = [];
+    const comparePath = (a, b) => {
+        const m = Math.min(a.length, b.length);
+        // console.log("Comparing path  of " + JSON.stringify(a) + " and " + JSON.stringify(b) + " min = " + m);
+        for (let i = 0; i < m; i++) {
+            if (a[i].b && b[i].b) {
+                if (a[i].a !== b[i].a) {
+                    return a[i].a ? 1 : -1;
+                }
+                if (a[i].b !== b[i].b) {
+                    return a[i].b < b[i].b ? -1 : 1;
+                }
+            }
+            else if (!a[i].b && !b[i].b) {
+                if (a[i].a !== b[i].a) {
+                    return a[i].a ? 1 : -1;
+                }
+            }
+            else if (a[i].b) {
+                return b[i].a ? -1 : 1;
+            }
+            else {
+                return a[i].a ? 1 : -1;
+            }
+        }
+        if (a.length === b.length) {
+            return 0;
+        }
+        if (a.length === m) {
+            return b[m].a ? -1 : 1;
+        }
+        return a[m].a ? 1 : -1;
+    };
+    const textArea = document.getElementById("editor");
+
+    socket.onmessage = function(event) {
+        const eventPayload = JSON.parse(event.data);
+        // console.log('Websocket event');
+        // console.log(eventPayload);
+        // console.log(arr);
+
+        if (eventPayload.responseType === 'ON_CONNECT') {
+            // console.log('Setting value');
+            // console.log(eventPayload.payload.currentState.map(v => v.b))
+            // arr = eventPayload.payload.currentState;
+            connectionId = eventPayload.payload.connectionId;
+        }
+        else if (eventPayload.responseType === 'ADD') {
+            // console.log('ADD Event');
+              arr = arr.filter(a => {
+                let c = comparePath(a.a, eventPayload.payload.a);
+                return c !== 0;
+              });
+            arr.splice(arr.length, 0, eventPayload.payload);
+            // if (arr.filter(v => comparePath(v.a, eventPayload.payload) === 0) > 0) {
+            //   return;
+            // }
+            arr = arr.sort((a, b) => {
+                return comparePath(a.a, b.a);
+            });
+        }
+        else if (eventPayload.responseType === 'DELETE') {
+            // console.log('DELETE Event');
+            arr = arr.filter(a => {
+                let c = comparePath(a.a, eventPayload.payload);
+                return c !== 0;
+            });
+        }
+      textArea.value = arr.map(v => v.b).join('');
+    };
+    socket.onopen = () => {
+        socket.send(JSON.stringify({
+            type: 'CONNECT'
+        }));
+    };
+
+    const createPair = (left, right, c) => {
+        if (!left && !right) {
+            return {a: [{a: false, b: connectionId}], b: c};
+        }
+        if (!left) {
+            return {a: [...right.a, {a: false, b: connectionId}], b: c};
+        }
+        else if (!right) {
+            return {a: [...left.a, {a: true, b: connectionId}], b: c};
+        }
+        if (isAncestor(left.a, right.a)) {
+            return {a: [...right.a, {a: false, b: connectionId}], b: c};
+        }
+        return {a: [...left.a, {a: true, b: connectionId}], b: c};
+    };
+
+    const isAncestor = (a, b) => {
+        if (b.length < a.length) {
+            return false;
+        }
+        for (let i = 0; i < a.length; i++) {
+            if (a[i].a !== b[i].a || a[i].b !== b[i].b) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const extract = index => {
+        if (index < 0 || index >= arr.length) {
+            return null;
+        }
+        return arr[index];
+    };
+
+    const dmp = new diff_match_patch();
+
+    textArea.addEventListener("change", event => {
+        console.log("Change");
+        console.log(event);
+        const curr = arr.map(v => v.b).join('');
+        const updated = textArea.value;
+        const diff = dmp.diff_main(curr, updated);
+        let prevIndex = -1;
+        let newArr = [];
+        for (const component of diff) {
+            const v = component[0];
+            const str = component[1];
+            if (v === 0) {
+                for (let i = 0; i < str.length; i++) {
+                    newArr.splice(newArr.length, 0, arr[i + prevIndex + 1]);
+                }
+                prevIndex += str.length;
+            }
+            else if (v === -1) {
+                for (let i = 0; i < str.length; i++) {
+                  changes.splice(changes.length, 0, {
+                    type: 'DELETE',
+                    payload: arr[i + prevIndex + 1].a
+                  });
+                    // socket.send(JSON.stringify({
+                    //     type: 'DELETE',
+                    //     payload: arr[i + prevIndex + 1].a
+                    // }));
+                }
+                prevIndex += str.length;
+            }
+            else {
+                let prev = extract(prevIndex);
+                const next = extract(prevIndex + 1);
+                for (let i = 0; i < str.length; i++) {
+                    const c = str.charAt(i);
+                    let a = createPair(prev, next, c)
+
+                    // while (
+                    //     arr.filter(v => {
+                    //         let c = comparePath(a.a, v.a);
+                    //         return c === 0;
+                    //     }).length > 0
+                    // ) {
+                    //     a = {a: [...a.a, {a: false, b: connectionId}], b: c}
+                    // }
+                    console.log('New ' + JSON.stringify(a) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
+                      changes.splice(changes.length, 0, {
+                        type: 'ADD',
+                        payload: a
+                      });
+                    newArr.splice(newArr.length, 0, a);
+                    prev = a;
+                }
+            }
+        }
+        arr = newArr;
+    });
+
+    let changes = [];
+
+    const onDocumentChange = instance => {
+      console.log("Document changed...");
+      const updated = instance.getBody().innerHTML;
+      const curr = arr.map(v => v.b).join('');
+      const diff = dmp.diff_main(curr, updated);
+      let prevIndex = -1;
+      let newArr = [];
+      for (const component of diff) {
+        const v = component[0];
+        const str = component[1];
+        if (v === 0) {
+          for (let i = 0; i < str.length; i++) {
+            newArr.splice(newArr.length, 0, arr[i + prevIndex + 1]);
+          }
+          prevIndex += str.length;
+        }
+        else if (v === -1) {
+          for (let i = 0; i < str.length; i++) {
+            changes.splice(changes.length, 0, {
+              type: 'DELETE',
+              payload: arr[i + prevIndex + 1].a
+            });
+            // socket.send(JSON.stringify({
+            //   type: 'DELETE',
+            //   payload: arr[i + prevIndex + 1].a
+            // }));
+          }
+          prevIndex += str.length;
+        }
+        else {
+          let prev = extract(prevIndex);
+          const next = extract(prevIndex + 1);
+          for (let i = 0; i < str.length; i++) {
+            const c = str.charAt(i);
+            let a = createPair(prev, next, c)
+            // console.log('New ' + JSON.stringify(a) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
+            // socket.send(JSON.stringify({
+            //   type: 'ADD',
+            //   payload: a
+            // }));
+            changes.splice(changes.length, 0, {
+              type: 'ADD',
+              payload: a
+            });
+            newArr.splice(newArr.length, 0, a);
+            prev = a;
+          }
+        }
+      }
+      arr = newArr;
+
+    };
+
+    // tinyMCE.init({
+    //   selector: 'textarea#editor',
+    //   mode : "textareas",
+    //   setup: function (instance) {
+    //     instance.on("change", function () {
+    //       onDocumentChange(instance);
+    //     })
+    //   }
+    // });
+
+    setInterval(() => {
+      if (changes.length > 0) {
+        socket.send(JSON.stringify({
+          type: 'CHANGES',
+          payload: changes
+        }));
+        changes = [];
+      }
+    }, 500);
+
+</script>
+
+</html>

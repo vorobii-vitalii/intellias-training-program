@@ -2,27 +2,39 @@ package tcp.server;
 
 import util.Serializable;
 
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
-
+import java.util.concurrent.BlockingQueue;
 
 public final class ServerAttachment {
 	private String protocol;
 	private final BufferContext bufferContext;
-	private final Queue<Serializable> responses;
+	private final BlockingQueue<ByteBuffer> responses;
 	private final Map<String, Object> context;
+	private final BufferContext clientBufferContext = new BufferContext();
 
 	public ServerAttachment(
 					String protocol,
 					BufferContext bufferContext,
-					Queue<Serializable> responses,
+			BlockingQueue<ByteBuffer> responses,
 					Map<String, Object> context
 	) {
 		this.protocol = protocol;
 		this.bufferContext = bufferContext;
 		this.responses = responses;
 		this.context = context;
+	}
+
+	public void invalidate() {
+		bufferContext.free(bufferContext.size());
+		responses.clear();
+		clientBufferContext.free(clientBufferContext.size());
+	}
+
+	public BufferContext getClientBufferContext() {
+		return clientBufferContext;
 	}
 
 	public void setProtocol(String protocol) {
@@ -37,7 +49,7 @@ public final class ServerAttachment {
 		return bufferContext;
 	}
 
-	public Queue<Serializable> responses() {
+	public BlockingQueue<ByteBuffer> responses() {
 		return responses;
 	}
 
@@ -65,9 +77,8 @@ public final class ServerAttachment {
 	public String toString() {
 		return "ServerAttachment[" +
 						"protocol=" + protocol + ", " +
-						"bufferContext=" + bufferContext + ", " +
-						"responses=" + responses + ", " +
-						"context=" + context + ']';
+						"responses=" + responses
+				+ ']';
 	}
 
 

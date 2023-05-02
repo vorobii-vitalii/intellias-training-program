@@ -1,5 +1,8 @@
 package http.reader;
 
+import java.util.List;
+import java.util.function.BiFunction;
+
 import http.domain.HTTPHeaders;
 import http.domain.HTTPRequest;
 import http.domain.HTTPRequestLine;
@@ -9,9 +12,6 @@ import tcp.server.reader.exception.ParseException;
 import util.ByteUtils;
 import util.Constants;
 import util.Pair;
-
-import java.util.List;
-import java.util.function.BiFunction;
 
 public class HTTPRequestMessageReader implements MessageReader<HTTPRequest> {
 	private static final byte CARRIAGE_RETURN = '\r';
@@ -46,9 +46,9 @@ public class HTTPRequestMessageReader implements MessageReader<HTTPRequest> {
 			httpHeaders.addHeaders(headerName, headerValues);
 		}
 		int payloadSize = httpHeaders
-						.getHeaderValue(Constants.HTTPHeaders.CONTENT_LENGTH)
-						.map(Integer::parseInt)
-						.orElse(0);
+				.getHeaderValue(Constants.HTTPHeaders.CONTENT_LENGTH)
+				.map(Integer::parseInt)
+				.orElse(0);
 
 		int bodyStartIndex = indexes.get(headerEndIndex) + CLRF_BYTES.length;
 		int readPayloadBytes = bufferContext.size() - bodyStartIndex;

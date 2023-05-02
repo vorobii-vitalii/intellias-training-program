@@ -33,13 +33,15 @@ public class BufferContext {
 	}
 
 	public void free(int bytesToFree) {
-		ByteBuffer lastBuffer = byteBuffers.get(byteBuffers.size() - 1);
-		ByteBuffer firstBuffer = byteBuffers.get(0);
-		int r = lastBuffer.position() - bytesToFree % SINGLE_BUFFER_SIZE;
-		for (int i = 0; i < r; i++) {
-			firstBuffer.put(i, lastBuffer.get(lastBuffer.position() - r + i));
+		if (bytesToFree == 0) {
+			return;
 		}
-		firstBuffer.position(r);
+		var bytesToKeep = size() - bytesToFree;
+		var firstBuffer = byteBuffers.get(0);
+		for (int i = 0; i < bytesToKeep; i++) {
+			firstBuffer.put(i, get(size() - bytesToKeep + i));
+		}
+		firstBuffer.position(bytesToKeep);
 		while (byteBuffers.size() > NUM_BUFFERS_TO_KEEP_ON_RESET) {
 			byteBuffers.remove(byteBuffers.size() - 1);
 		}
@@ -59,7 +61,7 @@ public class BufferContext {
 
 	private boolean isLastBufferFull() {
 		ByteBuffer last = byteBuffers.get(byteBuffers.size() - 1);
-		return last.position() == last.limit();
+		return last.position() == last.capacity();
 	}
 
 }

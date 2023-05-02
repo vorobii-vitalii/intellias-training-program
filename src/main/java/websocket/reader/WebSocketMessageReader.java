@@ -12,14 +12,13 @@ import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Map;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
 
 public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
-	private static final Logger LOGGER = LogManager.getLogger(WebSocketMessageReader.class);
-
-	private static final Map<Integer, Integer> EXTRA_BYTES_BY_PAYLOAD_LENGTH = Map.of(126, 2, 127, 8);
 	public static final int MASKING_KEY_IN_BYTES = 4;
+	private static final Logger LOGGER = LoggerFactory.getLogger(WebSocketMessageReader.class);
+	private static final Map<Integer, Integer> EXTRA_BYTES_BY_PAYLOAD_LENGTH = Map.of(126, 2, 127, 8);
 	private static final int METADATA_IN_BYTES = 2;
 	private static final int IS_FIN_BITMASK = 0b10000000;
 	private static final int IS_MASKED_BITMASK = 0b10000000;
@@ -27,59 +26,60 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 	private static final int PAYLOAD_LENGTH_BITMASK = 0b01111111;
 
 	@Override
-		public Pair<WebSocketMessage, Integer> read(BufferContext bufferContext) throws ParseException {
-			int N = bufferContext.size();
-			if (N < METADATA_IN_BYTES) {
-				return null;
-			}
-			var isFin = isFin(bufferContext);
-			var isMasked = isMasked(bufferContext);
-			var opCode = getOpCode(bufferContext);
-			var payloadLength = getPayloadLength(bufferContext);
-			var expectedMinLength = METADATA_IN_BYTES + (isMasked ? MASKING_KEY_IN_BYTES : 0);
-			var extraPayloadLengthBytes = EXTRA_BYTES_BY_PAYLOAD_LENGTH.getOrDefault(payloadLength, 0);
-			if (extraPayloadLengthBytes == 0) {
-				expectedMinLength += payloadLength;
-			} else {
-				expectedMinLength += extraPayloadLengthBytes;
-			}
-			if (N < expectedMinLength) {
-				return null;
-			}
-			if (extraPayloadLengthBytes != 0) {
-				var extendedSize = new BigInteger(
-						1,
-						extractBytes(bufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraPayloadLengthBytes));
-				LOGGER.info("Extra payload length bytes {}, size = {}, intValue = {} - {}",
-						extraPayloadLengthBytes,
-						extendedSize,
-						extendedSize.intValue(),
-						Arrays.toString(extractBytes(bufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraPayloadLengthBytes)));
-				expectedMinLength += extendedSize.intValue();
-				payloadLength = extendedSize.intValue();
-			}
-			if (N < expectedMinLength) {
-				return null;
-			}
-			var maskingKey = isMasked
-							? extractBytes(bufferContext,
-							METADATA_IN_BYTES + extraPayloadLengthBytes,
-							METADATA_IN_BYTES + MASKING_KEY_IN_BYTES + extraPayloadLengthBytes)
-							: null;
+	public Pair<WebSocketMessage, Integer> read(BufferContext bufferContext) throws ParseException {
+		int N = bufferContext.size();
+		if (N < METADATA_IN_BYTES) {
+			return null;
+		}
+		var isFin = isFin(bufferContext);
+		var isMasked = isMasked(bufferContext);
+		var opCode = getOpCode(bufferContext);
+		var payloadLength = getPayloadLength(bufferContext);
+		var expectedMinLength = METADATA_IN_BYTES + (isMasked ? MASKING_KEY_IN_BYTES : 0);
+		var extraPayloadLengthBytes = EXTRA_BYTES_BY_PAYLOAD_LENGTH.getOrDefault(payloadLength, 0);
+		if (extraPayloadLengthBytes == 0) {
+			expectedMinLength += payloadLength;
+		} else {
+			expectedMinLength += extraPayloadLengthBytes;
+		}
+		if (N < expectedMinLength) {
+			return null;
+		}
+//		LOGGER.info("Read bytes = {}", N);
+		if (extraPayloadLengthBytes != 0) {
+			var extendedSize = new BigInteger(
+					1,
+					extractBytes(bufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraPayloadLengthBytes));
+//			LOGGER.info("Extra payload length bytes {}, size = {}, intValue = {} - {}",
+//					extraPayloadLengthBytes,
+//					extendedSize,
+//					extendedSize.intValue(),
+//					Arrays.toString(extractBytes(bufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraPayloadLengthBytes)));
+			expectedMinLength += extendedSize.intValue();
+			payloadLength = extendedSize.intValue();
+		}
+		if (N < expectedMinLength) {
+			return null;
+		}
+		var maskingKey = isMasked
+				? extractBytes(bufferContext,
+				METADATA_IN_BYTES + extraPayloadLengthBytes,
+				METADATA_IN_BYTES + MASKING_KEY_IN_BYTES + extraPayloadLengthBytes)
+				: null;
 
-			var payloadStart = METADATA_IN_BYTES + (isMasked ? MASKING_KEY_IN_BYTES : 0) + extraPayloadLengthBytes;
+		var payloadStart = METADATA_IN_BYTES + (isMasked ? MASKING_KEY_IN_BYTES : 0) + extraPayloadLengthBytes;
 
-			LOGGER.info("Payload start = {}", payloadStart);
+//		LOGGER.info("Payload start = {}", payloadStart);
 
-			var payload = extractBytes(bufferContext, payloadStart, payloadStart + payloadLength);
-			if (isMasked) {
-				ByteUtils.applyMaskingKey(payload, maskingKey);
-			}
-			var webSocketMessage = new WebSocketMessage();
-			webSocketMessage.setFin(isFin);
-			webSocketMessage.setOpCode(opCode);
-			webSocketMessage.setMaskingKey(maskingKey);
-			webSocketMessage.setPayload(payload);
+		var payload = extractBytes(bufferContext, payloadStart, payloadStart + payloadLength);
+		if (isMasked) {
+			ByteUtils.applyMaskingKey(payload, maskingKey);
+		}
+		var webSocketMessage = new WebSocketMessage();
+		webSocketMessage.setFin(isFin);
+		webSocketMessage.setOpCode(opCode);
+		webSocketMessage.setMaskingKey(maskingKey);
+		webSocketMessage.setPayload(payload);
 		return new Pair<>(webSocketMessage, expectedMinLength);
 	}
 

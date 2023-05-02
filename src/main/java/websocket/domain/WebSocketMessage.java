@@ -52,7 +52,6 @@ public class WebSocketMessage implements Serializable {
 		firstByte |= (isFin ? 1 : 0) << 7;
 		firstByte |= opCode.getCode();
 		secondByte |= (maskingKey != null ? 1 : 0) << 7;
-		System.out.println("payload.length = " + payload.length);
 		if (payload.length <= 125) {
 			secondByte |= payload.length;
 		}
@@ -64,10 +63,6 @@ public class WebSocketMessage implements Serializable {
 			secondByte |= 127;
 			payloadLengthBytes = pad(BigInteger.valueOf(payload.length).toByteArray(), 8);
 		}
-//		System.out.println("payload length bytes = " + Arrays.toString(payloadLengthBytes));
-//		if (payloadLengthBytes != null) {
-//			System.out.println("reverse = " + new BigInteger(payloadLengthBytes));
-//		}
 		byte[] arr = merge(
 						new byte[]{firstByte, secondByte},
 						payloadLengthBytes,
@@ -84,7 +79,6 @@ public class WebSocketMessage implements Serializable {
 	}
 
 	private byte[] pad(byte[] arr, int k) {
-		System.out.println("Pad " + Arrays.toString(arr) + " k = " + k);
 		byte[] res = new byte[k];
 		for (int i = 0; i < arr.length; i++) {
 			if (arr[arr.length - i - 1] != 0) {
@@ -123,7 +117,7 @@ public class WebSocketMessage implements Serializable {
 						"isFin=" + isFin +
 						", opCode=" + opCode +
 						", maskingKey=" + Arrays.toString(maskingKey) +
-						", payload=" + Arrays.toString(payload) +
+						", payloadSize=" + payload.length +
 						'}';
 	}
 }

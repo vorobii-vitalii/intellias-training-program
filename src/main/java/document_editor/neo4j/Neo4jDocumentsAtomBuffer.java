@@ -7,8 +7,8 @@ import org.apache.commons.pool2.PooledObject;
 import org.apache.commons.pool2.PooledObjectFactory;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.commons.pool2.impl.GenericObjectPool;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
 import org.neo4j.driver.*;
 import org.neo4j.driver.async.AsyncSession;
 import org.treedoc.buffer.AtomBuffer;
@@ -27,7 +27,7 @@ import static org.neo4j.driver.Values.parameters;
 
 public class Neo4jDocumentsAtomBuffer implements AtomBuffer<Character, Integer> {
 
-	private static final Logger LOGGER = LogManager.getLogger(Neo4jDocumentsAtomBuffer.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(Neo4jDocumentsAtomBuffer.class);
 
 	public static final String BEFORE_LAST_NODE_NAME = "n";
 	public static final String LAST_NODE_NAME = "m";
@@ -52,11 +52,6 @@ public class Neo4jDocumentsAtomBuffer implements AtomBuffer<Character, Integer> 
 	public Neo4jDocumentsAtomBuffer(Driver driver, Integer documentId) {
 		this.driver = driver;
 		this.documentId = documentId;
-//
-//		try (var session = driver.session()) {
-//			session.executeWriteWithoutResult(tx -> {
-//				tx.run(new Query("MERGE (doc:DOCUMENT {documentId: %s})".formatted(documentId)));
-//			});
 	}
 
 	public static void main(String[] args) {

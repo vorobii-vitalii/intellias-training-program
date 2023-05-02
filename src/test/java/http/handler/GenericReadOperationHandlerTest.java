@@ -59,7 +59,8 @@ class GenericReadOperationHandlerTest {
 		when(selectionKey.attachment()).thenReturn(SERVER_ATTACHMENT);
 		when(selectionKey.channel()).thenReturn(socketChannel);
 		when(socketMessageReader.readMessage(BUFFER_CONTEXT, socketChannel))
-						.thenReturn(HTTP_REQUEST);
+				.thenReturn(HTTP_REQUEST)
+				.thenReturn(null);
 		httpReadOperationHandler.accept(selectionKey);
 		verify(blockingQueue).add(argThat(request -> request.request().equals(HTTP_REQUEST)));
 	}

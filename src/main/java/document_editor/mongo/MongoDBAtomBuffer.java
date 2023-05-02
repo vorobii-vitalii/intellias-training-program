@@ -4,6 +4,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.model.Filters;
 import org.bson.Document;
+import org.bson.conversions.Bson;
 import org.treedoc.buffer.AtomBuffer;
 import org.treedoc.path.MutableTreeDocPath;
 import org.treedoc.path.MutableTreeDocPathImpl;
@@ -53,11 +54,9 @@ public class MongoDBAtomBuffer implements AtomBuffer<Character, Integer> {
 
 	@Override
 	public void delete(TreeDocPath<Integer> treeDocPath) {
-		mongoCollection.deleteOne(
-						Filters.and(
-										Filters.eq("documentId", documentId),
-										Filters.eq("path", toString(treeDocPath))
-						));
+		var filter = Filters.and(Filters.eq("documentId", documentId), Filters.eq("path", toString(treeDocPath)));
+		mongoCollection.updateOne(filter, new Document().append("$set", new Document("deleting", true)));
+		mongoCollection.deleteOne(filter);
 	}
 
 	private String toString(TreeDocPath<Integer> path) {

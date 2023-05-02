@@ -22,6 +22,7 @@
         <commons-lang3.version>3.12.0</commons-lang3.version>
         <gson.version>2.10.1</gson.version>
         <commons-codec.version>1.15</commons-codec.version>
+        <micrometer.version>1.10.6</micrometer.version>
     </properties>
 
     <dependencies>
@@ -71,14 +72,14 @@
 
         <!-- Logging -->
         <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
-            <version>${log4j-core.version}</version>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.4.7</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-reload4j</artifactId>
-            <version>${slf4j-reload4j.version}</version>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.7</version>
         </dependency>
 
         <dependency>
@@ -101,12 +102,34 @@
             <version>${mongodb-driver-sync.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver-reactivestreams</artifactId>
+            <version>4.9.0</version>
+        </dependency>
+
+
         <!-- Json serialization -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>${gson.version}</version>
         </dependency>
+
+
+        <!-- https://mvnrepository.com/artifact/org.msgpack/msgpack -->
+<!--        <dependency>-->
+<!--            <groupId>org.msgpack</groupId>-->
+<!--            <artifactId>msgpack</artifactId>-->
+<!--            <version>0.6.12</version>-->
+<!--        </dependency>-->
+
+        <dependency>
+            <groupId>org.msgpack</groupId>
+            <artifactId>jackson-dataformat-msgpack</artifactId>
+            <version>0.9.3</version>
+        </dependency>
+
 
         <!-- Commons -->
         <dependency>
@@ -127,6 +150,19 @@
             <version>${commons-codec.version}</version>
         </dependency>
 
+        <!-- Metrics -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <version>${micrometer.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.mweirauch</groupId>
+            <artifactId>micrometer-jvm-extras</artifactId>
+            <version>0.2.2</version>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -143,6 +179,15 @@
                         </goals>
                     </execution>
                 </executions>
+<!--                <configuration>-->
+<!--                    <transformers>-->
+<!--                        <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">-->
+<!--                            <mainClass>document_editor.HttpServer</mainClass>-->
+<!--                        </transformer>-->
+<!--                    </transformers>-->
+<!--                    <shadedArtifactAttached>true</shadedArtifactAttached>-->
+<!--                    <shadedClassifierName>launcher</shadedClassifierName>-->
+<!--                </configuration>-->
             </plugin>
             <plugin>
                 <groupId>com.spotify</groupId>
@@ -164,39 +209,10 @@
                             </buildArgs>
                         </configuration>
                     </execution>
-<!--                    <execution>-->
-<!--                        <id>echo-client</id>-->
-<!--                        <goals>-->
-<!--                            <goal>build</goal>-->
-<!--                            <goal>push</goal>-->
-<!--                        </goals>-->
-<!--                        <configuration>-->
-<!--                            <repository>my-repo/echo-client</repository>-->
-<!--                            <tag>${project.version}</tag>-->
-<!--                            <buildArgs>-->
-<!--                                <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>-->
-<!--                                <MAIN_CLASS>echo.client.EchoClientRunner</MAIN_CLASS>-->
-<!--                            </buildArgs>-->
-<!--                        </configuration>-->
-<!--                    </execution>-->
-<!--                    <execution>-->
-<!--                        <id>echo-server</id>-->
-<!--                        <goals>-->
-<!--                            <goal>build</goal>-->
-<!--                            <goal>push</goal>-->
-<!--                        </goals>-->
-<!--                        <configuration>-->
-<!--                            <repository>my-repo/echo-server</repository>-->
-<!--                            <tag>${project.version}</tag>-->
-<!--                            <buildArgs>-->
-<!--                                <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>-->
-<!--                                <MAIN_CLASS>echo.server.EchoServerRunner</MAIN_CLASS>-->
-<!--                            </buildArgs>-->
-<!--                        </configuration>-->
-<!--                    </execution>-->
                 </executions>
             </plugin>
-        </plugins>
+
+		</plugins>
     </build>
 
 </project>

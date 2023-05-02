@@ -1,11 +1,14 @@
 package tcp.server;
 
 import java.net.ProtocolFamily;
+import java.nio.channels.SelectionKey;
+import java.util.function.Consumer;
 
 public final class TCPServerConfig {
 	private String host;
 	private int port;
 	private ProtocolFamily protocolFamily;
+	private Consumer<SelectionKey> onConnectionClose = key -> {};
 
 	private TCPServerConfig() {
 	}
@@ -26,6 +29,10 @@ public final class TCPServerConfig {
 		return new Builder();
 	}
 
+	public Consumer<SelectionKey> getOnConnectionClose() {
+		return onConnectionClose;
+	}
+
 	public static class Builder {
 		private final TCPServerConfig config = new TCPServerConfig();
 
@@ -44,6 +51,11 @@ public final class TCPServerConfig {
 
 		public Builder setProtocolFamily(ProtocolFamily protocolFamily) {
 			config.protocolFamily = protocolFamily;
+			return this;
+		}
+
+		public Builder onConnectionClose(Consumer<SelectionKey> onConnectionClose) {
+			config.onConnectionClose = onConnectionClose;
 			return this;
 		}
 

@@ -1,21 +1,22 @@
 package tcp.server;
 
-import net.jcip.annotations.ThreadSafe;
-import util.Serializable;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+
+import net.jcip.annotations.ThreadSafe;
+import util.Serializable;
 
 @ThreadSafe
 public class ConnectionImpl implements SocketConnection {
-
+	public static final int NUM_RETRIES = 5;
 	private final SelectionKey selectionKey;
-	private final BufferContext bufferContext = new BufferContext();
 
 	public ConnectionImpl(SelectionKey selectionKey) {
 		this.selectionKey = selectionKey;
@@ -24,23 +25,23 @@ public class ConnectionImpl implements SocketConnection {
 	@Override
 	public void appendBytesToContext(byte[] data) {
 		for (byte b : data) {
-			bufferContext.getAvailableBuffer().put(b);
+			getServerAttachment().getClientBufferContext().getAvailableBuffer().put(b);
 		}
 	}
 
 	@Override
 	public void freeContext() {
-		bufferContext.free(bufferContext.size());
+		getServerAttachment().getClientBufferContext().free(getServerAttachment().getClientBufferContext().size());
 	}
 
 	@Override
 	public int getContextLength() {
-		return bufferContext.size();
+		return getServerAttachment().getClientBufferContext().size();
 	}
 
 	@Override
 	public byte getByteFromContext(int index) {
-		return bufferContext.get(index);
+		return getServerAttachment().getClientBufferContext().get(index);
 	}
 
 	@Override
@@ -50,19 +51,32 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public void changeOperation(int operation) {
-		try {
-			selectionKey.interestOps(operation);
-		}
-		catch (CancelledKeyException cancelledKeyException) {
-			cancelledKeyException.printStackTrace();
-		}
-//		selectionKey.selector().wakeup();
+		selectionKey.interestOps(operation);
+		selectionKey.selector().wakeup();
 	}
 
 	@Override
 	public void appendResponse(Serializable response) {
-		getServerAttachment().responses().add(response);
+		// Issue
+		if (!selectionKey.isValid()) {
+			throw new CancelledKeyException();
+		}
+		try {
+			var message = ByteBuffer.wrap(response.serialize());
+			getServerAttachment()
+					.responses()
+					.put(message);
+		}
+		catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
 	}
+
+	@Override
+	public int getResponsesSize() {
+		return getServerAttachment().responses().size();
+	}
+
 
 	@Override
 	public void setMetadata(String key, Object value) {
@@ -85,6 +99,7 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public void close() {
+		getServerAttachment().invalidate();
 		selectionKey.cancel();
 	}
 
@@ -97,7 +112,7 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(selectionKey);
+		return Objects.hash(getAddress());
 	}
 
 	@Override
