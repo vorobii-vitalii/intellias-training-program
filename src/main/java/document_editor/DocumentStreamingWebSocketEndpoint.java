@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import document_editor.event.DisconnectEvent;
+import document_editor.event.EditEvent;
 import document_editor.event.Event;
 import document_editor.event.NewConnectionEvent;
 import document_editor.mongo.MongoReactiveAtomBuffer;
@@ -24,16 +25,13 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentStreamingWebSocketEndpoint.class);
 
 	private final BlockingQueue<Event> eventsQueue;
-	private final MongoReactiveAtomBuffer mongoReactiveAtomBuffer;
 	private final ObjectMapper objectMapper;
 
 	public DocumentStreamingWebSocketEndpoint(
 			BlockingQueue<Event> eventsQueue,
-			MongoReactiveAtomBuffer mongoReactiveAtomBuffer,
 			ObjectMapper objectMapper
 	) {
 		this.eventsQueue = eventsQueue;
-		this.mongoReactiveAtomBuffer = mongoReactiveAtomBuffer;
 		this.objectMapper = objectMapper;
 	}
 
@@ -67,11 +65,8 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 
 	}
 
-
 	public record Request(RequestType type, List<Change> payload) {
 	}
-
-	private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
 
 	@Override
 	public void onMessage(SocketConnection socketConnection, WebSocketMessage message) {
@@ -88,7 +83,6 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 				LOGGER.info("Handling message... bytes in context {}", socketConnection.getContextLength());
 				var payload = message.getPayload();
 				if (message.isFin()) {
-					// To avoid additional memory allocation
 					var totalPayloadSize = payload.length + socketConnection.getContextLength();
 					try {
 						Request request = objectMapper.readValue(new InputStream() {
@@ -111,18 +105,13 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 							}
 						}, Request.class);
 
+						onMessage(socketConnection, request);
 						socketConnection.freeContext();
-//						LOGGER.info("Message {}", request);
-						executorService.execute(() -> onMessage(socketConnection, request));
-						socketConnection.freeContext();
-						//						LOGGER.info("Message {}", request);
-//						executorService.execute(() -> onMessage(socketConnection, value));
 					} catch (IOException e) {
 						LOGGER.error("error = ", e);
 					}
 
 				} else {
-//					LOGGER.info("Appending {} to context", Arrays.toString(payload));
 					socketConnection.appendBytesToContext(payload);
 				}
 			}
@@ -130,14 +119,14 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 	}
 
 	private void onMessage(SocketConnection socketConnection, Request request) {
-		if (request.type == RequestType.CONNECT) {
-			try {
+		try {
+			if (request.type == RequestType.CONNECT) {
 				eventsQueue.put(new NewConnectionEvent(socketConnection));
-			} catch (InterruptedException e) {
-				throw new RuntimeException(e);
+			} else if (request.type == RequestType.CHANGES) {
+				eventsQueue.put(new EditEvent(request.payload));
 			}
-		} else if (request.type == RequestType.CHANGES) {
-			mongoReactiveAtomBuffer.applyChangesBulk(request.payload());
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
 		}
 	}
 }

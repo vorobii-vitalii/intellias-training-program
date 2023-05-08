@@ -84,25 +84,38 @@ public class DocumentChangeWatcher implements Runnable {
 							new PairDTO<>(fromString(document.getString("path")), document.getString("value").charAt(0)))));
 				}
 				try {
+					LOGGER.info("Sending request to distribute message {}", webSocketMessage);
 					eventQueue.put(new MessageDistributeEvent(webSocketMessage));
 				} catch (InterruptedException e) {
 					throw new RuntimeException(e);
 				}
 			}
 		} catch (JsonProcessingException e) {
+			LOGGER.error("Error ", e);
 			throw new RuntimeException(e);
 		}
 	}
 
 	private List<DocumentStreamingWebSocketEndpoint.TreePathEntry> fromString(String str) {
-		try {
-			return objectMapper.readValue(Base64.getDecoder().decode(str),
-					new TypeReference<>() {
-					});
+//		try {
+//			return objectMapper.readValue(Base64.getDecoder().decode(str),
+//					new TypeReference<>() {
+//					});
+//		}
+//		catch (IOException e) {
+//			throw new RuntimeException(e);
+//		}
+
+
+		String[] arr = str.split(" ");
+		List<DocumentStreamingWebSocketEndpoint.TreePathEntry> list = new ArrayList<>(arr.length);
+		for (String value : arr) {
+			String[] s = value.split(",");
+			boolean isSet = s[0].charAt(0) == '1';
+			int d = Integer.parseInt(s[1]);
+			list.add(new DocumentStreamingWebSocketEndpoint.TreePathEntry(isSet, d));
 		}
-		catch (IOException e) {
-			throw new RuntimeException(e);
-		}
+		return list;
 	}
 
 //	private TreeDocPath<Integer> fromString(String str) {

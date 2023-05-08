@@ -1,8 +1,7 @@
 package request_handler;
 
+import io.opentelemetry.api.trace.Span;
 import tcp.server.SocketConnection;
 
-import java.nio.channels.SelectionKey;
-
-public record NetworkRequest<Request>(Request request, SocketConnection socketConnection) {
+public record NetworkRequest<Request>(Request request, SocketConnection socketConnection, Span span) {
 }

@@ -71,7 +71,7 @@
             connectionId = eventPayload.payload.connectionId;
         }
         else if (eventPayload.responseType === 'ADD') {
-            // console.log('ADD Event');
+          // Binary search
             arr = arr.filter(a => {
                 let c = comparePath(a.a, eventPayload.payload.a);
                 return c !== 0;
@@ -134,8 +134,6 @@
     const dmp = new diff_match_patch();
 
     textArea.addEventListener("change", event => {
-        console.log("Change");
-        console.log(event);
         const curr = arr.map(v => v.b).join('');
         const updated = textArea.value;
         const diff = dmp.diff_main(curr, updated);
@@ -155,10 +153,6 @@
                   changes.splice(changes.length, 0, {
                       a: arr[i + prevIndex + 1].a
                   });
-                    // socket.send(JSON.stringify({
-                    //     type: 'DELETE',
-                    //     payload: arr[i + prevIndex + 1].a
-                    // }));
                 }
                 prevIndex += str.length;
             }
@@ -200,10 +194,6 @@
             changes.splice(changes.length, 0, {
                 a: arr[i + prevIndex + 1].a
             });
-            // socket.send(JSON.stringify({
-            //   type: 'DELETE',
-            //   payload: arr[i + prevIndex + 1].a
-            // }));
           }
           prevIndex += str.length;
         }
@@ -213,11 +203,6 @@
           for (let i = 0; i < str.length; i++) {
             const c = str.charAt(i);
             let a = createPair(prev, next, c)
-            // console.log('New ' + JSON.stringify(a) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
-            // socket.send(JSON.stringify({
-            //   type: 'ADD',
-            //   payload: a
-            // }));
             changes.splice(changes.length, 0, a);
             newArr.splice(newArr.length, 0, a);
             prev = a;
@@ -240,6 +225,8 @@
 
     setInterval(() => {
       if (changes.length > 0) {
+        console.log('Sending changes');
+        console.log(changes);
         socket.send(msgpack.encode({
           type: 'CHANGES',
           payload: changes

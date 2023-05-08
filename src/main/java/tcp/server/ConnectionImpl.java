@@ -8,8 +8,9 @@ import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
+import io.opentelemetry.api.trace.Span;
 import net.jcip.annotations.ThreadSafe;
 import util.Serializable;
 
@@ -57,19 +58,20 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public void appendResponse(Serializable response) {
+		appendResponse(response, null);
+	}
+
+	@Override
+	public void appendResponse(Serializable response, Span parentSpan) {
 		// Issue
 		if (!selectionKey.isValid()) {
 			throw new CancelledKeyException();
 		}
-		try {
-			var message = ByteBuffer.wrap(response.serialize());
-			getServerAttachment()
-					.responses()
-					.put(message);
-		}
-		catch (InterruptedException e) {
-			throw new RuntimeException(e);
-		}
+		// Deadlock when queue is full and client disconnected
+		var message = ByteBuffer.wrap(response.serialize());
+		getServerAttachment()
+				.responses()
+				.add(new MessageWriteRequest(message, parentSpan));
 	}
 
 	@Override
@@ -99,10 +101,8 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public void close() {
-		getServerAttachment().invalidate();
 		selectionKey.cancel();
 	}
-
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;

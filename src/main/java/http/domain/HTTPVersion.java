@@ -20,6 +20,10 @@ public record HTTPVersion(int majorVersion, int minorVersion) implements Seriali
 		return new HTTPVersion(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)));
 	}
 
+	int getSizeInBytes() {
+		return 8;
+	}
+
 	@Override
 	public String toString() {
 		return "HTTP/" + majorVersion + "." + minorVersion;

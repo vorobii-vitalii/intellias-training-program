@@ -32,7 +32,6 @@ public class EventContext {
 				connection.appendResponse(message);
 				connection.changeOperation(SelectionKey.OP_WRITE);
 			} catch (Exception exception) {
-				connection.close();
 				iterator.remove();
 			}
 		}

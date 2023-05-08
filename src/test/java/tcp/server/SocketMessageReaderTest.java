@@ -1,5 +1,6 @@
 package tcp.server;
 
+import io.opentelemetry.api.trace.Span;
 import tcp.server.reader.exception.ParseException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +34,7 @@ class SocketMessageReaderTest {
 
 	@Mock
 	ReadableByteChannel readableByteChannel;
+	private Span requestSpan;
 
 	@Test
 	void readMessageGivenEnoughBytesWereRead() throws IOException, ParseException {
@@ -44,7 +46,7 @@ class SocketMessageReaderTest {
 						.thenReturn(null)
 						.thenReturn(null)
 						.thenReturn(new Pair<>(MESSAGE, MESSAGE_BYTES));
-		var readMessage = socketMessageReader.readMessage(bufferContext, readableByteChannel);
+		var readMessage = socketMessageReader.readMessage(bufferContext, readableByteChannel, requestSpan);
 		assertThat(readMessage).isEqualTo(MESSAGE);
 		verify(bufferContext).free(MESSAGE_BYTES);
 		verify(readableByteChannel, times(4)).read(BYTE_BUFFER);
@@ -55,7 +57,7 @@ class SocketMessageReaderTest {
 		when(bufferContext.getAvailableBuffer()).thenReturn(BYTE_BUFFER);
 		when(readableByteChannel.read(BYTE_BUFFER)).thenReturn(20, 20, 30, 20, 0);
 		when(messageReader.read(bufferContext)).thenReturn(null);
-		var readMessage = socketMessageReader.readMessage(bufferContext, readableByteChannel);
+		var readMessage = socketMessageReader.readMessage(bufferContext, readableByteChannel, requestSpan);
 		assertThat(readMessage).isNull();
 		verify(bufferContext, never()).free(anyInt());
 		verify(readableByteChannel, times(5)).read(BYTE_BUFFER);

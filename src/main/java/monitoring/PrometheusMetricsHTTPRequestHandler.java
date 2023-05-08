@@ -33,7 +33,7 @@ public class PrometheusMetricsHTTPRequestHandler implements HTTPRequestHandlerSt
 	@Override
 	public HTTPResponse handleRequest(HTTPRequest request) {
 		var scrapeBytes = prometheusRegistry.scrape().getBytes(StandardCharsets.UTF_8);
-		LOGGER.info("Scraped bytes = {}", scrapeBytes.length);
+		LOGGER.info("Providing metrics");
 		return new HTTPResponse(
 				new HTTPResponseLine(new HTTPVersion(1, 1), Constants.HTTPStatusCode.OK, "OK"),
 				new HTTPHeaders().addSingleHeader(Constants.HTTPHeaders.CONTENT_LENGTH, String.valueOf(scrapeBytes.length)),

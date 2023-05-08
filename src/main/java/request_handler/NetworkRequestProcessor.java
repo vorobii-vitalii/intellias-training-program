@@ -17,9 +17,9 @@ public class NetworkRequestProcessor<RequestMessage> implements Runnable {
 	private final Counter requestsCounter;
 
 	public NetworkRequestProcessor(
-		BlockingQueue<NetworkRequest<RequestMessage>> requestQueue,
-		RequestHandler<RequestMessage> requestHandler,
-		Timer requestProcessingTimer,
+			BlockingQueue<NetworkRequest<RequestMessage>> requestQueue,
+			RequestHandler<RequestMessage> requestHandler,
+			Timer requestProcessingTimer,
 			Counter requestsCounter
 	) {
 		this.requestQueue = requestQueue;
@@ -33,7 +33,6 @@ public class NetworkRequestProcessor<RequestMessage> implements Runnable {
 		while (!Thread.currentThread().isInterrupted()) {
 			try {
 				var request = requestQueue.take();
-//				LOGGER.info("Received request {}", request);
 				requestsCounter.increment();
 				requestProcessingTimer.record(() -> requestHandler.handle(request));
 			}

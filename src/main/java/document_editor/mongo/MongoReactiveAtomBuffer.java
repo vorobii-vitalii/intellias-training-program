@@ -5,6 +5,8 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -28,10 +30,12 @@ import org.treedoc.utils.Pair;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.model.BulkWriteOptions;
+import com.mongodb.client.model.DeleteManyModel;
 import com.mongodb.client.model.DeleteOneModel;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.InsertOneModel;
 import com.mongodb.client.model.InsertOneOptions;
+import com.mongodb.client.model.UpdateManyModel;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.WriteModel;
 
@@ -60,7 +64,9 @@ public class MongoReactiveAtomBuffer implements AtomBuffer<Character, Integer> {
 		) {
 			while (cursor.hasNext()) {
 				final Document document = cursor.next();
-				if (!function.apply(new DocumentStreamingWebSocketEndpoint.Change(fromString(document.getString("path")), document.getString("value").charAt(0)))) {
+				final List<DocumentStreamingWebSocketEndpoint.TreePathEntry> path = fromString(document.getString("path"));
+				LOGGER.info("Path {}", path);
+				if (!function.apply(new DocumentStreamingWebSocketEndpoint.Change(path, document.getString("value").charAt(0)))) {
 					return;
 				}
 			}
@@ -68,30 +74,58 @@ public class MongoReactiveAtomBuffer implements AtomBuffer<Character, Integer> {
 	}
 
 	public void applyChangesBulk(List<DocumentStreamingWebSocketEndpoint.Change> changes) {
-		List<WriteModel<Document>> collect = changes.stream()
-				.flatMap(request -> {
-					if (request.b() != null) {
-						return Stream.of(new InsertOneModel<>(
-								new Document()
-										.append("documentId", documentId)
-										.append("path", toString(request.a()))
-										.append("value", request.b())
-						));
-					} else {
-						final Bson filter = Filters.and(Filters.eq("documentId", documentId), Filters.eq("path", toString(request.a())));
-						return Stream.of(
-								new UpdateOneModel<Document>(
-										filter,
-										new Document().append("$set", new Document("deleting", true))
-								),
-								new DeleteOneModel<Document>(
-										filter
-								)
-						);
-					}
-				})
-				.collect(Collectors.toList());
-		mongoCollection.bulkWrite(collect, new BulkWriteOptions().ordered(true));
+		var map = changes.stream().collect(Collectors.partitioningBy(c -> c.b() != null));
+		Optional.ofNullable(map.get(true)).ifPresent(c -> {
+			if (c.isEmpty()) {
+				return;
+			}
+			LOGGER.info("Inserting {}", c);
+			mongoCollection.insertMany(c.stream()
+					.map(a -> new Document()
+							.append("documentId", documentId)
+							.append("path", toString(a.a()))
+							.append("value", a.b()))
+					.collect(Collectors.toList()));
+		});
+		Optional.ofNullable(map.get(false)).ifPresent(c -> {
+			if (c.isEmpty()) {
+				return;
+			}
+			final List<String> paths =
+					c.stream().map(DocumentStreamingWebSocketEndpoint.Change::a).map(this::toString).collect(Collectors.toList());
+			LOGGER.info("Deleting {}", paths);
+			final Bson filter = Filters.and(Filters.eq("documentId", documentId), Filters.in("path", paths));
+			mongoCollection.bulkWrite(List.of(
+					new UpdateManyModel<>(filter, new Document().append("$set", new Document("deleting", true))),
+					new DeleteManyModel<>(filter)
+			), new BulkWriteOptions().ordered(true));
+		});
+
+
+//		List<WriteModel<Document>> collect = changes.stream()
+//				.flatMap(request -> {
+//					if (request.b() != null) {
+//						return Stream.of(new InsertOneModel<>(
+//								new Document()
+//										.append("documentId", documentId)
+//										.append("path", toString(request.a()))
+//										.append("value", request.b())
+//						));
+//					} else {
+//						final Bson filter = Filters.and(Filters.eq("documentId", documentId), Filters.eq("path", toString(request.a())));
+//						return Stream.of(
+//								new UpdateOneModel<Document>(
+//										filter,
+//										new Document().append("$set", new Document("deleting", true))
+//								),
+//								new DeleteOneModel<Document>(
+//										filter
+//								)
+//						);
+//					}
+//				})
+//				.collect(Collectors.toList());
+//		mongoCollection.bulkWrite(collect, new BulkWriteOptions().ordered(true));
 	}
 
 	@Override
@@ -117,19 +151,18 @@ public class MongoReactiveAtomBuffer implements AtomBuffer<Character, Integer> {
 	}
 
 	private String toString(List<DocumentStreamingWebSocketEndpoint.TreePathEntry> path) {
-		try {
-			return ENCODER.encodeToString(objectMapper.writeValueAsBytes(path));
-		}
-		catch (JsonProcessingException e) {
-			throw new RuntimeException(e);
-		}
+//		try {
+//			return ENCODER.encodeToString(objectMapper.writeValueAsBytes(path));
+//		}
+//		catch (JsonProcessingException e) {
+//			throw new RuntimeException(e);
+//		}
 
-//		return IntStream.range(0, path.size())
-//				.mapToObj(i -> {
-//					char c = path.get(i).a() ? '1' : '0';
-//					return c + "," + path.get(i).b();
-//				})
-//				.collect(Collectors.joining(" "));
+		return path.stream().map(treePathEntry -> {
+					char c = treePathEntry.a() ? '1' : '0';
+					return c + "," + treePathEntry.b();
+				})
+				.collect(Collectors.joining(" "));
 	}
 
 	private String toString(TreeDocPath<Integer> path) {
@@ -142,24 +175,24 @@ public class MongoReactiveAtomBuffer implements AtomBuffer<Character, Integer> {
 	}
 
 	private List<DocumentStreamingWebSocketEndpoint.TreePathEntry> fromString(String str) {
-		try {
-			return objectMapper.readValue(Base64.getDecoder().decode(str),
-					new TypeReference<List<DocumentStreamingWebSocketEndpoint.TreePathEntry>>() {
-			});
-		}
-		catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-
-		//		String[] arr = str.split(" ");
-//		List<DocumentStreamingWebSocketEndpoint.TreePathEntry> list = new ArrayList<>(arr.length);
-//		for (String value : arr) {
-//			String[] s = value.split(",");
-//			boolean isSet = s[0].charAt(0) == '1';
-//			int d = Integer.parseInt(s[1]);
-//			list.add(new DocumentStreamingWebSocketEndpoint.TreePathEntry(isSet, d));
+//		try {
+//			return objectMapper.readValue(Base64.getDecoder().decode(str),
+//					new TypeReference<List<DocumentStreamingWebSocketEndpoint.TreePathEntry>>() {
+//			});
 //		}
-//		return list;
+//		catch (IOException e) {
+//			throw new RuntimeException(e);
+//		}
+
+		String[] arr = str.split(" ");
+		List<DocumentStreamingWebSocketEndpoint.TreePathEntry> list = new ArrayList<>(arr.length);
+		for (String value : arr) {
+			String[] s = value.split(",");
+			boolean isSet = s[0].charAt(0) == '1';
+			int d = Integer.parseInt(s[1]);
+			list.add(new DocumentStreamingWebSocketEndpoint.TreePathEntry(isSet, d));
+		}
+		return list;
 	}
 
 //	public void applyChangesBulk(ArrayValue arr) {

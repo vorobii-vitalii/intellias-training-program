@@ -6,15 +6,19 @@ import http.protocol_change.ProtocolChangeContext;
 import http.protocol_change.ProtocolChanger;
 import request_handler.NetworkRequest;
 
+import java.nio.channels.Selector;
 import java.util.Collection;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class ProtocolChangerHTTPResponsePostProcessor implements HTTPResponsePostProcessor {
 	private final Map<String, ProtocolChanger> protocolChangerMap;
 
-	public ProtocolChangerHTTPResponsePostProcessor(Collection<ProtocolChanger> protocolChangers) {
+	public ProtocolChangerHTTPResponsePostProcessor(
+			Collection<ProtocolChanger> protocolChangers
+	) {
 		this.protocolChangerMap = protocolChangers.stream()
 						.collect(Collectors.toMap(ProtocolChanger::getProtocolName, Function.identity()));
 	}

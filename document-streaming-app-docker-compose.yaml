@@ -57,6 +57,27 @@ services:
     ports:
       - 30003:30003
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.39
+    container_name: jaeger
+    networks:
+      - net
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14250:14250"
+      - "14268:14268"
+      - "14269:14269"
+      - "4317:4317"
+      - "4318:4318"
+      - "9411:9411"
+    environment:
+      - "COLLECTOR_ZIPKIN_HTTP_PORT=9411"
+      - "COLLECTOR_OTLP_ENABLED=true"
+
 ## WebSocket servers
   http-server:
     image: my-repo/http-server:1.0-SNAPSHOT
@@ -65,13 +86,22 @@ services:
       - "8005:8005"
       - "9010:9010"
     restart: always
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://0.0.0.0:12201"
+        tag: "document-streaming-app"
     depends_on:
       - mongo1
+      - mongo2
+      - mongo3
+      - jaeger
     networks:
       - net
     environment:
       - "MONGO_URL=mongodb://mongo1:30001,mongo2:30002,mongo3:30003/?replicaSet=my-replica-set"
       - "PORT=8000"
+      - "JAEGER_ENDPOINT=http://jaeger:4317"
       - "HOST=0.0.0.0"
 
 # net stack
@@ -119,11 +149,11 @@ services:
       - 9200
       - 9300
     ports:
-      - 9200:9200
-      - 9300:9300
+      - "9200:9200"
+      - "9300:9300"
     environment:
       node.name: elasticsearch
-      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      ES_JAVA_OPTS: -Xms1024m -Xmx1024m
       # Bootstrap password.
       # Used to initialize the keystore during the initial startup of
       # Elasticsearch. Ignored on subsequent runs.
@@ -147,6 +177,7 @@ services:
       - 5044:5044
       - 50000:50000/tcp
       - 50000:50000/udp
+      - 12201:12201/udp
       - 9600:9600
     environment:
       LS_JAVA_OPTS: -Xms256m -Xmx256m
@@ -165,7 +196,7 @@ services:
     volumes:
       - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
     ports:
-      - 5601:5601
+      - "5601:5601"
     environment:
       KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
     networks:
@@ -174,14 +205,44 @@ services:
       - elasticsearch
     restart: unless-stopped
 
+  db:
+    image: timescaledev/timescaledb-ha:pg12.14-ts2.10.3
+    networks:
+      net:
+    ports:
+      - 5432:5432/tcp
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+
+  promscale:
+    image: timescale/promscale:latest
+    ports:
+      - 9201:9201/tcp
+    restart: on-failure
+    command:
+      - '-startup.upgrade-prerelease-extensions=true'
+    networks:
+      net:
+    depends_on:
+      - db
+      - prometheus
+    environment:
+      PROMSCALE_DB_CONNECT_RETRIES: 10
+      PROMSCALE_WEB_TELEMETRY_PATH: /metrics-text
+      PROMSCALE_DB_URI: postgres://postgres:password@db:5432/postgres?sslmode=allow
+
 # Metrics
   prometheus:
     image: prom/prometheus
     container_name: prometheus
     command:
+      - '--enable-feature=native-histograms'
+      - '--web.enable-remote-write-receiver'
+      - '--web.enable-lifecycle'
       - '--config.file=/etc/prometheus/prometheus.yml'
     ports:
-      - 9090:9090
+      - "9090:9090"
     restart: unless-stopped
     networks:
       net:
@@ -194,7 +255,7 @@ services:
     image: grafana/grafana
     container_name: grafana
     ports:
-      - 3000:3000
+      - "3000:3000"
     restart: unless-stopped
     networks:
       net:

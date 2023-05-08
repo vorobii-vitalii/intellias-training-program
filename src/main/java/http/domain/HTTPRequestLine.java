@@ -14,4 +14,8 @@ public record HTTPRequestLine(HTTPMethod httpMethod, String path, HTTPVersion ht
 		return new HTTPRequestLine(method, path, httpVersion);
 	}
 
+	@Override
+	public String toString() {
+		return httpMethod + " " + path + " " + httpVersion;
+	}
 }

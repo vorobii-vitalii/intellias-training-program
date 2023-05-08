@@ -32,6 +32,7 @@ public class DocumentMessageEventsHandler implements Runnable {
 				.collect(Collectors.toMap(EventHandler::getHandledEventType, Function.identity()));
 	}
 
+	// diagrams
 	@Override
 	public void run() {
 		SortedMap<EventType, Collection<Event>> eventsMap = new TreeMap<>();
@@ -49,6 +50,7 @@ public class DocumentMessageEventsHandler implements Runnable {
 				return new ArrayList<>(List.of(event));
 			});
 		}
+//		LOGGER.info("Created map = {}", eventsMap);
 		eventsMap.forEach((type, events) -> {
 			try {
 				eventHandlerMap.get(type).handle(events, eventContext);

@@ -45,16 +45,10 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 		if (N < expectedMinLength) {
 			return null;
 		}
-//		LOGGER.info("Read bytes = {}", N);
 		if (extraPayloadLengthBytes != 0) {
 			var extendedSize = new BigInteger(
 					1,
 					extractBytes(bufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraPayloadLengthBytes));
-//			LOGGER.info("Extra payload length bytes {}, size = {}, intValue = {} - {}",
-//					extraPayloadLengthBytes,
-//					extendedSize,
-//					extendedSize.intValue(),
-//					Arrays.toString(extractBytes(bufferContext, METADATA_IN_BYTES, METADATA_IN_BYTES + extraPayloadLengthBytes)));
 			expectedMinLength += extendedSize.intValue();
 			payloadLength = extendedSize.intValue();
 		}
@@ -68,8 +62,6 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 				: null;
 
 		var payloadStart = METADATA_IN_BYTES + (isMasked ? MASKING_KEY_IN_BYTES : 0) + extraPayloadLengthBytes;
-
-//		LOGGER.info("Payload start = {}", payloadStart);
 
 		var payload = extractBytes(bufferContext, payloadStart, payloadStart + payloadLength);
 		if (isMasked) {

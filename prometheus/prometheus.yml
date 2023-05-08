@@ -21,11 +21,18 @@ scrape_configs:
           - localhost:9090
   - job_name: http-server
     honor_timestamps: true
-    scrape_interval: 5s
-    scrape_timeout: 3s
+    scrape_interval: 10s
+    scrape_timeout: 5s
     metrics_path: /prometheus
     enable_http2: false
     scheme: http
     static_configs:
       - targets:
           - http-server:8000
+
+remote_write:
+  - url: "http://promscale:9201/write"
+
+remote_read:
+  - url: "http://promscale:9201/read"
+    read_recent: true

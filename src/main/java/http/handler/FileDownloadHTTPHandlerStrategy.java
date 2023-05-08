@@ -32,20 +32,20 @@ public class FileDownloadHTTPHandlerStrategy implements HTTPRequestHandlerStrate
 			while ((t = inputStream.read()) != -1) {
 				outputStream.write(t);
 			}
-		} catch (IOException e) {
+		}
+		catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 		return new HTTPResponse(
-						new HTTPResponseLine(
-										new HTTPVersion(1, 1),
-										Constants.HTTPStatusCode.OK,
-										"OK"
-						),
-						new HTTPHeaders()
-										.addSingleHeader(Constants.HTTPHeaders.CONTENT_LENGTH, String.valueOf(outputStream.size()))
-										.addSingleHeader(Constants.HTTPHeaders.CONTENT_TYPE, contentType),
-						outputStream.toByteArray()
-		);
+				new HTTPResponseLine(
+						new HTTPVersion(1, 1),
+						Constants.HTTPStatusCode.OK,
+						"OK"
+				),
+				new HTTPHeaders()
+						.addSingleHeader(Constants.HTTPHeaders.CONTENT_LENGTH, String.valueOf(outputStream.size()))
+						.addSingleHeader(Constants.HTTPHeaders.CONTENT_TYPE, contentType),
+				outputStream.toByteArray());
 	}
 
 	@Override

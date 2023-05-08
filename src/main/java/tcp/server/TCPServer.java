@@ -4,16 +4,11 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.spi.AbstractSelector;
 import java.nio.channels.spi.SelectorProvider;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.Comparator;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.PriorityQueue;
 import java.util.function.Consumer;
 
 import org.slf4j.LoggerFactory;
@@ -67,28 +62,32 @@ public class TCPServer {
 			serverSocketChannel.configureBlocking(false);
 			serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
 			serverSocketChannel.bind(new InetSocketAddress(serverConfig.getHost(), serverConfig.getPort()));
-			while (!Thread.currentThread().isInterrupted()) {
-				selector.select(selectionKey -> {
-					try {
-						if (!selectionKey.isValid()) {
-							serverConfig.getOnConnectionClose().accept(selectionKey);
-							return;
-						}
-						var operationHandler = operationHandlerByType.get(selectionKey.readyOps());
-						if (operationHandler != null) {
-							operationHandler.accept(selectionKey);
-						}
-					}
-					catch (Throwable error) {
-						LOGGER.error("Error", error);
-					}
-				}, TIMEOUT);
-			}
+			new Poller(selector, operationHandlerByType, serverConfig.getOnConnectionClose(), TIMEOUT).run();
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
+
+//	private void startPollingSelector(AbstractSelector selector) throws IOException {
+//		while (!Thread.currentThread().isInterrupted()) {
+//			selector.select(selectionKey -> {
+//				try {
+//					if (!selectionKey.isValid()) {
+//						serverConfig.getOnConnectionClose().accept(selectionKey);
+//						return;
+//					}
+//					var operationHandler = operationHandlerByType.get(selectionKey.readyOps());
+//					if (operationHandler != null) {
+//						operationHandler.accept(selectionKey);
+//					}
+//				}
+//				catch (Throwable error) {
+//					LOGGER.error("Error", error);
+//				}
+//			}, TIMEOUT);
+//		}
+//	}
 
 }

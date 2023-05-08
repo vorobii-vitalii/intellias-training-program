@@ -13,6 +13,11 @@ public class BufferContext {
 	private static final int NUM_BUFFERS_TO_KEEP_ON_RESET = 1;
 
 	private final List<ByteBuffer> byteBuffers = new ArrayList<>();
+	private final ByteBufferPool byteBufferPool;
+
+	public BufferContext(ByteBufferPool byteBufferPool) {
+		this.byteBufferPool = byteBufferPool;
+	}
 
 	public ByteBuffer getAvailableBuffer() {
 		addByteBufferIfNeeded();
@@ -43,7 +48,8 @@ public class BufferContext {
 		}
 		firstBuffer.position(bytesToKeep);
 		while (byteBuffers.size() > NUM_BUFFERS_TO_KEEP_ON_RESET) {
-			byteBuffers.remove(byteBuffers.size() - 1);
+			var byteBuffer = byteBuffers.remove(byteBuffers.size() - 1);
+			byteBufferPool.save(byteBuffer);
 		}
 	}
 
@@ -55,7 +61,7 @@ public class BufferContext {
 
 	private void addByteBufferIfNeeded() {
 		if (byteBuffers.isEmpty() || isLastBufferFull()) {
-			byteBuffers.add(ByteBuffer.allocateDirect(SINGLE_BUFFER_SIZE));
+			byteBuffers.add(byteBufferPool.allocate(SINGLE_BUFFER_SIZE));
 		}
 	}
 

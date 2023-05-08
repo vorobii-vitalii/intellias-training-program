@@ -31,7 +31,7 @@ class WebSocketRequestHandlerTest {
 		var webSocketMessage = new WebSocketMessage();
 		var socketConnection = mock(SocketConnection.class);
 		when(socketConnection.getMetadata(Constants.WebSocketMetadata.ENDPOINT)).thenReturn(ENDPOINT);
-		var networkRequest = new NetworkRequest<>(webSocketMessage, socketConnection);
+		var networkRequest = new NetworkRequest<>(webSocketMessage, socketConnection, null);
 		var webSocketEndpoint = mock(WebSocketEndpoint.class);
 		when(webSocketEndpointProvider.getEndpoint(ENDPOINT)).thenReturn(webSocketEndpoint);
 		webSocketRequestHandler.handle(networkRequest);
