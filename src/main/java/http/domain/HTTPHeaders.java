@@ -2,11 +2,17 @@ package http.domain;
 
 import util.Serializable;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class HTTPHeaders implements Serializable {
+	private static final byte CARRIAGE_RETURN = '\r';
+	private static final byte LINE_FEED = '\n';
+	private static final int CLRF_BYTES = 2;
+	public static final int COLON = 1;
+	public static final byte COLON_BYTE = (byte) ':';
 
 	/**
 	 * header-field   = field-name ":" OWS field-value OWS
@@ -55,6 +61,31 @@ public class HTTPHeaders implements Serializable {
 	}
 
 	@Override
+	public int getSize() {
+		var count = CLRF_BYTES;
+		for (var entry : headers.entrySet()) {
+			count += entry.getKey().length();
+			count += COLON;
+			count += entry.getValue().get(0).length();
+			count += CLRF_BYTES;
+		}
+		return count;
+	}
+
+	@Override
+	public void serialize(ByteBuffer dest) {
+		for (var entry : headers.entrySet()) {
+			dest.put(entry.getKey().getBytes(StandardCharsets.UTF_8));
+			dest.put(COLON_BYTE);
+			dest.put(entry.getValue().get(0).getBytes(StandardCharsets.UTF_8));
+			dest.put(CARRIAGE_RETURN);
+			dest.put(LINE_FEED);
+		}
+		dest.put(CARRIAGE_RETURN);
+		dest.put(LINE_FEED);
+	}
+
+	@Override
 	public byte[] serialize() {
 		return (this.headers.entrySet().stream()
 						.map(e -> {
@@ -67,16 +98,14 @@ public class HTTPHeaders implements Serializable {
 
 	@Override
 	public String toString() {
-		return "HTTPHeaders{" +
-						"headers=" + headers +
-						'}';
+		return "HTTPHeaders{" + "headers=" + headers + '}';
 	}
 
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
-		HTTPHeaders that = (HTTPHeaders) o;
+		var that = (HTTPHeaders) o;
 		return Objects.equals(headers, that.headers);
 	}
 

@@ -1,6 +1,7 @@
 package tcp.server;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.util.concurrent.TimeUnit;
 
@@ -19,13 +20,12 @@ public class SocketMessageReader<Message> {
 	}
 
 	public Message readMessage(BufferContext bufferContext, ReadableByteChannel readableByteChannel, Span span)
-					throws IOException, ParseException {
+			throws IOException, ParseException {
 		var startTime = System.nanoTime();
-		var buffer = bufferContext.getAvailableBuffer();
 		try {
 			do {
 				span.addEvent("Read from context");
-				var res = messageReader.read(bufferContext);
+				var res = messageReader.read(bufferContext, span::addEvent);
 				span.addEvent("Read from context end");
 				if (res != null) {
 					bufferContext.free(res.second());
@@ -33,13 +33,18 @@ public class SocketMessageReader<Message> {
 					return res.first();
 				}
 			}
-			while (readableByteChannel.read(buffer) > 0);
+			while (tryRead(readableByteChannel, bufferContext, span));
 			return null;
-		}
-		finally {
+		} finally {
 			messageReadTimer.record(System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
 		}
+	}
 
+	private boolean tryRead(ReadableByteChannel readableByteChannel, BufferContext bufferContext, Span span)
+			throws IOException {
+		var buffer = bufferContext.getAvailableBuffer();
+		span.addEvent("Got buffer to write");
+		return readableByteChannel.read(buffer) > 0;
 	}
 
 }

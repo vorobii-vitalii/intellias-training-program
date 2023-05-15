@@ -12,8 +12,10 @@ import tcp.server.ByteBufferPool;
 import tcp.server.ServerAttachment;
 import util.UnsafeConsumer;
 
+import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.WritableByteChannel;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -25,17 +27,14 @@ public class WriteOperationHandler implements Consumer<SelectionKey> {
 	private final BiConsumer<SelectionKey, Throwable> onError;
 	private final ByteBufferPool byteBufferPool;
 	private final Tracer writeHandlerTracer;
-	private final UnsafeConsumer<SelectionKey> onResponsesWrite;
 
 	public WriteOperationHandler(
 			Timer timer,
 			Counter messagesWrittenCounter,
 			BiConsumer<SelectionKey, Throwable> onError,
 			ByteBufferPool byteBufferPool,
-			OpenTelemetry openTelemetry,
-			UnsafeConsumer<SelectionKey> onResponsesWrite
+			OpenTelemetry openTelemetry
 	) {
-		this.onResponsesWrite = onResponsesWrite;
 		this.timer = timer;
 		this.messagesWrittenCounter = messagesWrittenCounter;
 		this.onError = onError;
@@ -77,12 +76,17 @@ public class WriteOperationHandler implements Consumer<SelectionKey> {
 						break;
 					}
 					byteBufferPool.save(buffer);
+					if (writeRequest.onWriteResponseCallback() != null) {
+						writeRequest.onWriteResponseCallback().accept(selectionKey);
+					}
 					responses.poll();
 					messagesWrittenCounter.increment();
 				}
 				if (responses.isEmpty()) {
-					onResponsesWrite.accept(selectionKey);
+					selectionKey.interestOps(SelectionKey.OP_READ);
 				}
+			} catch (CancelledKeyException cancelledKeyException) {
+				// Ignore
 			} catch (Throwable e) {
 				onError.accept(selectionKey, e);
 			}

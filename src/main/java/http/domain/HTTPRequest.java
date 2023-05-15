@@ -18,11 +18,6 @@ public class HTTPRequest {
 		this(httpRequestLine, new HTTPHeaders(), null);
 	}
 
-	public HTTPRequest addHeader(String headerName, String headerValue) {
-		headers.addSingleHeader(headerName, headerValue);
-		return this;
-	}
-
 	public HTTPHeaders getHeaders() {
 		return headers;
 	}

@@ -1,6 +1,7 @@
 package tcp.server;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -8,101 +9,143 @@ import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import io.opentelemetry.api.trace.Span;
 import net.jcip.annotations.ThreadSafe;
 import util.Serializable;
+import util.UnsafeConsumer;
 
 @ThreadSafe
 public class ConnectionImpl implements SocketConnection {
 	public static final int NUM_RETRIES = 5;
-	private final SelectionKey selectionKey;
+	public static final int EOF = -1;
+	private final ServerAttachment serverAttachment;
 
-	public ConnectionImpl(SelectionKey selectionKey) {
-		this.selectionKey = selectionKey;
+	public ConnectionImpl(ServerAttachment serverAttachment) {
+		this.serverAttachment = serverAttachment;
 	}
 
 	@Override
 	public void appendBytesToContext(byte[] data) {
 		for (byte b : data) {
-			getServerAttachment().getClientBufferContext().getAvailableBuffer().put(b);
+			serverAttachment.getClientBufferContext().getAvailableBuffer().put(b);
 		}
 	}
 
 	@Override
 	public void freeContext() {
-		getServerAttachment().getClientBufferContext().free(getServerAttachment().getClientBufferContext().size());
+		serverAttachment.getClientBufferContext().free(serverAttachment.getClientBufferContext().size());
 	}
 
 	@Override
 	public int getContextLength() {
-		return getServerAttachment().getClientBufferContext().size();
+		return serverAttachment.getClientBufferContext().size();
 	}
 
 	@Override
 	public byte getByteFromContext(int index) {
-		return getServerAttachment().getClientBufferContext().get(index);
+		return serverAttachment.getClientBufferContext().get(index);
+	}
+
+	@Override
+	public InputStream getContextInputStream() {
+		return new InputStream() {
+			private int index = 0;
+
+			@Override
+			public int read() {
+				var size = getContextLength();
+				if (index == size) {
+					return EOF;
+				}
+				return getByteFromContext(index++);
+			}
+		};
 	}
 
 	@Override
 	public void setProtocol(String protocol) {
-		getServerAttachment().setProtocol(protocol);
+		serverAttachment.setProtocol(protocol);
 	}
 
 	@Override
 	public void changeOperation(int operation) {
-		selectionKey.interestOps(operation);
-		selectionKey.selector().wakeup();
+		serverAttachment.getSelectionKey().interestOps(operation);
+		serverAttachment.getSelectionKey().selector().wakeup();
 	}
 
 	@Override
 	public void appendResponse(Serializable response) {
-		appendResponse(response, null);
+		appendResponse(response, null, null, null);
 	}
 
 	@Override
-	public void appendResponse(Serializable response, Span parentSpan) {
+	public void appendResponse(Serializable response, Span parentSpan, Span requestSpan, UnsafeConsumer<SelectionKey> onWriteResponseCallback) {
 		// Issue
-		if (!selectionKey.isValid()) {
+		if (!serverAttachment.getSelectionKey().isValid()) {
 			throw new CancelledKeyException();
 		}
-		// Deadlock when queue is full and client disconnected
-		var message = ByteBuffer.wrap(response.serialize());
-		getServerAttachment()
+		ByteBuffer message = serverAttachment.allocate(response.getSize());
+		if (requestSpan != null) {
+			requestSpan.addEvent("Allocated buffer");
+		}
+		response.serialize(message);
+		if (requestSpan != null) {
+			requestSpan.addEvent("Serialized");
+		}
+		message.flip();
+		serverAttachment
 				.responses()
-				.add(new MessageWriteRequest(message, parentSpan));
+				.add(new MessageWriteRequest(message, parentSpan, onWriteResponseCallback));
+		if (requestSpan != null) {
+			requestSpan.addEvent("Written to queue");
+		}
+
+//		// Deadlock when queue is full and client disconnected
+//		var bytes = response.serialize();
+//		ByteBuffer message = ByteBuffer.allocateDirect(bytes.length);
+//		message.put(bytes);
+//		message.flip();
+//		getServerAttachment()
+//				.responses()
+//				.add(new MessageWriteRequest(message, parentSpan));
 	}
 
 	@Override
 	public int getResponsesSize() {
-		return getServerAttachment().responses().size();
+		return serverAttachment.responses().size();
 	}
 
 
 	@Override
 	public void setMetadata(String key, Object value) {
-		getServerAttachment().context().put(key, value);
+		serverAttachment.context().put(key, value);
 	}
 
 	@Override
 	public String getMetadata(String key) {
-		return (String) getServerAttachment().context().get(key);
+		return (String) serverAttachment.context().get(key);
 	}
 
 	@Override
 	public SocketAddress getAddress() {
 		try {
-			return ((SocketChannel) selectionKey.channel()).getRemoteAddress();
+			return ((SocketChannel) (serverAttachment.getSelectionKey().channel())).getRemoteAddress();
 		} catch (IOException e) {
-			throw new UncheckedIOException(e);
+			throw new RuntimeException(e);
 		}
 	}
 
 	@Override
 	public void close() {
-		selectionKey.cancel();
+		try {
+			serverAttachment.getSelectionKey().channel().close();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
 	}
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
@@ -117,11 +160,9 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public String toString() {
-		return "Connection[" + getServerAttachment() + " " + getAddress() + "]";
+		return "Connection[" + serverAttachment + " " + getAddress() + "]";
 	}
 
-	private ServerAttachment getServerAttachment() {
-		return (ServerAttachment) selectionKey.attachment();
-	}
+
 
 }

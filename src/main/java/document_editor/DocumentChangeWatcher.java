@@ -1,142 +1,95 @@
 package document_editor;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.example.document.storage.DocumentChangedEvents;
+import com.example.document.storage.DocumentStorageServiceGrpc;
+import com.example.document.storage.SubscribeForDocumentChangesRequest;
+import com.example.document.storage.TreePath;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.gson.Gson;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.changestream.ChangeStreamDocument;
-import com.mongodb.client.model.changestream.FullDocument;
-import org.slf4j.LoggerFactory;
-import org.slf4j.Logger;
-import org.bson.Document;
-import org.treedoc.path.MutableTreeDocPath;
-import org.treedoc.path.MutableTreeDocPathImpl;
-import org.treedoc.path.TreeDocPath;
-import org.treedoc.utils.Pair;
-
+import com.google.protobuf.InvalidProtocolBufferException;
 import document_editor.event.Event;
 import document_editor.event.MessageDistributeEvent;
+import io.grpc.stub.StreamObserver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.stream.Collectors;
 
 // NGINX reconnect, Envoy proxy, EBPF
-// connection stickiness
 public class DocumentChangeWatcher implements Runnable {
-	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentChangeWatcher.class);
-	public static final int BATCH_SIZE = 100;
+    public static final int BATCH_SIZE = 100;
+    private static final Logger LOGGER = LoggerFactory.getLogger(DocumentChangeWatcher.class);
+    public static final int BATCH_TIMEOUT = 100;
+    private final BlockingQueue<Event> eventQueue;
+    private final ObjectMapper objectMapper;
+    private final DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService;
 
-	private final MongoCollection<Document> mongoCollection;
-	private final BlockingQueue<Event> eventQueue;
-	private final ObjectMapper objectMapper;
+    public DocumentChangeWatcher(
+            BlockingQueue<Event> eventQueue,
+             ObjectMapper objectMapper,
+             DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService
+    ) {
+        this.eventQueue = eventQueue;
+        this.objectMapper = objectMapper;
+        this.documentStorageService = documentStorageService;
+    }
 
-	public DocumentChangeWatcher(MongoCollection<Document> mongoCollection, BlockingQueue<Event> eventQueue, ObjectMapper objectMapper) {
-		this.mongoCollection = mongoCollection;
-		this.eventQueue = eventQueue;
-		this.objectMapper = objectMapper;
-	}
+    @Override
+    public void run() {
+        var subscribeForDocumentChangesRequest = SubscribeForDocumentChangesRequest.newBuilder()
+                .setBatchSize(BATCH_SIZE)
+                .setBatchTimeout(BATCH_TIMEOUT)
+                .build();
+        documentStorageService.subscribeForDocumentsChanges(subscribeForDocumentChangesRequest, new StreamObserver<>() {
+            @Override
+            public void onNext(DocumentChangedEvents documentChangedEvents) {
+                try {
+                    var webSocketMessage = new WebSocketMessage();
+                    webSocketMessage.setFin(true);
+                    webSocketMessage.setOpCode(OpCode.BINARY);
+                    webSocketMessage.setPayload(objectMapper.writeValueAsBytes(new DocumentStreamingWebSocketEndpoint.Response(
+                            DocumentStreamingWebSocketEndpoint.ResponseType.CHANGES,
+                            documentChangedEvents
+                                    .getEventsList()
+                                    .stream()
+                                    .map(e -> {
+                                        var change = e.getChange();
+                                        return new PairDTO<>(
+                                                toInternalPath(change.getPath()),
+                                                change.hasCharacter() ? ((char) change.getCharacter()) : null
+                                        );
+                                    })
+                                    .collect(Collectors.toList())
+                    )));
+                    eventQueue.put(new MessageDistributeEvent(webSocketMessage));
 
-	@Override
-	public void run() {
-		try (var cursor = mongoCollection.watch()
-				.fullDocument(FullDocument.UPDATE_LOOKUP)
-				.batchSize(BATCH_SIZE)
-				.cursor()
-		) {
-			while (cursor.hasNext()) {
-				final ChangeStreamDocument<Document> documentChangeStreamDocument = cursor.next();
-				var document = documentChangeStreamDocument.getFullDocument();
-				//						LOGGER.info("New change {}", documentChangeStreamDocument);
-				if (document == null) {
-					continue;
-				}
-				var webSocketMessage = new WebSocketMessage();
-				webSocketMessage.setFin(true);
-				webSocketMessage.setOpCode(OpCode.BINARY);
+                } catch (Throwable error) {
+                    LOGGER.warn("Error", error);
+                }
+            }
 
-				// Delete event
-				if (document.containsKey("deleting")) {
-//					webSocketMessage.setPayload(
-//							new Gson()
-//									.toJson(new DocumentStreamingWebSocketEndpoint.Response(
-//											DocumentStreamingWebSocketEndpoint.ResponseType.DELETE, toPairs(fromString(document.getString("path")))))
-//									.getBytes(StandardCharsets.UTF_8)
-//					);
-					webSocketMessage.setPayload(objectMapper.writeValueAsBytes(new DocumentStreamingWebSocketEndpoint.Response(
-							DocumentStreamingWebSocketEndpoint.ResponseType.DELETE, fromString(document.getString("path")))));
-				}
-				// insert event
-				else {
-//					webSocketMessage.setPayload(new Gson()
-//							.toJson(new DocumentStreamingWebSocketEndpoint.Response(
-//									DocumentStreamingWebSocketEndpoint.ResponseType.ADD,
-//									new Pair<>(toPairs(fromString(document.getString("path"))), document.getString("value").charAt(0))))
-//							.getBytes(StandardCharsets.UTF_8));
-					webSocketMessage.setPayload(objectMapper.writeValueAsBytes(new DocumentStreamingWebSocketEndpoint.Response(
-							DocumentStreamingWebSocketEndpoint.ResponseType.ADD,
-							new PairDTO<>(fromString(document.getString("path")), document.getString("value").charAt(0)))));
-				}
-				try {
-					LOGGER.info("Sending request to distribute message {}", webSocketMessage);
-					eventQueue.put(new MessageDistributeEvent(webSocketMessage));
-				} catch (InterruptedException e) {
-					throw new RuntimeException(e);
-				}
-			}
-		} catch (JsonProcessingException e) {
-			LOGGER.error("Error ", e);
-			throw new RuntimeException(e);
-		}
-	}
+            @Override
+            public void onError(Throwable throwable) {
+                LOGGER.warn("Error", throwable);
+            }
 
-	private List<DocumentStreamingWebSocketEndpoint.TreePathEntry> fromString(String str) {
-//		try {
-//			return objectMapper.readValue(Base64.getDecoder().decode(str),
-//					new TypeReference<>() {
-//					});
-//		}
-//		catch (IOException e) {
-//			throw new RuntimeException(e);
-//		}
+            @Override
+            public void onCompleted() {
+                LOGGER.info("Stream completed");
+            }
+        });
+    }
 
-
-		String[] arr = str.split(" ");
-		List<DocumentStreamingWebSocketEndpoint.TreePathEntry> list = new ArrayList<>(arr.length);
-		for (String value : arr) {
-			String[] s = value.split(",");
-			boolean isSet = s[0].charAt(0) == '1';
-			int d = Integer.parseInt(s[1]);
-			list.add(new DocumentStreamingWebSocketEndpoint.TreePathEntry(isSet, d));
-		}
-		return list;
-	}
-
-//	private TreeDocPath<Integer> fromString(String str) {
-//		String[] arr = str.split(" ");
-//		MutableTreeDocPath<Integer> path = new MutableTreeDocPathImpl<>(arr.length);
-//		for (int i = 0; i < arr.length; i++) {
-//			String[] s = arr[i].split(",");
-//			if (s[0].charAt(0) == '1') {
-//				path.set(i);
-//			}
-//			path.disambiguatorAt(i, Integer.parseInt(s[1]));
-//		}
-//		return path;
-//	}
-
-	private <T extends Comparable<T>> List<PairDTO<Boolean, T>> toPairs(TreeDocPath<T> path) {
-		var pairs = new ArrayList<PairDTO<Boolean, T>>(path.length());
-		for (var i = 0; i < path.length(); i++) {
-			pairs.add(new PairDTO<>(path.isSet(i), path.disambiguatorAt(i)));
-		}
-		return pairs;
-	}
-
+    private List<DocumentStreamingWebSocketEndpoint.TreePathEntry> toInternalPath(TreePath path) {
+        return path.getEntriesList().stream()
+                .map(entry -> new DocumentStreamingWebSocketEndpoint.TreePathEntry(
+                        entry.getIsLeft(),
+                        entry.getDisambiguator()
+                ))
+                .collect(Collectors.toList());
+    }
 }

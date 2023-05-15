@@ -43,7 +43,10 @@ class GenericReadOperationHandlerTest {
 			new HashMap<>(),
 			null,
 			null,
-			null);
+			null,
+			null,
+			null
+	);
 	@Mock
 	SocketMessageReader<HTTPRequest> socketMessageReader;
 

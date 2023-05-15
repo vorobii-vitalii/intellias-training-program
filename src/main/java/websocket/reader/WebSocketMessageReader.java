@@ -1,5 +1,6 @@
 package websocket.reader;
 
+import tcp.server.EventEmitter;
 import tcp.server.reader.exception.ParseException;
 import tcp.server.reader.MessageReader;
 import tcp.server.BufferContext;
@@ -26,7 +27,7 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 	private static final int PAYLOAD_LENGTH_BITMASK = 0b01111111;
 
 	@Override
-	public Pair<WebSocketMessage, Integer> read(BufferContext bufferContext) throws ParseException {
+	public Pair<WebSocketMessage, Integer> read(BufferContext bufferContext, EventEmitter eventEmitter) throws ParseException {
 		int N = bufferContext.size();
 		if (N < METADATA_IN_BYTES) {
 			return null;

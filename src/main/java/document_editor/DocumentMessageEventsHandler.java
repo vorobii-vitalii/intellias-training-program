@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.BlockingQueue;
@@ -17,15 +18,21 @@ import document_editor.event.Event;
 import document_editor.event.EventContext;
 import document_editor.event.EventHandler;
 import document_editor.event.EventType;
+import request_handler.NetworkRequest;
+import request_handler.NetworkRequestHandler;
 
 public class DocumentMessageEventsHandler implements Runnable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentMessageEventsHandler.class);
 
-	private final BlockingQueue<Event> eventsQueue;
+	private final Queue<Event> eventsQueue;
 	private final EventContext eventContext;
 	private final Map<EventType, EventHandler> eventHandlerMap;
 
-	public DocumentMessageEventsHandler(BlockingQueue<Event> eventsQueue, EventContext eventContext, List<EventHandler> eventHandlers) {
+	public DocumentMessageEventsHandler(
+			Queue<Event> eventsQueue,
+			EventContext eventContext,
+			List<EventHandler> eventHandlers
+	) {
 		this.eventsQueue = eventsQueue;
 		this.eventContext = eventContext;
 		this.eventHandlerMap = eventHandlers.stream()
@@ -35,7 +42,7 @@ public class DocumentMessageEventsHandler implements Runnable {
 	// diagrams
 	@Override
 	public void run() {
-		SortedMap<EventType, Collection<Event>> eventsMap = new TreeMap<>();
+		var eventsMap = new TreeMap<EventType, Collection<Event>>();
 		var size = eventsQueue.size();
 		for (var i = 0; i < size; i++) {
 			var event = eventsQueue.poll();
@@ -50,12 +57,13 @@ public class DocumentMessageEventsHandler implements Runnable {
 				return new ArrayList<>(List.of(event));
 			});
 		}
-//		LOGGER.info("Created map = {}", eventsMap);
+		if (LOGGER.isDebugEnabled()) {
+			LOGGER.debug("Created events map = {}", eventsMap);
+		}
 		eventsMap.forEach((type, events) -> {
 			try {
 				eventHandlerMap.get(type).handle(events, eventContext);
-			}
-			catch (Exception error) {
+			} catch (Exception error) {
 				LOGGER.error("Error", error);
 			}
 		});

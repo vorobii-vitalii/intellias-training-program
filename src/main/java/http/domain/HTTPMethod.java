@@ -15,14 +15,14 @@ public enum HTTPMethod {
 	CONNECT,
 	DELETE;
 
-	private static final Map<String, HTTPMethod> METHOD_BY_STRING = Stream.of(HTTPMethod.values())
-					.collect(Collectors.toMap(httpMethod -> httpMethod.name().toLowerCase(), Function.identity()));
+	private static final Map<CharSequence, HTTPMethod> METHOD_BY_STRING = Stream.of(HTTPMethod.values())
+					.collect(Collectors.toMap(Enum::name, Function.identity()));
 
-	public static HTTPMethod parse(String method) throws ParseException {
-		if (!METHOD_BY_STRING.containsKey(method.toLowerCase())) {
+	public static HTTPMethod parse(CharSequence method) throws ParseException {
+		if (!METHOD_BY_STRING.containsKey(method)) {
 			throw new ParseException("Method " + method + " is not supported!");
 		}
-		return METHOD_BY_STRING.get(method.toLowerCase());
+		return METHOD_BY_STRING.get(method);
 	}
 
 }

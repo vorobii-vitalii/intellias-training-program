@@ -40,7 +40,7 @@ class SocketMessageReaderTest {
 	void readMessageGivenEnoughBytesWereRead() throws IOException, ParseException {
 		when(bufferContext.getAvailableBuffer()).thenReturn(BYTE_BUFFER);
 		when(readableByteChannel.read(BYTE_BUFFER)).thenReturn(20, 20, 30, 20, 0);
-		when(messageReader.read(bufferContext))
+		when(messageReader.read(bufferContext, any()))
 						.thenReturn(null)
 						.thenReturn(null)
 						.thenReturn(null)
@@ -56,7 +56,7 @@ class SocketMessageReaderTest {
 	void readMessageGivenNotEnoughBytesWereRead() throws IOException, ParseException {
 		when(bufferContext.getAvailableBuffer()).thenReturn(BYTE_BUFFER);
 		when(readableByteChannel.read(BYTE_BUFFER)).thenReturn(20, 20, 30, 20, 0);
-		when(messageReader.read(bufferContext)).thenReturn(null);
+		when(messageReader.read(bufferContext, any())).thenReturn(null);
 		var readMessage = socketMessageReader.readMessage(bufferContext, readableByteChannel, requestSpan);
 		assertThat(readMessage).isNull();
 		verify(bufferContext, never()).free(anyInt());

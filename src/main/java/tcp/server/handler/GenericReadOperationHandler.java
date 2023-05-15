@@ -1,7 +1,9 @@
 package tcp.server.handler;
 
+import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -42,6 +44,10 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 			if (!serverAttachment.isReadable()) {
 				return;
 			}
+			if (!selectionKey.isReadable()) {
+				serverAttachment.getRequestSpan().addEvent("Not readable...");
+				return;
+			}
 			var socketChannel = (SocketChannel) selectionKey.channel();
 			var requestSpan = readOperationHandlerTracer
 					.spanBuilder("Socket message")
@@ -53,10 +59,11 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 				return;
 			}
 			requestSpan.addEvent("Message read from socket");
-			requestQueue.put(new NetworkRequest<>(request, new ConnectionImpl(selectionKey), requestSpan));
+			requestQueue.put(new NetworkRequest<>(request, new ConnectionImpl(serverAttachment), requestSpan));
 			requestSpan.end();
-		}
-		catch (Throwable e) {
+		} catch (CancelledKeyException cancelledKeyException) {
+			// Ignore
+		} catch (Throwable e) {
 			onError.accept(selectionKey, e);
 		}
 	}

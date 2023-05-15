@@ -18,7 +18,7 @@ class WebSocketMessageReaderTest {
 
 	@Test
 	void readGivenOnly1ByteRead() throws ParseException {
-		assertThat(webSocketMessageReader.read(BufferTestUtils.createBufferContext(new byte[]{1}))).isNull();
+		assertThat(webSocketMessageReader.read(BufferTestUtils.createBufferContext(new byte[]{1}), e -> {})).isNull();
 	}
 
 	@Test
@@ -33,7 +33,7 @@ class WebSocketMessageReaderTest {
 										},
 										MASKING_KEY
 						)
-		));
+		), e -> {});
 		assertThat(res).isNull();
 	}
 
@@ -50,7 +50,7 @@ class WebSocketMessageReaderTest {
 										},
 										MASKING_KEY,
 										mask(payload)
-						)));
+						)), e -> {});
 		assertThat(res).isNotNull();
 		assertThat(res.first().isFin()).isEqualTo(true);
 		assertThat(res.first().getOpCode()).isEqualTo(OpCode.TEXT);
@@ -70,7 +70,7 @@ class WebSocketMessageReaderTest {
 														(byte) 0b00000111
 										},
 										payload
-						)));
+						)), e -> {});
 		assertThat(res).isNotNull();
 		assertThat(res.first().isFin()).isEqualTo(true);
 		assertThat(res.first().getOpCode()).isEqualTo(OpCode.TEXT);
@@ -92,7 +92,7 @@ class WebSocketMessageReaderTest {
 										pad(BigInteger.valueOf(15000).toByteArray(), 2),
 										MASKING_KEY,
 										mask(payload)
-						)));
+						)), e -> {});
 		assertThat(res).isNotNull();
 		assertThat(res.first().isFin()).isEqualTo(true);
 		assertThat(res.first().getOpCode()).isEqualTo(OpCode.TEXT);
@@ -114,7 +114,7 @@ class WebSocketMessageReaderTest {
 										pad(BigInteger.valueOf(120_000).toByteArray(), 8),
 										MASKING_KEY,
 										mask(payload)
-						)));
+						)), e -> {});
 		assertThat(res).isNotNull();
 		assertThat(res.first().isFin()).isEqualTo(true);
 		assertThat(res.first().getOpCode()).isEqualTo(OpCode.TEXT);

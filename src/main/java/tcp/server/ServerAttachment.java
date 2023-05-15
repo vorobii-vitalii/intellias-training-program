@@ -4,6 +4,8 @@ import io.opentelemetry.api.trace.Span;
 import token_bucket.TokenBucket;
 
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
@@ -16,7 +18,9 @@ public final class ServerAttachment {
 	private final BufferContext clientBufferContext;
 	private final TokenBucket<SocketAddress> readTokenBucket;
 	private final Span requestSpan;
+	private final ByteBufferPool byteBufferPool;
 	private volatile String protocol;
+	private volatile SelectionKey selectionKey;
 
 	public ServerAttachment(
 			String protocol,
@@ -26,7 +30,10 @@ public final class ServerAttachment {
 			Map<String, Object> context,
 			TokenBucket<SocketAddress> writeTokenBucket,
 			TokenBucket<SocketAddress> readTokenBucket,
-			Span requestSpan) {
+			Span requestSpan,
+			ByteBufferPool byteBufferPool,
+			SelectionKey selectionKey
+	) {
 		this.protocol = protocol;
 		this.bufferContext = bufferContext;
 		this.clientBufferContext = clientBufferContext;
@@ -35,6 +42,12 @@ public final class ServerAttachment {
 		this.writeTokenBucket = writeTokenBucket;
 		this.readTokenBucket = readTokenBucket;
 		this.requestSpan = requestSpan;
+		this.byteBufferPool = byteBufferPool;
+		this.selectionKey = selectionKey;
+	}
+
+	public ByteBuffer allocate(int bytes) {
+		return byteBufferPool.allocate(bytes);
 	}
 
 	public Span getRequestSpan() {
@@ -101,11 +114,20 @@ public final class ServerAttachment {
 	}
 
 	public boolean isWritable() {
-		return writeTokenBucket.takeToken();
+		return true;
+//		return writeTokenBucket.takeToken();
 	}
 
 	public boolean isReadable() {
-		return readTokenBucket.takeToken();
+		return true;
+//		return readTokenBucket.takeToken();
 	}
 
+	public SelectionKey getSelectionKey() {
+		return selectionKey;
+	}
+
+	public void setSelectionKey(SelectionKey selectionKey) {
+		this.selectionKey = selectionKey;
+	}
 }

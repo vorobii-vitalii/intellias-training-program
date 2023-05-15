@@ -1,14 +1,8 @@
 package document_editor.event;
 
-import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
-import java.nio.file.StandardOpenOption;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 
 import tcp.server.SocketConnection;
 import util.Serializable;
@@ -37,16 +31,5 @@ public class EventContext {
 		}
 	}
 
-	public int connections() {
-		return connections.size();
-	}
-
-	public int numberNotWrittenResponses() {
-		int total = 0;
-		for (SocketConnection connection : connections) {
-			total += connection.getResponsesSize();
-		}
-		return total;
-	}
 
 }

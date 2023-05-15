@@ -19,13 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class HTTPRequestMessageReaderTest {
 
 	HTTPRequestMessageReader httpRequestMessageReader =
-					new HTTPRequestMessageReader((name, val) -> Collections.singletonList(val.trim()));
+					new HTTPRequestMessageReader((name, val) -> Collections.singletonList(val.toString().trim()));
 
 	@Test
 	void readHappyPath() throws ParseException {
 		byte[] bytes = "GET /example HTTP/1.1\r\nContent-Type:application/json\r\nHost: example.com\r\n\r\n"
 										.getBytes(StandardCharsets.UTF_8);
-		var readResult = httpRequestMessageReader.read(BufferTestUtils.createBufferContext(bytes));
+		var readResult = httpRequestMessageReader.read(BufferTestUtils.createBufferContext(bytes), e -> {});
 		assertThat(readResult).isNotNull();
 		assertThat(readResult.first()).isEqualTo(
 						new HTTPRequest(
@@ -44,7 +44,7 @@ class HTTPRequestMessageReaderTest {
 						"Content-Type:application/json\r\n" +
 						"Host: example.com\r\n\r\n1234567"
 		).getBytes(StandardCharsets.UTF_8);
-		var readResult = httpRequestMessageReader.read(BufferTestUtils.createBufferContext(bytes));
+		var readResult = httpRequestMessageReader.read(BufferTestUtils.createBufferContext(bytes), e -> {});
 		assertThat(readResult).isNotNull();
 		assertThat(readResult.first()).isEqualTo(
 						new HTTPRequest(
@@ -61,14 +61,14 @@ class HTTPRequestMessageReaderTest {
 	void readWrongHeaderMessage() {
 		byte[] bytes = "GET /example HTTP/1.1\r\nContent-Type xxx  application/json\r\nHost: example.com\r\n\r\n"
 						.getBytes(StandardCharsets.UTF_8);
-		assertThrows(ParseException.class, () -> httpRequestMessageReader.read(BufferTestUtils.createBufferContext(bytes)));
+		assertThrows(ParseException.class, () -> httpRequestMessageReader.read(BufferTestUtils.createBufferContext(bytes), e -> {}));
 	}
 
 	@Test
 	void readNotEnoughBytes() throws ParseException {
 		byte[] bytes = "GET /example HTTP/1.1\r\nContent-Type: application/json\r\nHost: example.com\r\n"
 						.getBytes(StandardCharsets.UTF_8);
-		assertThat(httpRequestMessageReader.read(BufferTestUtils.createBufferContext(bytes))).isNull();
+		assertThat(httpRequestMessageReader.read(BufferTestUtils.createBufferContext(bytes), e -> {})).isNull();
 	}
 
 }

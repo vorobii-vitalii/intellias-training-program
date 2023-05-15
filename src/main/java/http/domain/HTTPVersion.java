@@ -3,13 +3,17 @@ package http.domain;
 import tcp.server.reader.exception.ParseException;
 import util.Serializable;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
 public record HTTPVersion(int majorVersion, int minorVersion) implements Serializable {
 	private static final Pattern HTTP_VERSION_PATTERN = Pattern.compile("HTTP/(\\d+)\\.(\\d+)", Pattern.CASE_INSENSITIVE);
+	public static final String HTTP_PREFIX = "HTTP/";
+	public static final byte[] HTTP_PREFIX_BYTES = HTTP_PREFIX.getBytes(StandardCharsets.UTF_8);
+	private static final byte DOT = '.';
 
-	public static HTTPVersion parse(String httpVersion) throws ParseException {
+	public static HTTPVersion parse(CharSequence httpVersion) throws ParseException {
 		var matcher = HTTP_VERSION_PATTERN.matcher(httpVersion);
 		if (!matcher.matches()) {
 			throw new ParseException("""
@@ -20,13 +24,22 @@ public record HTTPVersion(int majorVersion, int minorVersion) implements Seriali
 		return new HTTPVersion(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)));
 	}
 
-	int getSizeInBytes() {
-		return 8;
+	@Override
+	public void serialize(ByteBuffer dest) {
+		dest.put(HTTP_PREFIX_BYTES);
+		dest.put((byte) (majorVersion + '0'));
+		dest.put(DOT);
+		dest.put((byte) (minorVersion + '0'));
+	}
+
+	@Override
+	public int getSize() {
+		return HTTP_PREFIX_BYTES.length + 1 + 1 + 1;
 	}
 
 	@Override
 	public String toString() {
-		return "HTTP/" + majorVersion + "." + minorVersion;
+		return HTTP_PREFIX + majorVersion + "." + minorVersion;
 	}
 
 	@Override

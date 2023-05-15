@@ -3,12 +3,16 @@ package tcp.server;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.nio.channels.AsynchronousServerSocketChannel;
+import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.CompletionHandler;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.spi.AbstractSelector;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import org.slf4j.LoggerFactory;
@@ -16,7 +20,8 @@ import org.slf4j.Logger;
 
 public class TCPServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TCPServer.class);
-	public static final int TIMEOUT = 100;
+	private static final int TIMEOUT = 1;
+	private static final int BACKLOG = 10_000;
 	private final TCPServerConfig serverConfig;
 	private final Consumer<Throwable> errorHandler;
 	private final SelectorProvider selectorProvider;
@@ -57,11 +62,13 @@ public class TCPServer {
 
 	private void runServer() {
 		try (var selector = selectorProvider.openSelector();
-		     var serverSocketChannel = selectorProvider.openServerSocketChannel(serverConfig.getProtocolFamily())
+			 var serverSocketChannel = selectorProvider.openServerSocketChannel(serverConfig.getProtocolFamily())
 		) {
 			serverSocketChannel.configureBlocking(false);
+//			serverSocketChannel.socket().setReceiveBufferSize(64 * 1024);
+//			serverSocketChannel.socket().setSoTimeout(1);
 			serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
-			serverSocketChannel.bind(new InetSocketAddress(serverConfig.getHost(), serverConfig.getPort()));
+			serverSocketChannel.bind(new InetSocketAddress(serverConfig.getHost(), serverConfig.getPort()), BACKLOG);
 			new Poller(selector, operationHandlerByType, serverConfig.getOnConnectionClose(), TIMEOUT).run();
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
@@ -69,25 +76,5 @@ public class TCPServer {
 			e.printStackTrace();
 		}
 	}
-
-//	private void startPollingSelector(AbstractSelector selector) throws IOException {
-//		while (!Thread.currentThread().isInterrupted()) {
-//			selector.select(selectionKey -> {
-//				try {
-//					if (!selectionKey.isValid()) {
-//						serverConfig.getOnConnectionClose().accept(selectionKey);
-//						return;
-//					}
-//					var operationHandler = operationHandlerByType.get(selectionKey.readyOps());
-//					if (operationHandler != null) {
-//						operationHandler.accept(selectionKey);
-//					}
-//				}
-//				catch (Throwable error) {
-//					LOGGER.error("Error", error);
-//				}
-//			}, TIMEOUT);
-//		}
-//	}
 
 }

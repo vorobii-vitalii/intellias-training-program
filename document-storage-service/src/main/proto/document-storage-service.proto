@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.example.document.storage";
+option java_outer_classname = "DocumentStorage";
+
+package document_storage;
+
+message TreePathEntry {
+  bool isLeft = 1;
+  int32 disambiguator = 2;
+}
+
+message TreePath {
+  repeated TreePathEntry entries = 1;
+}
+
+message Change {
+  TreePath path = 1;
+  int32 documentId = 2;
+  // Not provided on deletion, provided on insertion
+  optional int32 character = 3;
+}
+
+message DocumentElement {
+  TreePath path = 1;
+  int32 character = 3;
+}
+
+message DocumentElements {
+  repeated DocumentElement documentElements = 1;
+}
+
+
+message ChangesRequest {
+  repeated Change changes = 1;
+}
+
+message ChangesResponse {
+
+}
+
+message FetchDocumentContentRequest {
+  int32 documentId = 1;
+}
+
+message SubscribeForDocumentChangesRequest {
+  optional string resumeToken = 1;
+  int32 batchSize = 2;
+  int32 batchTimeout = 3;
+}
+
+message DocumentChangedEvent {
+    Change change = 1;
+    string resumeToken = 2;
+}
+
+message DocumentChangedEvents {
+  repeated DocumentChangedEvent events = 1;
+}
+
+service DocumentStorageService {
+  rpc applyChanges (ChangesRequest) returns (ChangesResponse) {}
+  rpc fetchDocumentContent (FetchDocumentContentRequest) returns (stream DocumentElements) {}
+  rpc subscribeForDocumentsChanges (SubscribeForDocumentChangesRequest) returns (stream DocumentChangedEvents) {}
+}

@@ -1,5 +1,7 @@
 package http.domain;
 
+import java.nio.ByteBuffer;
+
 import util.Constants;
 import util.Serializable;
 
@@ -17,6 +19,18 @@ public record HTTPResponse(HTTPResponseLine responseLine, HTTPHeaders httpHeader
 	@Override
 	public byte[] serialize() {
 		return merge(responseLine.serialize(), httpHeaders.serialize(), body);
+	}
+
+	@Override
+	public void serialize(ByteBuffer dest) {
+		responseLine.serialize(dest);
+		httpHeaders.serialize(dest);
+		dest.put(body);
+	}
+
+	@Override
+	public int getSize() {
+		return responseLine.getSize() + httpHeaders.getSize() + body.length;
 	}
 
 	private byte[] merge(byte[]... byteArrays) {

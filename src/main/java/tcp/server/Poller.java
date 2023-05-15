@@ -42,17 +42,21 @@ public class Poller implements Runnable {
 							onSelectionKeyInvalidation.accept(selectionKey);
 							return;
 						}
-						var operationHandler = operationHandlerByType.get(selectionKey.readyOps());
+						var readyOps = selectionKey.readyOps();
+//						operationHandlerByType.forEach((ops, callback) -> {
+//							if ((readyOps & ops) != 0) {
+//								callback.accept(selectionKey);
+//							}
+//						});
+						var operationHandler = operationHandlerByType.get(readyOps);
 						if (operationHandler != null) {
 							operationHandler.accept(selectionKey);
 						}
-					}
-					catch (Throwable error) {
+					} catch (Throwable error) {
 						LOGGER.error("Error", error);
 					}
 				}, selectionTimeout);
-			}
-			catch (IOException e) {
+			} catch (IOException e) {
 				LOGGER.error("Error", e);
 			}
 		}

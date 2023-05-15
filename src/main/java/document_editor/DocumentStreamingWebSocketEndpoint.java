@@ -1,11 +1,14 @@
 package document_editor;
 
+import static java.nio.channels.SelectionKey.OP_WRITE;
+
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.SelectionKey;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,8 +19,9 @@ import document_editor.event.DisconnectEvent;
 import document_editor.event.EditEvent;
 import document_editor.event.Event;
 import document_editor.event.NewConnectionEvent;
-import document_editor.mongo.MongoReactiveAtomBuffer;
+import tcp.server.CompositeInputStream;
 import tcp.server.SocketConnection;
+import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
 import websocket.endpoint.WebSocketEndpoint;
 
@@ -43,7 +47,8 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 	public enum ResponseType {
 		ON_CONNECT,
 		ADD,
-		DELETE
+		ADD_BULK,
+		CHANGES, DELETE
 	}
 
 	public enum RequestType {
@@ -72,20 +77,28 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 	public void onMessage(SocketConnection socketConnection, WebSocketMessage message) {
 		switch (message.getOpCode()) {
 			case CONNECTION_CLOSE -> {
-				socketConnection.close();
-				try {
-					eventsQueue.put(new DisconnectEvent(socketConnection));
-				} catch (InterruptedException e) {
-					throw new RuntimeException(e);
-				}
+				var webSocketMessage = new WebSocketMessage();
+				webSocketMessage.setFin(true);
+				webSocketMessage.setOpCode(OpCode.CONNECTION_CLOSE);
+				webSocketMessage.setPayload(new byte[] {});
+				// TODO: Close TCP
+				socketConnection.appendResponse(webSocketMessage, null, null, SelectionKey::cancel);
+				socketConnection.changeOperation(OP_WRITE);
+				eventsQueue.add(new DisconnectEvent(socketConnection));
 			}
 			case TEXT, CONTINUATION, BINARY -> {
-				LOGGER.info("Handling message... bytes in context {}", socketConnection.getContextLength());
+				LOGGER.debug("Handling message... bytes in context {}", socketConnection.getContextLength());
 				var payload = message.getPayload();
 				if (message.isFin()) {
-					var totalPayloadSize = payload.length + socketConnection.getContextLength();
+//					var totalPayloadSize = payload.length + socketConnection.getContextLength();
+					var compositeInputStream = new CompositeInputStream(
+							socketConnection.getContextInputStream(),
+							new ByteArrayInputStream(payload)
+					);
 					try {
-						Request request = objectMapper.readValue(new InputStream() {
+						int totalPayloadSize = socketConnection.getContextLength() + payload.length;
+
+						var request = objectMapper.readValue(new InputStream() {
 							private int index = 0;
 
 							@Override
@@ -104,11 +117,10 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 
 							}
 						}, Request.class);
-
 						onMessage(socketConnection, request);
 						socketConnection.freeContext();
-					} catch (IOException e) {
-						LOGGER.error("error = ", e);
+					} catch (Exception e) {
+						LOGGER.error("Error = ", e);
 					}
 
 				} else {
@@ -118,15 +130,11 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 		}
 	}
 
-	private void onMessage(SocketConnection socketConnection, Request request) {
-		try {
-			if (request.type == RequestType.CONNECT) {
-				eventsQueue.put(new NewConnectionEvent(socketConnection));
-			} else if (request.type == RequestType.CHANGES) {
-				eventsQueue.put(new EditEvent(request.payload));
-			}
-		} catch (InterruptedException e) {
-			throw new RuntimeException(e);
+	private void onMessage(SocketConnection socketConnection, Request request) throws InterruptedException {
+		if (request.type == RequestType.CONNECT) {
+			eventsQueue.put(new NewConnectionEvent(socketConnection));
+		} else if (request.type == RequestType.CHANGES) {
+			eventsQueue.put(new EditEvent(request.payload));
 		}
 	}
 }

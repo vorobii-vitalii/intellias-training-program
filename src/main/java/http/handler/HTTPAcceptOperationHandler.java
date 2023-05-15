@@ -19,6 +19,8 @@ import java.nio.channels.ServerSocketChannel;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -31,6 +33,7 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 	private final Function<SelectionKey, Selector> selectorSupplier;
 	private final ByteBufferPool byteBufferPool;
 	private final Tracer httpAcceptConnectionHandlerTracer;
+	private final ByteBufferPool bufferPool;
 
 	public HTTPAcceptOperationHandler(
 			Set<TokenBucket<SocketAddress>> tokenBuckets,
@@ -38,7 +41,8 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 			int maxTokensRead,
 			Function<SelectionKey, Selector> selectorSupplier,
 			ByteBufferPool byteBufferPool,
-			OpenTelemetry openTelemetry
+			OpenTelemetry openTelemetry,
+			ByteBufferPool bufferPool
 	) {
 		this.tokenBuckets = tokenBuckets;
 		this.maxTokensWrite = maxTokensWrite;
@@ -46,36 +50,41 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 		this.selectorSupplier = selectorSupplier;
 		this.byteBufferPool = byteBufferPool;
 		httpAcceptConnectionHandlerTracer = openTelemetry.getTracer("HTTP accept connection handler");
+		this.bufferPool = bufferPool;
 	}
 
 	@Override
 	public void accept(SelectionKey selectionKey) {
 		try {
-			var socketChannel = ((ServerSocketChannel) selectionKey.channel()).accept();
 			var requestSpan = httpAcceptConnectionHandlerTracer
 					.spanBuilder("New HTTP connection")
-					.setAttribute("client.ip", socketChannel.getRemoteAddress().toString())
 					.startSpan();
-			socketChannel.socket().setSendBufferSize(2 * 1024 * 1024);
-			socketChannel.socket().setReceiveBufferSize(2 * 1024 * 1024);
-			socketChannel.socket().setSoTimeout(1);
-			LOGGER.info("Accepted new connection {}", socketChannel);
+			var socketChannel = ((ServerSocketChannel) selectionKey.channel()).accept();
+			if (socketChannel == null) {
+				return;
+			}
+			requestSpan.addEvent("Connection accepted");
+			LOGGER.debug("Accepted new connection {}", socketChannel);
 			socketChannel.configureBlocking(false);
-			TokenBucket<SocketAddress> writeTokenBucket = new TokenBucket<>(maxTokensWrite, maxTokensWrite, socketChannel.getRemoteAddress());
-			TokenBucket<SocketAddress> readTokenBucket = new TokenBucket<>(maxTokensRead, maxTokensRead, socketChannel.getRemoteAddress());
-			tokenBuckets.add(writeTokenBucket);
-			tokenBuckets.add(readTokenBucket);
+			//				TokenBucket<SocketAddress> writeTokenBucket = new TokenBucket<>(maxTokensWrite, maxTokensWrite, socketChannel.getRemoteAddress());
+			//				TokenBucket<SocketAddress> readTokenBucket = new TokenBucket<>(maxTokensRead, maxTokensRead, socketChannel.getRemoteAddress());
+			//				tokenBuckets.add(writeTokenBucket);
+			//				tokenBuckets.add(readTokenBucket);
 			var serverAttachment = new ServerAttachment(
 					Constants.Protocol.HTTP,
 					new BufferContext(byteBufferPool),
 					new BufferContext(byteBufferPool),
 					new ConcurrentLinkedQueue<>(),
 					new ConcurrentHashMap<>(),
-					writeTokenBucket,
-					readTokenBucket,
-					requestSpan
+					null,
+					null,
+					requestSpan,
+					bufferPool,
+					null
 			);
-			socketChannel.register(selectorSupplier.apply(selectionKey), SelectionKey.OP_READ, serverAttachment);
+			var newSelector = selectorSupplier.apply(selectionKey);
+			serverAttachment.setSelectionKey(socketChannel.register(newSelector, SelectionKey.OP_READ, serverAttachment));
+			newSelector.wakeup();
 			requestSpan.end();
 		} catch (IOException e) {
 			selectionKey.cancel();
