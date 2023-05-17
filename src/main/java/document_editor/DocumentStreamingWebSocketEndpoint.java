@@ -82,7 +82,7 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 				webSocketMessage.setOpCode(OpCode.CONNECTION_CLOSE);
 				webSocketMessage.setPayload(new byte[] {});
 				// TODO: Close TCP
-				socketConnection.appendResponse(webSocketMessage, null, null, SelectionKey::cancel);
+				socketConnection.appendResponse(webSocketMessage, null, SelectionKey::cancel);
 				socketConnection.changeOperation(OP_WRITE);
 				eventsQueue.add(new DisconnectEvent(socketConnection));
 			}

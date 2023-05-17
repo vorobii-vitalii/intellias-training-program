@@ -1,7 +1,39 @@
 package document_editor;
 
+import static java.nio.channels.SelectionKey.OP_ACCEPT;
+import static java.nio.channels.SelectionKey.OP_READ;
+import static java.nio.channels.SelectionKey.OP_WRITE;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
+import java.io.IOException;
+import java.net.SocketAddress;
+import java.net.StandardProtocolFamily;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.spi.SelectorProvider;
+import java.time.Duration;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+
+import org.msgpack.jackson.dataformat.MessagePackFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import document_editor.event.DisconnectEvent;
 import document_editor.event.Event;
 import document_editor.event.EventContext;
@@ -40,12 +72,16 @@ import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.semconv.resource.attributes.ResourceAttributes;
 import monitoring.PrometheusMetricsHTTPRequestHandler;
-import org.msgpack.jackson.dataformat.MessagePackFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import request_handler.NetworkRequest;
 import request_handler.NetworkRequestProcessor;
-import tcp.server.*;
+import tcp.server.ByteBufferPool;
+import tcp.server.ConnectionImpl;
+import tcp.server.Poller;
+import tcp.server.RoundRobinProvider;
+import tcp.server.ServerAttachment;
+import tcp.server.SocketMessageReader;
+import tcp.server.TCPServer;
+import tcp.server.TCPServerConfig;
 import tcp.server.handler.DelegatingReadOperationHandler;
 import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
@@ -59,43 +95,17 @@ import websocket.handler.WebSocketNetworkRequestHandler;
 import websocket.handler.WebSocketProtocolChanger;
 import websocket.reader.WebSocketMessageReader;
 
-import java.io.IOException;
-import java.net.SocketAddress;
-import java.net.StandardProtocolFamily;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.spi.SelectorProvider;
-import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
-
-import static java.nio.channels.SelectionKey.OP_ACCEPT;
-import static java.nio.channels.SelectionKey.OP_READ;
-import static java.nio.channels.SelectionKey.OP_WRITE;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-
 public class HttpServer {
 	public static final int QUEUE_SIZE = 200_000;
 	public static final String PROMETHEUS_ENDPOINT = "/prometheus";
 	public static final int MAX_TOKENS_WRITE = 1000;
 	public static final int MAX_TOKENS_READ = 10;
 	public static final int SELECTION_TIMEOUT = 100;
+	public static final int DOCUMENT_ID = 13;
 	private static final AtomicInteger atomicInteger = new AtomicInteger(1);
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServer.class);
 	private static final Integer WS_VERSION = 13;
-	public static final int DOCUMENT_ID = 13;
 	private static final ScheduledExecutorService documentEventsExecutor = Executors.newSingleThreadScheduledExecutor();
-
-	private static String getMongoConnectionURL() {
-		return Optional.ofNullable(System.getenv("MONGO_URL"))
-				.orElse("mongodb://localhost:27017");
-	}
 
 	private static int getPort() {
 		return Optional.ofNullable(System.getenv("PORT"))
@@ -124,7 +134,7 @@ public class HttpServer {
 
 	public static void main(String[] args) throws IOException {
 		var resource = Resource.getDefault()
-				.merge(Resource.create(Attributes.of(ResourceAttributes.SERVICE_NAME, "logical-service-name")));
+				.merge(Resource.create(Attributes.of(ResourceAttributes.SERVICE_NAME, "documents-app")));
 
 		var spanExporter = OtlpGrpcSpanExporter.builder()
 				.setEndpoint(System.getenv("JAEGER_ENDPOINT"))
@@ -180,7 +190,6 @@ public class HttpServer {
 						.isPresent()
 		), webSocketEndpointProvider);
 
-
 		Collection<HTTPResponsePostProcessor> httpResponsePostProcessors = List.of(
 				new ProtocolChangerHTTPResponsePostProcessor(List.of(new WebSocketProtocolChanger(webSocketEndpointProvider)))
 		);
@@ -223,11 +232,10 @@ public class HttpServer {
 		var httpRequestsCount = Counter.builder("http.requests.count").register(prometheusRegistry);
 		var webSocketRequestsCount = Counter.builder("websocket.requests.count").register(prometheusRegistry);
 
-
 		Set<TokenBucket<SocketAddress>> tokenBuckets = Collections.synchronizedSet(new HashSet<>());
 
 		Selector[] wsSelectors = createSelectors(8);
-		Selector[] httpSelectors = createSelectors(0);
+		Selector[] httpSelectors = createSelectors(8);
 
 		RoundRobinProvider<Selector> webSocketSelectorProvider = new RoundRobinProvider<>(wsSelectors);
 
@@ -266,31 +274,34 @@ public class HttpServer {
 		);
 		var eventContext = new EventContext();
 
-//		var documentStorageServiceChannel = new PooledChannel(100, () -> {
-//			return Grpc.newChannelBuilder(System.getenv("DOCUMENT_STORAGE_SERVICE_URL"), InsecureChannelCredentials.create())
-//					.build();
-//		});
+		//		var documentStorageServiceChannel = new PooledChannel(100, () -> {
+		//			return Grpc.newChannelBuilder(System.getenv("DOCUMENT_STORAGE_SERVICE_URL"), InsecureChannelCredentials.create())
+		//					.build();
+		//		});
 
 		var documentStorageServiceChannel =
 				Grpc.newChannelBuilder(
-						System.getenv("DOCUMENT_STORAGE_SERVICE_URL"),
-						InsecureChannelCredentials.create())
-				.maxInboundMessageSize(Integer.MAX_VALUE)
-				.build();
+								System.getenv("DOCUMENT_STORAGE_SERVICE_URL"),
+								InsecureChannelCredentials.create())
+						.maxInboundMessageSize(Integer.MAX_VALUE)
+//						.intercept(new ContextPropagator())
+						.build();
 
-		DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService = DocumentStorageServiceGrpc.newStub(documentStorageServiceChannel);
+		DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService =
+				DocumentStorageServiceGrpc.newStub(documentStorageServiceChannel);
 
-//		refillExecutor.scheduleWithFixedDelay(new RefillProcess<>(tokenBuckets), 1, 1, SECONDS);
+		//		refillExecutor.scheduleWithFixedDelay(new RefillProcess<>(tokenBuckets), 1, 1, SECONDS);
 
 		startProcess(httpRequestProcessor, "HTTP Request processor");
 		documentEventsExecutor.scheduleWithFixedDelay(new DocumentMessageEventsHandler(eventsQueue, eventContext, List.of(
 				new DisconnectEventHandler(),
-				new NewConnectionEventHandler(documentStorageService, atomicInteger::getAndIncrement, objectMapper, dbReadDocumentTimer),
+				new NewConnectionEventHandler(documentStorageService, atomicInteger::getAndIncrement, objectMapper, dbReadDocumentTimer,
+						openTelemetry),
 				new MessageDistributeEventHandler(),
-				new EditEventHandler(documentStorageService, changesApplyTimer)
+				new EditEventHandler(documentStorageService, changesApplyTimer, openTelemetry)
 		)), 500, 500, MILLISECONDS);
 		startProcess(webSocketRequestProcessor, "WebSocket Request processor");
-		startProcess(new DocumentChangeWatcher(eventsQueue, objectMapper, documentStorageService), "Document change watcher");
+		startProcess(new DocumentChangeWatcher(eventsQueue, objectMapper, documentStorageService, openTelemetry), "Document change watcher");
 
 		Consumer<SelectionKey> closeConnection = selectionKey -> {
 			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());
@@ -298,7 +309,8 @@ public class HttpServer {
 			socketConnection.close();
 			try {
 				eventsQueue.put(new DisconnectEvent(socketConnection));
-			} catch (InterruptedException e) {
+			}
+			catch (InterruptedException e) {
 				throw new RuntimeException(e);
 			}
 		};
@@ -309,7 +321,8 @@ public class HttpServer {
 			socketConnection.close();
 			try {
 				eventsQueue.put(new DisconnectEvent(socketConnection));
-			} catch (InterruptedException e) {
+			}
+			catch (InterruptedException e) {
 				throw new RuntimeException(e);
 			}
 		};
@@ -361,7 +374,8 @@ public class HttpServer {
 				);
 
 		for (int i = 0; i < wsSelectors.length; i++) {
-			startProcess(new Poller(wsSelectors[i], operationHandlerByTypeWebSockets, closeConnection, SELECTION_TIMEOUT), "WebSocket selector " + i);
+			startProcess(new Poller(wsSelectors[i], operationHandlerByTypeWebSockets, closeConnection, SELECTION_TIMEOUT),
+					"WebSocket selector " + i);
 		}
 		for (int i = 0; i < httpSelectors.length; i++) {
 			startProcess(new Poller(httpSelectors[i], operationHandlerByTypeHTTP, closeConnection, SELECTION_TIMEOUT), "HTTP selector " + i);
@@ -384,7 +398,7 @@ public class HttpServer {
 								tokenBuckets,
 								MAX_TOKENS_WRITE,
 								MAX_TOKENS_READ,
-								selectionKey -> selectionKey.selector(),
+								selectionKey -> httpSelectorProvider.get(),
 								byteBufferPool,
 								openTelemetry,
 								byteBufferPool

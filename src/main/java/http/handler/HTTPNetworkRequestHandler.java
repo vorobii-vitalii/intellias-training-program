@@ -84,7 +84,7 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 
 				requestSpan.addEvent("Postprocessors finished");
 				var socketConnection = networkRequest.socketConnection();
-				socketConnection.appendResponse(response, networkRequest.span(), requestSpan, onWriteResponseCallback);
+				socketConnection.appendResponse(response, requestSpan, onWriteResponseCallback);
 				socketConnection.changeOperation(SelectionKey.OP_WRITE);
 				requestSpan.addEvent("Response added to queue");
 			} finally {

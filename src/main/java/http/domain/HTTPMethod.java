@@ -12,6 +12,7 @@ public enum HTTPMethod {
 	POST,
 	PUT,
 	PATCH,
+	HEAD,
 	CONNECT,
 	DELETE;
 

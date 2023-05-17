@@ -18,7 +18,6 @@ import util.UnsafeConsumer;
 
 @ThreadSafe
 public class ConnectionImpl implements SocketConnection {
-	public static final int NUM_RETRIES = 5;
 	public static final int EOF = -1;
 	private final ServerAttachment serverAttachment;
 
@@ -31,6 +30,11 @@ public class ConnectionImpl implements SocketConnection {
 		for (byte b : data) {
 			serverAttachment.getClientBufferContext().getAvailableBuffer().put(b);
 		}
+	}
+
+	@Override
+	public Span getConnectionSpan() {
+		return serverAttachment.getRequestSpan();
 	}
 
 	@Override
@@ -77,46 +81,31 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public void appendResponse(Serializable response) {
-		appendResponse(response, null, null, null);
+		appendResponse(response, null, null);
 	}
 
 	@Override
-	public void appendResponse(Serializable response, Span parentSpan, Span requestSpan, UnsafeConsumer<SelectionKey> onWriteResponseCallback) {
+	public void appendResponse(Serializable response, Span writeRequestSpan, UnsafeConsumer<SelectionKey> onWriteResponseCallback) {
 		// Issue
 		if (!serverAttachment.getSelectionKey().isValid()) {
 			throw new CancelledKeyException();
 		}
 		ByteBuffer message = serverAttachment.allocate(response.getSize());
-		if (requestSpan != null) {
-			requestSpan.addEvent("Allocated buffer");
+		if (writeRequestSpan != null) {
+			writeRequestSpan.addEvent("Allocated buffer");
 		}
 		response.serialize(message);
-		if (requestSpan != null) {
-			requestSpan.addEvent("Serialized");
+		if (writeRequestSpan != null) {
+			writeRequestSpan.addEvent("Serialized");
 		}
 		message.flip();
 		serverAttachment
 				.responses()
-				.add(new MessageWriteRequest(message, parentSpan, onWriteResponseCallback));
-		if (requestSpan != null) {
-			requestSpan.addEvent("Written to queue");
+				.add(new MessageWriteRequest(message, onWriteResponseCallback));
+		if (writeRequestSpan != null) {
+			writeRequestSpan.addEvent("Written to queue");
 		}
-
-//		// Deadlock when queue is full and client disconnected
-//		var bytes = response.serialize();
-//		ByteBuffer message = ByteBuffer.allocateDirect(bytes.length);
-//		message.put(bytes);
-//		message.flip();
-//		getServerAttachment()
-//				.responses()
-//				.add(new MessageWriteRequest(message, parentSpan));
 	}
-
-	@Override
-	public int getResponsesSize() {
-		return serverAttachment.responses().size();
-	}
-
 
 	@Override
 	public void setMetadata(String key, Object value) {

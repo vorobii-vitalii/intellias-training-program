@@ -2,6 +2,11 @@ package util;
 
 public interface Constants {
 
+
+	interface Tracing {
+		String CONTEXT = "CONTEXT";
+	}
+
 	interface HTTPStatusCode {
 		int SWITCHING_PROTOCOL = 101;
 		int BAD_REQUEST = 400;

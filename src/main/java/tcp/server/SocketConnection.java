@@ -13,6 +13,7 @@ import java.util.function.Consumer;
 // metrics, grafana, assertions in load test
 public interface SocketConnection {
 	void appendBytesToContext(byte[] data);
+	Span getConnectionSpan();
 
 	void freeContext();
 
@@ -28,9 +29,7 @@ public interface SocketConnection {
 
 	void appendResponse(Serializable response);
 
-	void appendResponse(Serializable response, Span parentSpan, Span requestSpan, UnsafeConsumer<SelectionKey> onWriteResponseCallback);
-
-	int getResponsesSize();
+	void appendResponse(Serializable response, Span writeRequestSpan, UnsafeConsumer<SelectionKey> onWriteResponseCallback);
 
 	void setMetadata(String key, Object value);
 

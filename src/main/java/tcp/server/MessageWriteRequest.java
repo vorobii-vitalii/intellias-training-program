@@ -9,7 +9,6 @@ import util.UnsafeConsumer;
 
 public record MessageWriteRequest(
 		ByteBuffer message,
-		Span parentSpan,
 		UnsafeConsumer<SelectionKey> onWriteResponseCallback
 ) {
 }

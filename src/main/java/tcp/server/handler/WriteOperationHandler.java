@@ -55,10 +55,7 @@ public class WriteOperationHandler implements Consumer<SelectionKey> {
 				for (int i = 0; i < MAX_MSGS_WRITE && selectionKey.isWritable() && attachmentObject.isWritable() && !responses.isEmpty(); i++) {
 					var writeRequest = responses.peek();
 					var buffer = writeRequest.message();
-					var context = Context.current();
-					if (writeRequest.parentSpan() != null) {
-						context = context.with(writeRequest.parentSpan());
-					}
+					var context = Context.current().with(attachmentObject.getRequestSpan());
 					var span = writeHandlerTracer.spanBuilder("Write message").setParent(context).startSpan();
 					boolean canAcceptMore = true;
 					long totalBytesWritten = 0;
