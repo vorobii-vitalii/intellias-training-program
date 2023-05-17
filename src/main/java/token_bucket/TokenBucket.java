@@ -1,42 +1,33 @@
 package token_bucket;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import net.jcip.annotations.ThreadSafe;
 
 @ThreadSafe
 public class TokenBucket<Identifier> {
-	private int tokens;
+	private final AtomicInteger tokens;
 	private final int maxTokens;
 	private final Identifier identifier;
 
 	public TokenBucket(int maxTokens, int initialTokens, Identifier identifier) {
 		this.maxTokens = maxTokens;
-		this.tokens = initialTokens;
+		this.tokens = new AtomicInteger(initialTokens);
 		this.identifier = identifier;
 	}
 
-	public synchronized void fill(int tokensToAdd) {
-		tokens = Math.min(maxTokens, tokens + tokensToAdd);
-	}
-
-	public boolean takeToken() {
-		return true;
+	public void fill(int tokensToAdd) {
+		tokens.updateAndGet(t -> Math.min(maxTokens, t + tokensToAdd));
 	}
 
 	public int getMaxTokens() {
 		return maxTokens;
 	}
 
-	// Atomic reference
-
-	//	public synchronized boolean takeToken() {
-//		if (tokens == 0) {
-//			return false;
-//		}
-//		tokens--;
-//		return true;
-//	}
+	public boolean takeToken() {
+		return tokens.getAndUpdate(t -> Math.max(0, t - 1)) > 0;
+	}
 
 	@Override
 	public boolean equals(Object obj) {

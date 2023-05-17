@@ -1,12 +1,16 @@
 package tcp.server;
 
+import static java.nio.channels.SelectionKey.OP_READ;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.CancelledKeyException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -20,9 +24,16 @@ import util.UnsafeConsumer;
 public class ConnectionImpl implements SocketConnection {
 	public static final int EOF = -1;
 	private final ServerAttachment serverAttachment;
+	private final SocketAddress address;
 
 	public ConnectionImpl(ServerAttachment serverAttachment) {
 		this.serverAttachment = serverAttachment;
+		try {
+			address = ((SocketChannel) (serverAttachment.getSelectionKey().channel())).getRemoteAddress();
+		}
+		catch (IOException e) {
+			throw new IllegalStateException(e);
+		}
 	}
 
 	@Override
@@ -85,7 +96,7 @@ public class ConnectionImpl implements SocketConnection {
 	}
 
 	@Override
-	public void appendResponse(Serializable response, Span writeRequestSpan, UnsafeConsumer<SelectionKey> onWriteResponseCallback) {
+	public void appendResponse(Serializable response, Span writeRequestSpan, Consumer<SocketConnection> onWriteCallback) {
 		// Issue
 		if (!serverAttachment.getSelectionKey().isValid()) {
 			throw new CancelledKeyException();
@@ -101,7 +112,7 @@ public class ConnectionImpl implements SocketConnection {
 		message.flip();
 		serverAttachment
 				.responses()
-				.add(new MessageWriteRequest(message, onWriteResponseCallback));
+				.add(new MessageWriteRequest(message, onWriteCallback));
 		if (writeRequestSpan != null) {
 			writeRequestSpan.addEvent("Written to queue");
 		}
@@ -119,11 +130,7 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public SocketAddress getAddress() {
-		try {
-			return ((SocketChannel) (serverAttachment.getSelectionKey().channel())).getRemoteAddress();
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
+		return address;
 	}
 
 	@Override
@@ -131,6 +138,21 @@ public class ConnectionImpl implements SocketConnection {
 		try {
 			serverAttachment.getSelectionKey().channel().close();
 		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public void changeSelector(Selector selector) {
+		try {
+			var oldSelectionKey = serverAttachment.getSelectionKey();
+			var channel = oldSelectionKey.channel();
+			var newSelectionKey = channel.register(selector, OP_READ, serverAttachment);
+			serverAttachment.setSelectionKey(newSelectionKey);
+			selector.wakeup();
+			oldSelectionKey.cancel();
+		}
+		catch (ClosedChannelException e) {
 			throw new RuntimeException(e);
 		}
 	}
@@ -151,7 +173,5 @@ public class ConnectionImpl implements SocketConnection {
 	public String toString() {
 		return "Connection[" + serverAttachment + " " + getAddress() + "]";
 	}
-
-
 
 }

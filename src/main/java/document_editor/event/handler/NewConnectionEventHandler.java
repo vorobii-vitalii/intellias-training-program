@@ -12,6 +12,7 @@ import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
 import document_editor.dto.TreePathEntry;
 import document_editor.event.*;
+import document_editor.event.context.EventContext;
 import grpc.TracingContextPropagator;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Timer;
@@ -93,7 +94,7 @@ public class NewConnectionEventHandler implements EventHandler {
             catch (Exception e) {
                 return;
             }
-            eventContext.addConnection(socketConnection);
+            eventContext.addOrUpdateConnection(socketConnection);
             socketConnections.add(socketConnection);
         }
 

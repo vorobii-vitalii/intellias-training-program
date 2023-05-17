@@ -7,6 +7,7 @@ import util.UnsafeConsumer;
 import java.io.InputStream;
 import java.net.SocketAddress;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.util.function.Consumer;
 
 // ISP
@@ -29,7 +30,7 @@ public interface SocketConnection {
 
 	void appendResponse(Serializable response);
 
-	void appendResponse(Serializable response, Span writeRequestSpan, UnsafeConsumer<SelectionKey> onWriteResponseCallback);
+	void appendResponse(Serializable response, Span writeRequestSpan, Consumer<SocketConnection> onWriteCallback);
 
 	void setMetadata(String key, Object value);
 
@@ -38,4 +39,6 @@ public interface SocketConnection {
 	SocketAddress getAddress();
 
 	void close();
+
+	void changeSelector(Selector selector);
 }

@@ -5,9 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.concurrent.BlockingQueue;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -15,11 +13,9 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 
 import document_editor.event.Event;
-import document_editor.event.EventContext;
+import document_editor.event.context.EventContext;
 import document_editor.event.EventHandler;
 import document_editor.event.EventType;
-import request_handler.NetworkRequest;
-import request_handler.NetworkRequestHandler;
 
 public class DocumentMessageEventsHandler implements Runnable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentMessageEventsHandler.class);

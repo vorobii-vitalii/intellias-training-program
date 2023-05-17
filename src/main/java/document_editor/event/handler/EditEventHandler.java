@@ -16,7 +16,7 @@ import document_editor.HttpServer;
 import document_editor.dto.TreePathEntry;
 import document_editor.event.EditEvent;
 import document_editor.event.Event;
-import document_editor.event.EventContext;
+import document_editor.event.context.EventContext;
 import document_editor.event.EventHandler;
 import document_editor.event.EventType;
 import grpc.TracingContextPropagator;

@@ -17,7 +17,7 @@ import {SharedArray} from 'k6/data';
 //   },
 // };
 
-const VIRTUAL_USERS = 2000;
+const VIRTUAL_USERS = 1000;
 const CHANGES_PER_USER = 1;
 
 // export const options = {
@@ -72,20 +72,30 @@ export let options = {
 const comparePath = (a, b) => {
     const m = Math.min(a.length, b.length);
     for (let i = 0; i < m; i++) {
-        if (a[i].a !== b[i].a) {
-            return a[i].a ? 1 : -1;
-        }
-        if (a[i].b !== b[i].b) {
-            return a[i].b < b[i].b ? -1 : 1;
+        if (a[i].disambiguator && b[i].disambiguator) {
+            if (a[i].isLeft !== b[i].isLeft) {
+                return a[i].isLeft ? 1 : -1;
+            }
+            if (a[i].disambiguator !== b[i].disambiguator) {
+                return a[i].disambiguator < b[i].disambiguator ? -1 : 1;
+            }
+        } else if (!a[i].disambiguator && !b[i].disambiguator) {
+            if (a[i].isLeft !== b[i].isLeft) {
+                return a[i].isLeft ? 1 : -1;
+            }
+        } else if (a[i].disambiguator) {
+            return b[i].isLeft ? -1 : 1;
+        } else {
+            return a[i].isLeft ? 1 : -1;
         }
     }
     if (a.length === b.length) {
         return 0;
     }
     if (a.length === m) {
-        return b[m].a ? -1 : 1;
+        return b[m].isLeft ? -1 : 1;
     }
-    return a[m].a ? 1 : -1;
+    return a[m].isLeft ? 1 : -1;
 };
 
 const generateData = () => {
@@ -96,16 +106,16 @@ const generateData = () => {
         for (let i = 0; i < pathLength; i++) {
             const a = randomIntBetween(1, 3) == 2;
             const b = randomIntBetween(1, 1000);
-            path.splice(path.length, 0, {a: a, b: b});
+            path.splice(path.length, 0, {isLeft: a, disambiguator: b});
         }
-        path.splice(path.length, 0, {a: 0, b: k});
+        path.splice(path.length, 0, {isLeft: 0, disambiguator: k});
         events.splice(events.length, 0, {
-            a: path,
-            b: randomString(1).charAt(0)
+            treePath: path,
+            character: randomString(1).charAt(0)
         });
     }
     events.sort((a, b) => {
-        return comparePath(a.a, b.a);
+        return comparePath(a.treePath, b.treePath);
     });
     return events;
 };
@@ -115,7 +125,6 @@ let data = new SharedArray('arr', generateData);
 
 export default function () {
     const url = 'ws://127.0.0.1:8001/documents';
-    // const params = { tags: { my_tag: 'hello' } };
 
     let receivedChanges = [];
 
@@ -123,9 +132,6 @@ export default function () {
         headers: {'X-Request-Time': new Date(Date.now()).getTime()},
         tags: {k6test: 'yes'},
     };
-
-    // console.log(`exec http.get at ${new Date(Date.now()).toLocaleString()}`)
-    // const start = new Date().getTime();
 
     const res = ws.connect(url, params, function (socket) {
         socket.on('open', () => {
@@ -150,9 +156,6 @@ export default function () {
                     }).buffer);
                 }, sendMessageTimeout);
             }, randomIntBetween(1, 2));
-
-            // console.log(`${new Date().getTime() - start} ms`);
-
 
             const binarySearch = (path) => {
                 for (const d of data) {
@@ -197,14 +200,14 @@ export default function () {
 
             socket.setTimeout(() => {
                 receivedChanges.sort((a, b) => {
-                    return comparePath(a.a, b.a);
+                    return comparePath(a.treePath, b.treePath);
                 });
                 // console.log(`${__VU} received ${receivedChanges.length} changes`);
                 // check(receivedChanges, {
                 //   'all changes received': c => c.length === data.length
                 // })
                 socket.close();
-            }, 8 * 1000);
+            }, 10 * 1000);
         });
     });
     // console.log(res)

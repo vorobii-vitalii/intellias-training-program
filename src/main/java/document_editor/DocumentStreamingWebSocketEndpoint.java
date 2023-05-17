@@ -14,10 +14,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import document_editor.dto.Request;
 import document_editor.dto.RequestType;
-import document_editor.event.DisconnectEvent;
 import document_editor.event.EditEvent;
 import document_editor.event.Event;
 import document_editor.event.NewConnectionEvent;
+import document_editor.event.PingEvent;
 import tcp.server.CompositeInputStream;
 import tcp.server.SocketConnection;
 import websocket.domain.OpCode;
@@ -51,10 +51,8 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 				webSocketMessage.setFin(true);
 				webSocketMessage.setOpCode(OpCode.CONNECTION_CLOSE);
 				webSocketMessage.setPayload(new byte[] {});
-				// TODO: Close TCP
-				socketConnection.appendResponse(webSocketMessage, null, SelectionKey::cancel);
+				socketConnection.appendResponse(webSocketMessage, null, SocketConnection::close);
 				socketConnection.changeOperation(OP_WRITE);
-				eventsQueue.add(new DisconnectEvent(socketConnection));
 			}
 			case TEXT, CONTINUATION, BINARY -> {
 				LOGGER.debug("Handling message... bytes in context {}", socketConnection.getContextLength());
@@ -105,6 +103,8 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 			eventsQueue.put(new NewConnectionEvent(socketConnection));
 		} else if (request.type() == RequestType.CHANGES) {
 			eventsQueue.put(new EditEvent(request.payload()));
+		} else if (request.type() == RequestType.PING) {
+			eventsQueue.put(new PingEvent(socketConnection));
 		}
 	}
 }

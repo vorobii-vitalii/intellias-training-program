@@ -9,6 +9,7 @@ import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import tcp.server.ByteBufferPool;
+import tcp.server.ConnectionImpl;
 import tcp.server.ServerAttachment;
 import util.UnsafeConsumer;
 
@@ -73,8 +74,8 @@ public class WriteOperationHandler implements Consumer<SelectionKey> {
 						break;
 					}
 					byteBufferPool.save(buffer);
-					if (writeRequest.onWriteResponseCallback() != null) {
-						writeRequest.onWriteResponseCallback().accept(selectionKey);
+					if (writeRequest.onWriteCallback() != null) {
+						writeRequest.onWriteCallback().accept(new ConnectionImpl(attachmentObject));
 					}
 					responses.poll();
 					messagesWrittenCounter.increment();

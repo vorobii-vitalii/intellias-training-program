@@ -9,6 +9,6 @@ import util.UnsafeConsumer;
 
 public record MessageWriteRequest(
 		ByteBuffer message,
-		UnsafeConsumer<SelectionKey> onWriteResponseCallback
+		Consumer<SocketConnection> onWriteCallback
 ) {
 }

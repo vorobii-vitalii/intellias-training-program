@@ -34,13 +34,14 @@ import org.slf4j.LoggerFactory;
 import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import document_editor.event.DisconnectEvent;
 import document_editor.event.Event;
-import document_editor.event.EventContext;
-import document_editor.event.handler.DisconnectEventHandler;
+import document_editor.event.SendPongsEvent;
+import document_editor.event.context.EventContext;
 import document_editor.event.handler.EditEventHandler;
 import document_editor.event.handler.MessageDistributeEventHandler;
 import document_editor.event.handler.NewConnectionEventHandler;
+import document_editor.event.handler.PingEventHandler;
+import document_editor.event.handler.PongEventHandler;
 import http.domain.HTTPMethod;
 import http.domain.HTTPRequest;
 import http.handler.FileDownloadHTTPHandlerStrategy;
@@ -74,11 +75,13 @@ import io.opentelemetry.semconv.resource.attributes.ResourceAttributes;
 import monitoring.PrometheusMetricsHTTPRequestHandler;
 import request_handler.NetworkRequest;
 import request_handler.NetworkRequestProcessor;
+import tcp.FillQueueProcess;
 import tcp.server.ByteBufferPool;
 import tcp.server.ConnectionImpl;
 import tcp.server.Poller;
 import tcp.server.RoundRobinProvider;
 import tcp.server.ServerAttachment;
+import tcp.server.SocketConnection;
 import tcp.server.SocketMessageReader;
 import tcp.server.TCPServer;
 import tcp.server.TCPServerConfig;
@@ -105,7 +108,7 @@ public class HttpServer {
 	private static final AtomicInteger atomicInteger = new AtomicInteger(1);
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServer.class);
 	private static final Integer WS_VERSION = 13;
-	private static final ScheduledExecutorService documentEventsExecutor = Executors.newSingleThreadScheduledExecutor();
+	public static final int MAX_WAIT_FOR_PING_MS = 15_000;
 
 	private static int getPort() {
 		return Optional.ofNullable(System.getenv("PORT"))
@@ -130,6 +133,11 @@ public class HttpServer {
 			selectors[i] = Selector.open();
 		}
 		return selectors;
+	}
+
+	private static void schedulePeriodically(int delayMs, Runnable process) {
+		var executor = Executors.newSingleThreadScheduledExecutor();
+		executor.scheduleWithFixedDelay(process, delayMs, delayMs, MILLISECONDS);
 	}
 
 	public static void main(String[] args) throws IOException {
@@ -239,15 +247,7 @@ public class HttpServer {
 
 		RoundRobinProvider<Selector> webSocketSelectorProvider = new RoundRobinProvider<>(wsSelectors);
 
-		UnsafeConsumer<SelectionKey> changeSelector = selectionKey -> {
-			var attachment = (ServerAttachment) selectionKey.attachment();
-			var channel = selectionKey.channel();
-			var newSelector = webSocketSelectorProvider.get();
-			final SelectionKey newSelectionKey = channel.register(newSelector, OP_READ, attachment);
-			attachment.setSelectionKey(newSelectionKey);
-			newSelector.wakeup();
-			selectionKey.cancel();
-		};
+		Consumer<SocketConnection> changeSelector = connection -> connection.changeSelector(webSocketSelectorProvider.get());
 
 		var handler = new HTTPNetworkRequestHandler(
 				List.of(
@@ -272,19 +272,13 @@ public class HttpServer {
 				webSocketRequestProcessingTimer,
 				webSocketRequestsCount
 		);
-		var eventContext = new EventContext();
-
-		//		var documentStorageServiceChannel = new PooledChannel(100, () -> {
-		//			return Grpc.newChannelBuilder(System.getenv("DOCUMENT_STORAGE_SERVICE_URL"), InsecureChannelCredentials.create())
-		//					.build();
-		//		});
+		var eventContext = new EventContext(MAX_WAIT_FOR_PING_MS);
 
 		var documentStorageServiceChannel =
 				Grpc.newChannelBuilder(
 								System.getenv("DOCUMENT_STORAGE_SERVICE_URL"),
 								InsecureChannelCredentials.create())
 						.maxInboundMessageSize(Integer.MAX_VALUE)
-//						.intercept(new ContextPropagator())
 						.build();
 
 		DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService =
@@ -293,13 +287,21 @@ public class HttpServer {
 		//		refillExecutor.scheduleWithFixedDelay(new RefillProcess<>(tokenBuckets), 1, 1, SECONDS);
 
 		startProcess(httpRequestProcessor, "HTTP Request processor");
-		documentEventsExecutor.scheduleWithFixedDelay(new DocumentMessageEventsHandler(eventsQueue, eventContext, List.of(
-				new DisconnectEventHandler(),
-				new NewConnectionEventHandler(documentStorageService, atomicInteger::getAndIncrement, objectMapper, dbReadDocumentTimer,
-						openTelemetry),
+
+		schedulePeriodically(1000, new FillQueueProcess<>(eventsQueue, new SendPongsEvent()));
+		schedulePeriodically(500, new DocumentMessageEventsHandler(eventsQueue, eventContext, List.of(
+				new NewConnectionEventHandler(
+						documentStorageService,
+						atomicInteger::getAndIncrement,
+						objectMapper,
+						dbReadDocumentTimer,
+						openTelemetry
+				),
 				new MessageDistributeEventHandler(),
+				new PingEventHandler(),
+				new PongEventHandler(objectMapper),
 				new EditEventHandler(documentStorageService, changesApplyTimer, openTelemetry)
-		)), 500, 500, MILLISECONDS);
+		)));
 		startProcess(webSocketRequestProcessor, "WebSocket Request processor");
 		startProcess(new DocumentChangeWatcher(eventsQueue, objectMapper, documentStorageService, openTelemetry), "Document change watcher");
 
@@ -307,24 +309,12 @@ public class HttpServer {
 			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());
 			LOGGER.debug("Closing connection {}", socketConnection);
 			socketConnection.close();
-			try {
-				eventsQueue.put(new DisconnectEvent(socketConnection));
-			}
-			catch (InterruptedException e) {
-				throw new RuntimeException(e);
-			}
 		};
 
 		BiConsumer<SelectionKey, Throwable> onError = (selectionKey, throwable) -> {
 			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());
-			LOGGER.info("Closing connection {} because of", socketConnection, throwable);
+			LOGGER.info("Closing connection {} because of error", socketConnection, throwable);
 			socketConnection.close();
-			try {
-				eventsQueue.put(new DisconnectEvent(socketConnection));
-			}
-			catch (InterruptedException e) {
-				throw new RuntimeException(e);
-			}
 		};
 
 		var byteBufferPool = new ByteBufferPool(ByteBuffer::allocateDirect);

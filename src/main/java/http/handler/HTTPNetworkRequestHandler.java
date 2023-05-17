@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -28,22 +29,21 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes;
 import request_handler.NetworkRequest;
 import request_handler.NetworkRequestHandler;
+import tcp.server.SocketConnection;
 import util.UnsafeConsumer;
 
 public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequest> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HTTPNetworkRequestHandler.class);
-	public static final UnsafeConsumer<SelectionKey> NOOP = selectionKey -> {
-	};
 	private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 	private final List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies;
 	private final Collection<HTTPResponsePostProcessor> httpResponsePostProcessor;
 	private final Tracer httpRequestHandlerTracer;
-	private final List<Function<HTTPResponse, UnsafeConsumer<SelectionKey>>> onWriteResponseStrategies;
+	private final List<Function<HTTPResponse, Consumer<SocketConnection>>> onWriteResponseStrategies;
 
 	public HTTPNetworkRequestHandler(
 			List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies,
 			Collection<HTTPResponsePostProcessor> httpResponsePostProcessor,
-			List<Function<HTTPResponse, UnsafeConsumer<SelectionKey>>> onWriteResponseStrategies,
+			List<Function<HTTPResponse, Consumer<SocketConnection>>> onWriteResponseStrategies,
 			OpenTelemetry openTelemetry
 	) {
 		this.httpResponsePostProcessor = httpResponsePostProcessor;
@@ -80,7 +80,7 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 						.map(strategy -> strategy.apply(response))
 						.filter(Objects::nonNull)
 						.findFirst()
-						.orElse(NOOP);
+						.orElse(null);
 
 				requestSpan.addEvent("Postprocessors finished");
 				var socketConnection = networkRequest.socketConnection();

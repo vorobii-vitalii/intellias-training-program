@@ -1,11 +1,9 @@
 package document_editor.event.handler;
 
 import java.util.Collection;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 
 import document_editor.event.Event;
-import document_editor.event.EventContext;
+import document_editor.event.context.EventContext;
 import document_editor.event.EventHandler;
 import document_editor.event.EventType;
 import document_editor.event.MessageDistributeEvent;
