@@ -27,45 +27,45 @@
     const comparePath = (a, b) => {
         const m = Math.min(a.length, b.length);
         for (let i = 0; i < m; i++) {
-            if (a[i].b && b[i].b) {
-                if (a[i].a !== b[i].a) {
-                    return a[i].a ? 1 : -1;
+            if (a[i].disambiguator && b[i].disambiguator) {
+                if (a[i].isLeft !== b[i].isLeft) {
+                    return a[i].isLeft ? 1 : -1;
                 }
-                if (a[i].b !== b[i].b) {
-                    return a[i].b < b[i].b ? -1 : 1;
+                if (a[i].disambiguator !== b[i].disambiguator) {
+                    return a[i].disambiguator < b[i].disambiguator ? -1 : 1;
                 }
-            } else if (!a[i].b && !b[i].b) {
-                if (a[i].a !== b[i].a) {
-                    return a[i].a ? 1 : -1;
+            } else if (!a[i].disambiguator && !b[i].disambiguator) {
+                if (a[i].isLeft !== b[i].isLeft) {
+                    return a[i].isLeft ? 1 : -1;
                 }
-            } else if (a[i].b) {
-                return b[i].a ? -1 : 1;
+            } else if (a[i].disambiguator) {
+                return b[i].isLeft ? -1 : 1;
             } else {
-                return a[i].a ? 1 : -1;
+                return a[i].isLeft ? 1 : -1;
             }
         }
         if (a.length === b.length) {
             return 0;
         }
         if (a.length === m) {
-            return b[m].a ? -1 : 1;
+            return b[m].isLeft ? -1 : 1;
         }
-        return a[m].a ? 1 : -1;
+        return a[m].isLeft ? 1 : -1;
     };
 
     const createPair = (left, right, c) => {
         if (!left && !right) {
-            return {a: [{a: false, b: connectionId}], b: c};
+            return {treePath: [{isLeft: false, disambiguator: connectionId}], character: c};
         }
         if (!left) {
-            return {a: [...right.a, {a: false, b: connectionId}], b: c};
+            return {treePath: [...right.treePath, {isLeft: false, disambiguator: connectionId}], character: c};
         } else if (!right) {
-            return {a: [...left.a, {a: true, b: connectionId}], b: c};
+            return {treePath: [...left.treePath, {isLeft: true, disambiguator: connectionId}], character: c};
         }
-        if (isAncestor(left.a, right.a)) {
-            return {a: [...right.a, {a: false, b: connectionId}], b: c};
+        if (isAncestor(left.treePath, right.treePath)) {
+            return {treePath: [...right.treePath, {isLeft: false, disambiguator: connectionId}], character: c};
         }
-        return {a: [...left.a, {a: true, b: connectionId}], b: c};
+        return {treePath: [...left.treePath, {isLeft: true, disambiguator: connectionId}], character: c};
     };
 
     const isAncestor = (a, b) => {
@@ -73,7 +73,7 @@
             return false;
         }
         for (let i = 0; i < a.length; i++) {
-            if (a[i].a !== b[i].a || a[i].b !== b[i].b) {
+            if (a[i].isLeft !== b[i].isLeft || a[i].disambiguator !== b[i].disambiguator) {
                 return false;
             }
         }
@@ -102,7 +102,7 @@
         let res = -1;
         while (low <= high) {
             const mid = Math.floor((low + high) / 2);
-            const c = comparePath(path, arr[mid].a);
+            const c = comparePath(path, arr[mid].treePath);
             if (c === 0) {
                 return mid;
             }
@@ -126,8 +126,8 @@
         }
         else if (eventPayload.responseType === 'ADD_BULK') {
             for (const change of eventPayload.payload) {
-                const index = binarySearch(change.a);
-                if (index < 0 || index >= arr.length || comparePath(arr[index].a, change.a) !== 0) {
+                const index = binarySearch(change.treePath);
+                if (index < 0 || index >= arr.length || comparePath(arr[index].treePath, change.treePath) !== 0) {
                     arr.splice(index + 1, 0, change);
                 }
             }
@@ -135,19 +135,19 @@
         }
         else if (eventPayload.responseType === 'CHANGES') {
             for (const change of eventPayload.payload) {
-                const index = binarySearch(change.a);
-                if (!change.b) {
-                    if (index >= 0 && index < arr.length && comparePath(arr[index].a, change.a) === 0) {
+                const index = binarySearch(change.treePath);
+                if (!change.character) {
+                    if (index >= 0 && index < arr.length && comparePath(arr[index].treePath, change.treePath) === 0) {
                         arr.splice(index, 1);
                     }
                 } else {
-                    if (index < 0 || index >= arr.length || comparePath(arr[index].a, change.a) !== 0) {
+                    if (index < 0 || index >= arr.length || comparePath(arr[index].treePath, change.treePath) !== 0) {
                         arr.splice(index + 1, 0, change);
                     }
                 }
             }
         }
-        textArea.value = arr.map(v => v.b).join('');
+        textArea.value = arr.map(v => v.character).join('');
     };
     socket.onopen = () => {
         socket.send(msgpack.encode({
@@ -170,7 +170,7 @@
 
 
     textArea.addEventListener("change", event => {
-        const curr = arr.map(v => v.b).join('');
+        const curr = arr.map(v => v.character).join('');
         const updated = textArea.value;
         const diff = dmp.diff_main(curr, updated);
         let prevIndex = -1;
@@ -186,7 +186,7 @@
             } else if (v === -1) {
                 for (let i = 0; i < str.length; i++) {
                     changes.splice(changes.length, 0, {
-                        a: arr[i + prevIndex + 1].a
+                        treePath: arr[i + prevIndex + 1].treePath
                     });
                 }
                 prevIndex += str.length;

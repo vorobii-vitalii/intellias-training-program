@@ -68,7 +68,7 @@
 
         if (eventPayload.responseType === 'ON_CONNECT') {
             // console.log('Setting value');
-            // console.log(eventPayload.payload.currentState.map(v => v.b))
+            // console.log(eventPayload.payload.currentState.map(v => v.character))
             // arr = eventPayload.payload.currentState;
             connectionId = eventPayload.payload.connectionId;
         }
@@ -79,7 +79,7 @@
                 return c !== 0;
               });
             arr.splice(arr.length, 0, eventPayload.payload);
-            // if (arr.filter(v => comparePath(v.a, eventPayload.payload) === 0) > 0) {
+            // if (arr.filter(v => comparePath(v.treePath, eventPayload.payload) === 0) > 0) {
             //   return;
             // }
             arr = arr.sort((a, b) => {
@@ -163,7 +163,7 @@
                   });
                     // socket.send(JSON.stringify({
                     //     type: 'DELETE',
-                    //     payload: arr[i + prevIndex + 1].a
+                    //     payload: arr[i + prevIndex + 1].treePath
                     // }));
                 }
                 prevIndex += str.length;
@@ -177,11 +177,11 @@
 
                     // while (
                     //     arr.filter(v => {
-                    //         let c = comparePath(a.a, v.a);
+                    //         let c = comparePath(treePath.treePath, v.treePath);
                     //         return c === 0;
                     //     }).length > 0
                     // ) {
-                    //     a = {a: [...a.a, {a: false, b: connectionId}], b: c}
+                    //     treePath = {treePath: [...treePath.treePath, {treePath: false, character: connectionId}], character: c}
                     // }
                     console.log('New ' + JSON.stringify(a) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
                       changes.splice(changes.length, 0, {
@@ -222,7 +222,7 @@
             });
             // socket.send(JSON.stringify({
             //   type: 'DELETE',
-            //   payload: arr[i + prevIndex + 1].a
+            //   payload: arr[i + prevIndex + 1].treePath
             // }));
           }
           prevIndex += str.length;
@@ -233,10 +233,10 @@
           for (let i = 0; i < str.length; i++) {
             const c = str.charAt(i);
             let a = createPair(prev, next, c)
-            // console.log('New ' + JSON.stringify(a) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
+            // console.log('New ' + JSON.stringify(treePath) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
             // socket.send(JSON.stringify({
             //   type: 'ADD',
-            //   payload: a
+            //   payload: treePath
             // }));
             changes.splice(changes.length, 0, {
               type: 'ADD',

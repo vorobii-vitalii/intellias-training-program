@@ -4,8 +4,13 @@ import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.example.document.storage.FetchDocumentContentRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import document_editor.DocumentStreamingWebSocketEndpoint;
+
 import document_editor.HttpServer;
+import document_editor.dto.Change;
+import document_editor.dto.ConnectDocumentReply;
+import document_editor.dto.Response;
+import document_editor.dto.ResponseType;
+import document_editor.dto.TreePathEntry;
 import document_editor.event.*;
 import grpc.TracingContextPropagator;
 import io.grpc.stub.StreamObserver;
@@ -74,9 +79,9 @@ public class NewConnectionEventHandler implements EventHandler {
             var webSocketMessage = new WebSocketMessage();
             webSocketMessage.setFin(true);
             try {
-                webSocketMessage.setPayload(objectMapper.writeValueAsBytes(new DocumentStreamingWebSocketEndpoint.Response(
-                        DocumentStreamingWebSocketEndpoint.ResponseType.ON_CONNECT,
-                        new DocumentStreamingWebSocketEndpoint.ConnectDocumentReply(connectionIdProvider.get()))));
+                webSocketMessage.setPayload(objectMapper.writeValueAsBytes(new Response(
+                        ResponseType.ON_CONNECT,
+                        new ConnectDocumentReply(connectionIdProvider.get()))));
             }
             catch (JsonProcessingException e) {
                 throw new RuntimeException(e);
@@ -112,13 +117,13 @@ public class NewConnectionEventHandler implements EventHandler {
                                 try {
                                     var changes = documentElements.getDocumentElementsList()
                                             .stream()
-                                            .map(doc -> new DocumentStreamingWebSocketEndpoint.Change(
+                                            .map(doc -> new Change(
                                                     toInternalPath(doc.getPath()),
                                                     (char) doc.getCharacter()
                                             ))
                                             .collect(Collectors.toList());
-                                    message.setPayload(objectMapper.writeValueAsBytes(new DocumentStreamingWebSocketEndpoint.Response(
-                                            DocumentStreamingWebSocketEndpoint.ResponseType.ADD_BULK, changes)));
+                                    message.setPayload(objectMapper.writeValueAsBytes(new Response(
+                                            ResponseType.ADD_BULK, changes)));
                                 } catch (JsonProcessingException e) {
                                     throw new RuntimeException(e);
                                 }
@@ -134,9 +139,9 @@ public class NewConnectionEventHandler implements EventHandler {
                                 }
                             }
 
-                            private List<DocumentStreamingWebSocketEndpoint.TreePathEntry> toInternalPath(com.example.document.storage.TreePath path) {
+                            private List<TreePathEntry> toInternalPath(com.example.document.storage.TreePath path) {
                                 return path.getEntriesList().stream()
-                                        .map(entry -> new DocumentStreamingWebSocketEndpoint.TreePathEntry(
+                                        .map(entry -> new TreePathEntry(
                                                 entry.getIsLeft(),
                                                 entry.getDisambiguator()
                                         ))

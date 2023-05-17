@@ -6,6 +6,10 @@ import com.example.document.storage.SubscribeForDocumentChangesRequest;
 import com.example.document.storage.TreePath;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import document_editor.dto.Change;
+import document_editor.dto.Response;
+import document_editor.dto.ResponseType;
+import document_editor.dto.TreePathEntry;
 import document_editor.event.Event;
 import document_editor.event.MessageDistributeEvent;
 import io.grpc.stub.StreamObserver;
@@ -102,14 +106,14 @@ public class DocumentChangeWatcher implements Runnable {
             var webSocketMessage = new WebSocketMessage();
             webSocketMessage.setFin(true);
             webSocketMessage.setOpCode(OpCode.BINARY);
-            webSocketMessage.setPayload(objectMapper.writeValueAsBytes(new DocumentStreamingWebSocketEndpoint.Response(
-                    DocumentStreamingWebSocketEndpoint.ResponseType.CHANGES,
+            webSocketMessage.setPayload(objectMapper.writeValueAsBytes(new Response(
+                    ResponseType.CHANGES,
                     documentChangedEvents
                             .getEventsList()
                             .stream()
                             .map(e -> {
                                 var change = e.getChange();
-                                return new PairDTO<>(
+                                return new Change(
                                         toInternalPath(change.getPath()),
                                         change.hasCharacter() ? ((char) change.getCharacter()) : null
                                 );
@@ -123,9 +127,9 @@ public class DocumentChangeWatcher implements Runnable {
         }
     }
 
-    private List<DocumentStreamingWebSocketEndpoint.TreePathEntry> toInternalPath(TreePath path) {
+    private List<TreePathEntry> toInternalPath(TreePath path) {
         return path.getEntriesList().stream()
-                .map(entry -> new DocumentStreamingWebSocketEndpoint.TreePathEntry(
+                .map(entry -> new TreePathEntry(
                         entry.getIsLeft(),
                         entry.getDisambiguator()
                 ))

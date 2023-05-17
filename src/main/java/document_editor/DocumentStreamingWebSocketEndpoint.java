@@ -3,11 +3,8 @@ package document_editor;
 import static java.nio.channels.SelectionKey.OP_WRITE;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.SelectionKey;
-import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 
 import org.slf4j.Logger;
@@ -15,6 +12,8 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import document_editor.dto.Request;
+import document_editor.dto.RequestType;
 import document_editor.event.DisconnectEvent;
 import document_editor.event.EditEvent;
 import document_editor.event.Event;
@@ -42,35 +41,6 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 	@Override
 	public void onConnect(SocketConnection socketConnection) {
 		LOGGER.info("New websocket connection {}", socketConnection);
-	}
-
-	public enum ResponseType {
-		ON_CONNECT,
-		ADD,
-		ADD_BULK,
-		CHANGES, DELETE
-	}
-
-	public enum RequestType {
-		CONNECT,
-		CHANGES
-	}
-
-	public record Response(ResponseType responseType, Object payload) {
-	}
-
-	public record ConnectDocumentReply(int connectionId) {
-	}
-
-	public record TreePathEntry(boolean a, int b) {
-
-	}
-
-	public record Change(List<TreePathEntry> a, Character b) {
-
-	}
-
-	public record Request(RequestType type, List<Change> payload) {
 	}
 
 	@Override
@@ -131,10 +101,10 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 	}
 
 	private void onMessage(SocketConnection socketConnection, Request request) throws InterruptedException {
-		if (request.type == RequestType.CONNECT) {
+		if (request.type() == RequestType.CONNECT) {
 			eventsQueue.put(new NewConnectionEvent(socketConnection));
-		} else if (request.type == RequestType.CHANGES) {
-			eventsQueue.put(new EditEvent(request.payload));
+		} else if (request.type() == RequestType.CHANGES) {
+			eventsQueue.put(new EditEvent(request.payload()));
 		}
 	}
 }
