@@ -18,12 +18,9 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HTTPAcceptOperationHandler.class);
@@ -31,7 +28,7 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 	private final int maxTokensWrite;
 	private final int maxTokensRead;
 	private final Function<SelectionKey, Selector> selectorSupplier;
-	private final ByteBufferPool byteBufferPool;
+	private final ByteBufferPool networkByteBufferPool;
 	private final Tracer httpAcceptConnectionHandlerTracer;
 	private final ByteBufferPool bufferPool;
 
@@ -40,7 +37,7 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 			int maxTokensWrite,
 			int maxTokensRead,
 			Function<SelectionKey, Selector> selectorSupplier,
-			ByteBufferPool byteBufferPool,
+			ByteBufferPool networkByteBufferPool,
 			OpenTelemetry openTelemetry,
 			ByteBufferPool bufferPool
 	) {
@@ -48,7 +45,7 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 		this.maxTokensWrite = maxTokensWrite;
 		this.maxTokensRead = maxTokensRead;
 		this.selectorSupplier = selectorSupplier;
-		this.byteBufferPool = byteBufferPool;
+		this.networkByteBufferPool = networkByteBufferPool;
 		httpAcceptConnectionHandlerTracer = openTelemetry.getTracer("HTTP accept connection handler");
 		this.bufferPool = bufferPool;
 	}
@@ -63,23 +60,27 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 			if (socketChannel == null) {
 				return;
 			}
+			socketChannel.socket().setSoTimeout(1);
 			requestSpan.addEvent("Connection accepted");
-			LOGGER.debug("Accepted new connection {}", socketChannel);
+			if (LOGGER.isDebugEnabled()) {
+				LOGGER.debug("Accepted new connection {}", socketChannel);
+			}
 			socketChannel.configureBlocking(false);
 			//				TokenBucket<SocketAddress> writeTokenBucket = new TokenBucket<>(maxTokensWrite, maxTokensWrite, socketChannel.getRemoteAddress());
 			//				TokenBucket<SocketAddress> readTokenBucket = new TokenBucket<>(maxTokensRead, maxTokensRead, socketChannel.getRemoteAddress());
 			//				tokenBuckets.add(writeTokenBucket);
 			//				tokenBuckets.add(readTokenBucket);
+			// executor
 			var serverAttachment = new ServerAttachment(
 					Constants.Protocol.HTTP,
-					new BufferContext(byteBufferPool),
-					new BufferContext(byteBufferPool),
-					new ConcurrentLinkedQueue<>(),
+					new BufferContext(networkByteBufferPool),
+					new BufferContext(bufferPool),
+					new ConcurrentLinkedDeque<>(),
 					new ConcurrentHashMap<>(),
 					null,
 					null,
 					requestSpan,
-					bufferPool,
+					networkByteBufferPool,
 					null
 			);
 			var newSelector = selectorSupplier.apply(selectionKey);

@@ -1,6 +1,7 @@
 package tcp.server;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -12,30 +13,31 @@ import net.jcip.annotations.ThreadSafe;
 @ThreadSafe
 public class ByteBufferPool {
 	private final ConcurrentSkipListMap<Integer, ConcurrentLinkedDeque<ByteBuffer>> byteBuffersBySize = new ConcurrentSkipListMap<>();
-//private final ConcurrentHashMap<Integer, ConcurrentLinkedDeque<ByteBuffer>> byteBuffersBySize = new ConcurrentHashMap<>();
 	private final Function<Integer, ByteBuffer> allocator;
 
 	public ByteBufferPool(Function<Integer, ByteBuffer> allocator) {
 		this.allocator = allocator;
 	}
 
-	public synchronized ByteBuffer allocate(int size) {
+	public ByteBuffer allocate(int size) {
 		while (true) {
-			var availableBufferSize = byteBuffersBySize.ceilingKey(size);
-			if (availableBufferSize == null) {
+			var entry = byteBuffersBySize.ceilingEntry(size);
+			if (entry == null) {
 				break;
 			}
-			var reference = new AtomicReference<ByteBuffer>();
-			byteBuffersBySize.computeIfPresent(availableBufferSize, (s, queue) -> {
-				if (isEmpty(queue)) {
-					return null;
-				}
+			var queue = entry.getValue();
+			if (isEmpty(queue)) {
+				byteBuffersBySize.compute(entry.getKey(), (k, v) -> {
+					if (isEmpty(v)) {
+						return null;
+					}
+					return v;
+				});
+			} else {
 				var buffer = queue.poll();
-				reference.set(buffer);
-				return queue;
-			});
-			if (reference.get() != null) {
-				return reference.get();
+				if (buffer != null) {
+					return buffer;
+				}
 			}
 		}
 		return allocator.apply(size);
@@ -45,7 +47,7 @@ public class ByteBufferPool {
 		return deque == null || deque.isEmpty();
 	}
 
-	public synchronized void save(ByteBuffer buffer) {
+	public void save(ByteBuffer buffer) {
 		var size = buffer.capacity();
 		buffer.clear();
 		byteBuffersBySize.compute(size, (s, arr) -> {

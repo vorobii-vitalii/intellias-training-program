@@ -38,9 +38,7 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public void appendBytesToContext(byte[] data) {
-		for (byte b : data) {
-			serverAttachment.getClientBufferContext().getAvailableBuffer().put(b);
-		}
+		serverAttachment.getClientBufferContext().write(data);
 	}
 
 	@Override
@@ -74,7 +72,7 @@ public class ConnectionImpl implements SocketConnection {
 				if (index == size) {
 					return EOF;
 				}
-				return getByteFromContext(index++);
+				return getByteFromContext(index++) & 0xff;
 			}
 		};
 	}
@@ -159,14 +157,19 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (!(o instanceof SocketConnection r)) return false;
-		return this.getAddress().equals(r.getAddress());
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
+		ConnectionImpl that = (ConnectionImpl) o;
+		return Objects.equals(serverAttachment, that.serverAttachment);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(getAddress());
+		return Objects.hash(serverAttachment);
 	}
 
 	@Override

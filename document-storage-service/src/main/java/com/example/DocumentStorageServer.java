@@ -6,6 +6,7 @@ import com.example.interceptor.ContextInterceptor;
 import com.example.tracing.ContextExtractor;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
+import com.mongodb.MongoCompressor;
 import com.mongodb.ServerApi;
 import com.mongodb.ServerApiVersion;
 import com.mongodb.reactivestreams.client.MongoClients;
@@ -27,13 +28,15 @@ import org.bson.Document;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 
 public class DocumentStorageServer {
 
     public static final String DOCUMENTS_COLLECTION = "docCol";
-    public static final int MIN_SIZE = 10;
+    public static final int MIN_SIZE = 1;
     public static final int MAX_SIZE = 150;
 
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -66,6 +69,7 @@ public class DocumentStorageServer {
                 .applyConnectionString(new ConnectionString(getMongoConnectionURL()))
                 .serverApi(ServerApi.builder().version(ServerApiVersion.V1).build())
                 .applyToConnectionPoolSettings(builder -> builder.minSize(MIN_SIZE).maxSize(MAX_SIZE))
+                .compressorList(List.of(MongoCompressor.createZlibCompressor()))
                 .build();
         var mongoClient = MongoClients.create(settings);
         var mongoClientDatabase = mongoClient.getDatabase("test");

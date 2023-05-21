@@ -10,18 +10,26 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import tcp.server.ByteBufferPool;
 import tcp.server.ConnectionImpl;
+import tcp.server.MessageWriteRequest;
 import tcp.server.ServerAttachment;
+import tcp.server.SocketConnection;
 import util.UnsafeConsumer;
 
+import java.net.ServerSocket;
+import java.nio.ByteBuffer;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class WriteOperationHandler implements Consumer<SelectionKey> {
-	private static final int MAX_MSGS_WRITE = 1;
+	private static final int MAX_MSGS_WRITE = 10;
 	public static final int NO_BYTES_WRITTEN = 0;
 	private final Timer timer;
 	private final Counter messagesWrittenCounter;
@@ -46,40 +54,47 @@ public class WriteOperationHandler implements Consumer<SelectionKey> {
 	@Override
 	public void accept(SelectionKey selectionKey) {
 		timer.record(() -> {
-			var socketChannel = (WritableByteChannel) (selectionKey.channel());
+			var socketChannel = (SocketChannel) (selectionKey.channel());
 			var attachmentObject = (ServerAttachment) (selectionKey.attachment());
 			var responses = attachmentObject.responses();
 			if (responses == null) {
 				return;
 			}
 			try {
+				var context = Context.current().with(attachmentObject.getRequestSpan());
+				var span = writeHandlerTracer.spanBuilder("Write message").setParent(context).startSpan();
+				ByteBuffer[] buffers = new ByteBuffer[MAX_MSGS_WRITE];
+				List<Consumer<SocketConnection>> callbacks = new ArrayList<>(MAX_MSGS_WRITE);
+				int bufferIndex = 0;
 				for (int i = 0; i < MAX_MSGS_WRITE && selectionKey.isWritable() && attachmentObject.isWritable() && !responses.isEmpty(); i++) {
-					var writeRequest = responses.peek();
-					var buffer = writeRequest.message();
-					var context = Context.current().with(attachmentObject.getRequestSpan());
-					var span = writeHandlerTracer.spanBuilder("Write message").setParent(context).startSpan();
-					boolean canAcceptMore = true;
-					long totalBytesWritten = 0;
-					while (buffer.hasRemaining()) {
-						var bytesWritten = socketChannel.write(buffer);
-						totalBytesWritten += bytesWritten;
-						if (bytesWritten == NO_BYTES_WRITTEN) {
-							canAcceptMore = false;
-							break;
-						}
-					}
-					span.addEvent("Written bytes", Attributes.of(AttributeKey.longKey("bytesWritten"), totalBytesWritten));
-					span.end();
-					if (!canAcceptMore) {
+					var messageWriteRequest = responses.pollFirst();
+					buffers[bufferIndex++] = messageWriteRequest.message();
+					callbacks.add(messageWriteRequest.onWriteCallback());
+				}
+				long totalWritten = 0;
+				while (true) {
+					var written = socketChannel.write(buffers, 0, bufferIndex);
+					if (written == NO_BYTES_WRITTEN) {
 						break;
 					}
-					byteBufferPool.save(buffer);
-					if (writeRequest.onWriteCallback() != null) {
-						writeRequest.onWriteCallback().accept(new ConnectionImpl(attachmentObject));
-					}
-					responses.poll();
-					messagesWrittenCounter.increment();
+					totalWritten += written;
 				}
+				span.addEvent("Written bytes", Attributes.of(AttributeKey.longKey("bytesWritten"), totalWritten));
+				var connection = new ConnectionImpl(attachmentObject);
+				for (int i = bufferIndex - 1; i >= 0; i--) {
+					final Consumer<SocketConnection> callback = callbacks.get(i);
+					if (buffers[i].hasRemaining()) {
+						responses.addFirst(new MessageWriteRequest(buffers[i], callback));
+					}
+					else {
+						byteBufferPool.save(buffers[i]);
+						messagesWrittenCounter.increment();
+						if (callback != null) {
+							callback.accept(connection);
+						}
+					}
+				}
+				span.end();
 				if (responses.isEmpty()) {
 					selectionKey.interestOps(SelectionKey.OP_READ);
 				}

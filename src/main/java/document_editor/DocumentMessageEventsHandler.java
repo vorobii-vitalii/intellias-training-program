@@ -58,7 +58,10 @@ public class DocumentMessageEventsHandler implements Runnable {
 		}
 		eventsMap.forEach((type, events) -> {
 			try {
-				eventHandlerMap.get(type).handle(events, eventContext);
+				var eventHandler = eventHandlerMap.get(type);
+				if (eventHandler != null) {
+					eventHandler.handle(events, eventContext);
+				}
 			} catch (Exception error) {
 				LOGGER.error("Error", error);
 			}

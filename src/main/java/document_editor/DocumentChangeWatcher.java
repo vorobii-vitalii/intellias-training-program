@@ -1,9 +1,13 @@
 package document_editor;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.util.zip.GZIPOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,14 +40,14 @@ public class DocumentChangeWatcher implements Runnable {
 	public static final int BATCH_SIZE = 100;
 	public static final int BATCH_TIMEOUT = 100;
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentChangeWatcher.class);
-	private final BlockingQueue<Event> eventQueue;
+	private final Queue<Event> eventQueue;
 	private final ObjectMapper objectMapper;
 	private final DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService;
 	private final OpenTelemetry openTelemetry;
 	private final Tracer tracer;
 
 	public DocumentChangeWatcher(
-			BlockingQueue<Event> eventQueue,
+			Queue<Event> eventQueue,
 			ObjectMapper objectMapper,
 			DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService,
 			OpenTelemetry openTelemetry
@@ -58,6 +62,12 @@ public class DocumentChangeWatcher implements Runnable {
 	@Override
 	public void run() {
 		subscribeForDocumentChanges(null);
+	}
+
+	private byte[] serialize(Object obj) throws IOException {
+		var arrayOutputStream = new ByteArrayOutputStream();
+		objectMapper.writeValue(new GZIPOutputStream(arrayOutputStream), obj);
+		return arrayOutputStream.toByteArray();
 	}
 
 	private void subscribeForDocumentChanges(String resumeToken) {
@@ -110,7 +120,7 @@ public class DocumentChangeWatcher implements Runnable {
 			var webSocketMessage = new WebSocketMessage();
 			webSocketMessage.setFin(true);
 			webSocketMessage.setOpCode(OpCode.BINARY);
-			webSocketMessage.setPayload(objectMapper.writeValueAsBytes(new Response(
+			webSocketMessage.setPayload(serialize(new Response(
 					ResponseType.CHANGES,
 					documentChangedEvents
 							.getEventsList()
@@ -124,7 +134,7 @@ public class DocumentChangeWatcher implements Runnable {
 							})
 							.collect(Collectors.toList())
 			)));
-			eventQueue.put(new MessageDistributeEvent(webSocketMessage));
+			eventQueue.add(new MessageDistributeEvent(webSocketMessage));
 
 		}
 		catch (Throwable error) {

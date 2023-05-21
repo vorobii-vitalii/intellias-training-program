@@ -1,0 +1,23 @@
+@startuml
+
+actor Client
+participant DocumentsWebApplication
+participant DocumentsApp
+participant DocumentsStorageService
+database Mongo
+
+Client -> DocumentsWebApplication : Opens app
+DocumentsWebApplication -> DocumentsApp : HTTP/1.1 /documents
+DocumentsApp -> DocumentsWebApplication : HTTP/1.1 101 Change protocol to WS
+
+DocumentsWebApplication -> DocumentsApp : WebSocket message {type: CONNECT, documentId: X}
+DocumentsApp -> DocumentsWebApplication : WebSocket message {type: CONNECTED, connectionId: Y}
+
+DocumentsApp -> DocumentsStorageService : gRPC call: Fetch document X
+DocumentsStorageService -> Mongo: Retrieve content of document X
+Mongo -> DocumentsStorageService : Streams document in batches
+DocumentsStorageService -> DocumentsApp : Streams document in batches
+DocumentsApp -> DocumentsWebApplication : Streams document in batches
+DocumentsWebApplication -> Client : Updates textarea
+
+@enduml

@@ -12,9 +12,10 @@ import java.util.List;
 public class BufferContext {
 	private static final Logger LOGGER = LoggerFactory.getLogger(BufferContext.class);
 	// TODO: Make it configurable
-	private static final int SINGLE_BUFFER_SIZE = 1536;
+	private static final int SINGLE_BUFFER_SIZE = 1024;
 
 	private final List<ByteBuffer> byteBuffers = new ArrayList<>();
+	private final List<Integer> list = new ArrayList<>();
 	private final ByteBufferPool byteBufferPool;
 
 	public BufferContext(ByteBufferPool byteBufferPool) {
@@ -26,29 +27,68 @@ public class BufferContext {
 		return byteBuffers.get(byteBuffers.size() - 1);
 	}
 
-	public int size() {
-		var totalSize = 0;
-		for (ByteBuffer byteBuffer : byteBuffers) {
-			totalSize += byteBuffer.position();
+	public byte[] extract(int from, int end) {
+		if (from > end) {
+			throw new IllegalStateException("from = " + from + " > end = " + end);
 		}
-		return totalSize;
-//		if (byteBuffers.isEmpty()) {
-//			return 0;
-//		}
-//		return (byteBuffers.size() - 1) * SINGLE_BUFFER_SIZE + byteBuffers.get(byteBuffers.size() - 1).position();
+		validatePosition(from);
+		int count = end - from;
+		var res = new byte[count];
+		var index = getBufferIndex(from);
+		while (count > 0) {
+			int pos = from + res.length - count;
+			var buffer = byteBuffers.get(index);
+			var bufferStart = pos - list.get(index);
+			var bytesToRead = Math.min(count, buffer.position() - bufferStart);
+			buffer.get(bufferStart, res, res.length - count, bytesToRead);
+			index++;
+			count -= bytesToRead;
+		}
+		return res;
+	}
+
+	public int size() {
+		if (list.isEmpty()) {
+			return 0;
+		}
+		return list.get(list.size() - 1) + byteBuffers.get(list.size() - 1).position();
+	}
+
+	public void write(byte[] bytes) {
+		int index = 0;
+		while (index < bytes.length) {
+			addByteBufferIfNeeded();
+			var buffer = byteBuffers.get(byteBuffers.size() - 1);
+			int prev = buffer.position();
+			buffer.put(bytes, index, Math.min(bytes.length - index, buffer.remaining()));
+			index += buffer.position() - prev;
+		}
 	}
 
 	public byte get(int pos) {
 		validatePosition(pos);
-		for (var buffer : byteBuffers) {
-			if (pos < buffer.position()) {
-				return buffer.get(pos);
+		var index = getBufferIndex(pos);
+		return byteBuffers.get(index).get(pos - list.get(index));
+	}
+
+	private int getBufferIndex(int pos) {
+		int low = 0;
+		int high = byteBuffers.size() - 1;
+		while (low <= high) {
+			int mid = low + (high - low) / 2;
+			int start = list.get(mid);
+			int end = start + byteBuffers.get(mid).position();
+			if (pos < start) {
+				high = mid - 1;
 			}
-			pos -= buffer.position();
+			else if (pos >= end) {
+				low = mid + 1;
+			}
+			else {
+				return mid;
+			}
 		}
 		throw new IllegalStateException();
-//		int bufferPos = pos / SINGLE_BUFFER_SIZE;
-//		return byteBuffers.get(bufferPos).get(pos % SINGLE_BUFFER_SIZE);
 	}
 
 	public void free(int bytesToFree) {
@@ -57,35 +97,25 @@ public class BufferContext {
 		}
 		var currentSize = size();
 		var bytesToKeep = currentSize - bytesToFree;
-//		LOGGER.info("Current size = {}, bytesToKeep = {}", currentSize, bytesToKeep);
-//
-//
 		ByteBuffer newBuffer = null;
 
 		if (bytesToKeep > 0) {
 			newBuffer = byteBufferPool.allocate(Math.max(bytesToKeep, SINGLE_BUFFER_SIZE));
-			var lastBuffer = byteBuffers.get(byteBuffers.size() - 1);
+//			var lastBuffer = byteBuffers.get(byteBuffers.size() - 1);
 			for (var i = 0; i < bytesToKeep; i++) {
-				newBuffer.put(i, lastBuffer.get(lastBuffer.position() - bytesToKeep + i));
+//				newBuffer.put(i, lastBuffer.get(lastBuffer.position() - bytesToKeep + i));
+				newBuffer.put(i, get(currentSize - bytesToKeep + i));
 			}
 			newBuffer.position(bytesToKeep);
 		}
 		while (!byteBuffers.isEmpty()) {
 			byteBufferPool.save(byteBuffers.remove(byteBuffers.size() - 1));
+			list.remove(list.size() - 1);
 		}
 		if (bytesToKeep > 0) {
 			byteBuffers.add(newBuffer);
+			list.add(0);
 		}
-
-//		var firstBuffer = byteBuffers.get(0);
-//		for (int i = 0; i < bytesToKeep; i++) {
-//			firstBuffer.put(i, get(size() - bytesToKeep + i));
-//		}
-//		firstBuffer.position(bytesToKeep);
-//		while (byteBuffers.size() > 1) {
-//			var byteBuffer = byteBuffers.remove(byteBuffers.size() - 1);
-//			byteBufferPool.save(byteBuffer);
-//		}
 	}
 
 	private void validatePosition(int pos) {
@@ -96,8 +126,11 @@ public class BufferContext {
 
 	private void addByteBufferIfNeeded() {
 		if (byteBuffers.isEmpty() || isLastBufferFull()) {
-			final ByteBuffer buffer = byteBufferPool.allocate(SINGLE_BUFFER_SIZE);
-			LOGGER.debug("Allocated buffer {}", buffer);
+			var newBufferSize = byteBuffers.isEmpty()
+					? SINGLE_BUFFER_SIZE
+					: (list.get(list.size() - 1) + byteBuffers.get(list.size() - 1).capacity());
+			var buffer = byteBufferPool.allocate(newBufferSize);
+			list.add(list.isEmpty() ? 0 : (list.get(list.size() - 1) + byteBuffers.get(list.size() - 1).capacity()));
 			byteBuffers.add(buffer);
 		}
 	}

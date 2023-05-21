@@ -14,14 +14,21 @@ public record HTTPVersion(int majorVersion, int minorVersion) implements Seriali
 	private static final byte DOT = '.';
 
 	public static HTTPVersion parse(CharSequence httpVersion) throws ParseException {
-		var matcher = HTTP_VERSION_PATTERN.matcher(httpVersion);
-		if (!matcher.matches()) {
+		if (httpVersion.length() != 8) {
 			throw new ParseException("""
 							HTTP version doesn't match the format:
 							HTTP-version  = HTTP-name "/" DIGIT "." DIGIT
 							HTTP-name     = %x48.54.54.50 ; "HTTP", case-sensitive""");
 		}
-		return new HTTPVersion(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)));
+		return new HTTPVersion(httpVersion.charAt(5) - '0', httpVersion.charAt(7) - '0');
+//		var matcher = HTTP_VERSION_PATTERN.matcher(httpVersion);
+//		if (!matcher.matches()) {
+//			throw new ParseException("""
+//							HTTP version doesn't match the format:
+//							HTTP-version  = HTTP-name "/" DIGIT "." DIGIT
+//							HTTP-name     = %x48.54.54.50 ; "HTTP", case-sensitive""");
+//		}
+//		return new HTTPVersion(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)));
 	}
 
 	@Override

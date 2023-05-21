@@ -1,6 +1,9 @@
 package document_editor.event.handler;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Collection;
+import java.util.zip.GZIPOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,18 +38,24 @@ public class PongEventHandler implements EventHandler {
 		return EventType.SEND_PONGS;
 	}
 
+	private byte[] serialize(Object obj) throws IOException {
+		var arrayOutputStream = new ByteArrayOutputStream();
+		objectMapper.writeValue(new GZIPOutputStream(arrayOutputStream), obj);
+		return arrayOutputStream.toByteArray();
+	}
+
 	@Override
 	public void handle(Collection<Event> events, EventContext eventContext) {
 		try {
-			LOGGER.info("Sending PONG to clients");
+//			LOGGER.info("Sending PONG to clients");
 			eventContext.removeDisconnectedClients();
 			var webSocketMessage = new WebSocketMessage();
 			webSocketMessage.setFin(true);
 			webSocketMessage.setOpCode(OpCode.BINARY);
-			webSocketMessage.setPayload(objectMapper.writeValueAsBytes(PONG_RESPONSE));
+			webSocketMessage.setPayload(serialize(PONG_RESPONSE));
 			eventContext.broadCastMessage(webSocketMessage);
 		}
-		catch (JsonProcessingException | InterruptedException e) {
+		catch (IOException | InterruptedException e) {
 			throw new RuntimeException(e);
 		}
 

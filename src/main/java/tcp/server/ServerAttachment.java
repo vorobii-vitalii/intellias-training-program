@@ -6,6 +6,7 @@ import token_bucket.TokenBucket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
+import java.util.Deque;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
@@ -13,7 +14,7 @@ import java.util.Queue;
 public final class ServerAttachment {
 	private final TokenBucket<SocketAddress> writeTokenBucket;
 	private final BufferContext bufferContext;
-	private final Queue<MessageWriteRequest> responses;
+	private final Deque<MessageWriteRequest> responses;
 	private final Map<String, Object> context;
 	private final BufferContext clientBufferContext;
 	private final TokenBucket<SocketAddress> readTokenBucket;
@@ -26,7 +27,7 @@ public final class ServerAttachment {
 			String protocol,
 			BufferContext bufferContext,
 			BufferContext clientBufferContext,
-			Queue<MessageWriteRequest> responses,
+			Deque<MessageWriteRequest> responses,
 			Map<String, Object> context,
 			TokenBucket<SocketAddress> writeTokenBucket,
 			TokenBucket<SocketAddress> readTokenBucket,
@@ -78,7 +79,7 @@ public final class ServerAttachment {
 		return bufferContext;
 	}
 
-	public Queue<MessageWriteRequest> responses() {
+	public Deque<MessageWriteRequest> responses() {
 		return responses;
 	}
 

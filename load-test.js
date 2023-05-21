@@ -4,71 +4,14 @@ import {randomString, randomIntBetween} from 'https://jslib.k6.io/k6-utils/1.2.0
 import msgpack from 'https://cdnjs.cloudflare.com/ajax/libs/msgpack-lite/0.1.26/msgpack.min.js';
 import {SharedArray} from 'k6/data';
 
-
-// export const options = {
-//   scenarios: {
-//     load_testing: {
-//       executor: "ramping-vus",
-//       startVus: 150,
-//       stages: [
-//         { duration: "20s", target: 150 },
-//       ],
-//     },
-//   },
-// };
-
 const VIRTUAL_USERS = 1000;
 const CHANGES_PER_USER = 1;
-
-// export const options = {
-//   discardResponseBodies: true,
-//   scenarios: {
-//     contacts: {
-//       executor: 'constant-arrival-rate',
-//
-//       // Our test should last 30 seconds in total
-//       duration: '32s',
-//
-//       // It should start 30 iterations per `timeUnit`. Note that iterations starting points
-//       // will be evenly spread across the `timeUnit` period.
-//       rate: 200,
-//
-//       // It should start `rate` iterations per second
-//       timeUnit: '8s',
-//
-//       // It should preallocate 2 VUs before starting the test
-//       preAllocatedVUs: 100,
-//
-//       // It is allowed to spin up to 50 maximum VUs to sustain the defined
-//       // constant arrival rate.
-//       maxVUs: VIRTUAL_USERS
-//     }
-//   }
-// }
 
 export let options = {
     iterations: VIRTUAL_USERS,
     vus: VIRTUAL_USERS,
     discardResponseBodies: true,
 }
-
-// export const options = {
-//  discardResponseBodies: true,
-//  scenarios: {
-//    contacts: {
-//      executor: 'shared-iterations',
-//      vus: 9,
-//      iterations: VIRTUAL_USERS,
-//      maxDuration: '29s',
-//    },
-//   },
-// };
-// export const options = {
-//  vus: VIRTUAL_USERS,
-//  iterations: VIRTUAL_USERS,
-//  noVUConnectionReuse: true
-// };
-
 const comparePath = (a, b) => {
     const m = Math.min(a.length, b.length);
     for (let i = 0; i < m; i++) {
@@ -155,7 +98,15 @@ export default function () {
                         payload: changes
                     }).buffer);
                 }, sendMessageTimeout);
+
+                socket.setInterval(() => {
+                    socket.sendBinary(msgpack.encode({
+                        type: 'PING',
+                    }).buffer);
+                }, 2000);
+
             }, randomIntBetween(1, 2));
+
 
             const binarySearch = (path) => {
                 for (const d of data) {
@@ -207,7 +158,7 @@ export default function () {
                 //   'all changes received': c => c.length === data.length
                 // })
                 socket.close();
-            }, 10 * 1000);
+            }, 6 * 1000);
         });
     });
     // console.log(res)

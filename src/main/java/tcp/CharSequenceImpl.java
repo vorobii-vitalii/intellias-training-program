@@ -6,6 +6,7 @@ public class CharSequenceImpl implements CharSequence {
     private final BufferContext bufferContext;
     private final int from;
     private final int end;
+    private String string;
 
     public CharSequenceImpl(BufferContext bufferContext, int from, int end) {
         this.bufferContext = bufferContext;
@@ -40,10 +41,9 @@ public class CharSequenceImpl implements CharSequence {
 
     @Override
     public String toString() {
-        var builder = new StringBuilder();
-        for (var i = 0; i < length(); i++) {
-            builder.append(charAt(i));
+        if (string == null) {
+            this.string = new String(bufferContext.extract(from, end));
         }
-        return builder.toString();
+        return string;
     }
 }

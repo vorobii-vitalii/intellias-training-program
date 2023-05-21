@@ -93,11 +93,7 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 	}
 
 	private byte[] extractBytes(BufferContext bufferContext, int start, int end) {
-		byte[] arr = new byte[end - start];
-		for (int i = start; i < end; i++) {
-			arr[i - start] = bufferContext.get(i);
-		}
-		return arr;
+		return bufferContext.extract(start, end);
 	}
 
 }

@@ -11,6 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/msgpack-lite/0.1.26/msgpack.min.js"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js"></script>
 </head>
 
 <body>
@@ -120,7 +121,8 @@
   socket = new WebSocket("ws://localhost:8001/documents");
   socket.binaryType = "arraybuffer";
   socket.onmessage = function(event) {
-    const eventPayload = msgpack.decode(new Uint8Array(event.data));
+    const data = pako.ungzip(event.data)
+    const eventPayload = msgpack.decode(new Uint8Array(data));
 
     if (eventPayload.responseType === 'ON_CONNECT') {
       connectionId = eventPayload.payload.connectionId;

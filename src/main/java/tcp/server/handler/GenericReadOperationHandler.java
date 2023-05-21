@@ -3,17 +3,14 @@ package tcp.server.handler;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import com.lmax.disruptor.RingBuffer;
+
 import io.opentelemetry.api.OpenTelemetry;
-import io.opentelemetry.api.metrics.Meter;
-import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
-import io.opentelemetry.semconv.trace.attributes.SemanticAttributes;
 import request_handler.NetworkRequest;
 import tcp.server.ConnectionImpl;
 import tcp.server.ServerAttachment;
@@ -21,17 +18,20 @@ import tcp.server.SocketMessageReader;
 
 public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 	private final SocketMessageReader<T> socketMessageReader;
-	private final BlockingQueue<NetworkRequest<T>> requestQueue;
+	private final RingBuffer<NetworkRequest<T>> ringBuffer;
 	private final BiConsumer<SelectionKey, Throwable> onError;
 	private final Tracer readOperationHandlerTracer;
+	private final String messageType;
 
 	public GenericReadOperationHandler(
-			BlockingQueue<NetworkRequest<T>> requestQueue,
+			RingBuffer<NetworkRequest<T>> ringBuffer,
 			SocketMessageReader<T> socketMessageReader,
 			BiConsumer<SelectionKey, Throwable> onError,
-			OpenTelemetry openTelemetry
+			OpenTelemetry openTelemetry,
+			String messageType
 	) {
-		this.requestQueue = requestQueue;
+		this.ringBuffer = ringBuffer;
+		this.messageType = messageType;
 		this.socketMessageReader = socketMessageReader;
 		this.onError = onError;
 		readOperationHandlerTracer = openTelemetry.getTracer("ReadOperationHandler");
@@ -51,6 +51,7 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 			var socketChannel = (SocketChannel) selectionKey.channel();
 			var requestSpan = readOperationHandlerTracer
 					.spanBuilder("Socket message")
+					.setAttribute("message.type", messageType)
 					.setAttribute("client.ip", socketChannel.getRemoteAddress().toString())
 					.setParent(Context.current().with(serverAttachment.getRequestSpan()))
 					.startSpan();
@@ -59,7 +60,15 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 				return;
 			}
 			requestSpan.addEvent("Message read from socket");
-			requestQueue.put(new NetworkRequest<>(request, new ConnectionImpl(serverAttachment), requestSpan));
+//			NetworkRequest<T> networkRequest = new NetworkRequest<>(request, new ConnectionImpl(serverAttachment), requestSpan);
+			requestSpan.addEvent("Request created");
+			var seq = ringBuffer.next();
+			final NetworkRequest<T> networkRequest = ringBuffer.get(seq);
+			networkRequest.setRequest(request);
+			networkRequest.setSocketConnection(new ConnectionImpl(serverAttachment));
+			networkRequest.setSpan(requestSpan);
+			ringBuffer.publish(seq);
+//			ringBuffer.add(networkRequest);
 			requestSpan.end();
 		} catch (CancelledKeyException cancelledKeyException) {
 			// Ignore

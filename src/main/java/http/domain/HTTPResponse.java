@@ -13,7 +13,7 @@ public record HTTPResponse(HTTPResponseLine responseLine, HTTPHeaders httpHeader
 	}
 
 	public String getUpgradeProtocol() {
-		return httpHeaders.getHeaderValues(Constants.HTTPHeaders.UPGRADE).get(0);
+		return httpHeaders.getHeaderValue(Constants.HTTPHeaders.UPGRADE).orElse(null);
 	}
 
 	@Override

@@ -19,10 +19,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -33,6 +37,14 @@ import org.slf4j.LoggerFactory;
 
 import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lmax.disruptor.BusySpinWaitStrategy;
+import com.lmax.disruptor.EventFactory;
+import com.lmax.disruptor.EventHandler;
+import com.lmax.disruptor.RingBuffer;
+import com.lmax.disruptor.WaitStrategy;
+import com.lmax.disruptor.dsl.Disruptor;
+import com.lmax.disruptor.dsl.ProducerType;
+import com.lmax.disruptor.util.DaemonThreadFactory;
 
 import document_editor.event.Event;
 import document_editor.event.SendPongsEvent;
@@ -74,6 +86,7 @@ import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.semconv.resource.attributes.ResourceAttributes;
 import monitoring.PrometheusMetricsHTTPRequestHandler;
 import request_handler.NetworkRequest;
+import request_handler.NetworkRequestHandler;
 import request_handler.NetworkRequestProcessor;
 import tcp.FillQueueProcess;
 import tcp.server.ByteBufferPool;
@@ -103,12 +116,13 @@ public class HttpServer {
 	public static final String PROMETHEUS_ENDPOINT = "/prometheus";
 	public static final int MAX_TOKENS_WRITE = 1000;
 	public static final int MAX_TOKENS_READ = 10;
-	public static final int SELECTION_TIMEOUT = 100;
+	public static final int SELECTION_TIMEOUT = 1;
 	public static final int DOCUMENT_ID = 13;
 	private static final AtomicInteger atomicInteger = new AtomicInteger(1);
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServer.class);
 	private static final Integer WS_VERSION = 13;
 	public static final int MAX_WAIT_FOR_PING_MS = 15_000;
+	public static final int RING_BUFFER_SIZE = (int) Math.pow(2, 14);
 
 	private static int getPort() {
 		return Optional.ofNullable(System.getenv("PORT"))
@@ -140,7 +154,32 @@ public class HttpServer {
 		executor.scheduleWithFixedDelay(process, delayMs, delayMs, MILLISECONDS);
 	}
 
+	private static <T> RingBuffer<NetworkRequest<T>> createNetworkDisruptor(NetworkRequestHandler<T> requestHandler) {
+		ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
+
+		WaitStrategy waitStrategy = new BusySpinWaitStrategy();
+		Disruptor<NetworkRequest<T>> disruptor = new Disruptor<>(
+				NetworkRequest::new,
+				RING_BUFFER_SIZE,
+				threadFactory,
+				ProducerType.MULTI,
+				waitStrategy
+		);
+		disruptor.handleEventsWith((tNetworkRequest, l, b) -> {
+			try {
+				requestHandler.handle(tNetworkRequest);
+			}
+			catch (Exception error) {
+				LOGGER.warn("Error", error);
+
+			}
+		});
+		return disruptor.start();
+	}
+
 	public static void main(String[] args) throws IOException {
+
+
 		var resource = Resource.getDefault()
 				.merge(Resource.create(Attributes.of(ResourceAttributes.SERVICE_NAME, "documents-app")));
 
@@ -167,9 +206,9 @@ public class HttpServer {
 
 		var objectMapper = new ObjectMapper(new MessagePackFactory());
 
-		var httpRequestQueue = new ArrayBlockingQueue<NetworkRequest<HTTPRequest>>(QUEUE_SIZE);
-		var webSocketRequestQueue = new ArrayBlockingQueue<NetworkRequest<WebSocketMessage>>(QUEUE_SIZE);
-		var eventsQueue = new ArrayBlockingQueue<Event>(QUEUE_SIZE);
+//		var httpRequestQueue = new ConcurrentLinkedQueue<NetworkRequest<HTTPRequest>>();
+//		var webSocketRequestQueue = new ConcurrentLinkedQueue<NetworkRequest<WebSocketMessage>>();
+		var eventsQueue = new ConcurrentLinkedQueue<Event>();
 
 		var prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
 
@@ -249,7 +288,7 @@ public class HttpServer {
 
 		Consumer<SocketConnection> changeSelector = connection -> connection.changeSelector(webSocketSelectorProvider.get());
 
-		var handler = new HTTPNetworkRequestHandler(
+		var httpRequestHandler = new HTTPNetworkRequestHandler(
 				List.of(
 						webSocketChangeProtocolHTTPHandlerStrategy,
 						new FileDownloadHTTPHandlerStrategy(p -> p.isEmpty() || p.equals("/"), "index.html", "text/html"),
@@ -264,14 +303,18 @@ public class HttpServer {
 				}),
 				openTelemetry
 		);
+		var webSocketNetworkRequestHandler = new WebSocketNetworkRequestHandler(webSocketEndpointProvider);
 
-		var httpRequestProcessor = new NetworkRequestProcessor<>(httpRequestQueue, handler, httpRequestProcessingTimer, httpRequestsCount);
-		var webSocketRequestProcessor = new NetworkRequestProcessor<>(
-				webSocketRequestQueue,
-				new WebSocketNetworkRequestHandler(webSocketEndpointProvider),
-				webSocketRequestProcessingTimer,
-				webSocketRequestsCount
-		);
+		final RingBuffer<NetworkRequest<HTTPRequest>> httpRing = createNetworkDisruptor(httpRequestHandler);
+		final RingBuffer<NetworkRequest<WebSocketMessage>> wsRing = createNetworkDisruptor(webSocketNetworkRequestHandler);
+
+		//		var httpRequestProcessor = new NetworkRequestProcessor<>(httpRequestQueue, httpRequestHandler, httpRequestProcessingTimer, httpRequestsCount);
+//		var webSocketRequestProcessor = new NetworkRequestProcessor<>(
+//				webSocketRequestQueue,
+//				webSocketNetworkRequestHandler,
+//				webSocketRequestProcessingTimer,
+//				webSocketRequestsCount
+//		);
 		var eventContext = new EventContext(MAX_WAIT_FOR_PING_MS);
 
 		var documentStorageServiceChannel =
@@ -286,9 +329,9 @@ public class HttpServer {
 
 		//		refillExecutor.scheduleWithFixedDelay(new RefillProcess<>(tokenBuckets), 1, 1, SECONDS);
 
-		startProcess(httpRequestProcessor, "HTTP Request processor");
+//		startProcess(httpRequestProcessor, "HTTP Request processor");
 
-		schedulePeriodically(1000, new FillQueueProcess<>(eventsQueue, new SendPongsEvent()));
+		schedulePeriodically(2000, new FillQueueProcess<>(eventsQueue, new SendPongsEvent()));
 		schedulePeriodically(500, new DocumentMessageEventsHandler(eventsQueue, eventContext, List.of(
 				new NewConnectionEventHandler(
 						documentStorageService,
@@ -302,7 +345,7 @@ public class HttpServer {
 				new PongEventHandler(objectMapper),
 				new EditEventHandler(documentStorageService, changesApplyTimer, openTelemetry)
 		)));
-		startProcess(webSocketRequestProcessor, "WebSocket Request processor");
+//		startProcess(webSocketRequestProcessor, "WebSocket Request processor");
 		startProcess(new DocumentChangeWatcher(eventsQueue, objectMapper, documentStorageService, openTelemetry), "Document change watcher");
 
 		Consumer<SelectionKey> closeConnection = selectionKey -> {
@@ -318,6 +361,7 @@ public class HttpServer {
 		};
 
 		var byteBufferPool = new ByteBufferPool(ByteBuffer::allocateDirect);
+		var appByteBufferPool = new ByteBufferPool(ByteBuffer::allocate);
 
 		Map<Integer, Consumer<SelectionKey>> operationHandlerByTypeHTTP =
 				Map.of(
@@ -330,29 +374,32 @@ public class HttpServer {
 						),
 						OP_READ, new DelegatingReadOperationHandler(Map.of(
 								Constants.Protocol.HTTP, new GenericReadOperationHandler<>(
-										httpRequestQueue,
+										httpRing,
 										new SocketMessageReader<>(
 												new HTTPRequestMessageReader((name, val) -> Collections.singletonList(val.toString().trim())),
 												httpRequestParseTimer
 										),
 										onError,
-										openTelemetry
+										openTelemetry,
+										"HTTP"
 								),
 								Constants.Protocol.WEB_SOCKET, new GenericReadOperationHandler<>(
-										webSocketRequestQueue,
+										wsRing,
 										new SocketMessageReader<>(new WebSocketMessageReader(), webSocketRequestParseTimer),
 										onError,
-										openTelemetry
+										openTelemetry,
+										"WEB_SOCKET"
 								)
 						))
 				);
 		Map<Integer, Consumer<SelectionKey>> operationHandlerByTypeWebSockets =
 				Map.of(
 						OP_READ, new GenericReadOperationHandler<>(
-								webSocketRequestQueue,
+								wsRing,
 								new SocketMessageReader<>(new WebSocketMessageReader(), webSocketRequestParseTimer),
 								onError,
-								openTelemetry
+								openTelemetry,
+								"WEB_SOCKET"
 						),
 						OP_WRITE, new WriteOperationHandler(
 								messagesWriteTimer,
@@ -391,32 +438,8 @@ public class HttpServer {
 								selectionKey -> httpSelectorProvider.get(),
 								byteBufferPool,
 								openTelemetry,
-								byteBufferPool
-						),
-						OP_WRITE, new WriteOperationHandler(
-								messagesWriteTimer,
-								messagesWrittenCounter,
-								onError,
-								byteBufferPool,
-								openTelemetry
-						),
-						OP_READ, new DelegatingReadOperationHandler(Map.of(
-								Constants.Protocol.HTTP, new GenericReadOperationHandler<>(
-										httpRequestQueue,
-										new SocketMessageReader<>(
-												new HTTPRequestMessageReader((name, val) -> Collections.singletonList(val.toString().trim())),
-												httpRequestParseTimer
-										),
-										onError,
-										openTelemetry
-								),
-								Constants.Protocol.WEB_SOCKET, new GenericReadOperationHandler<>(
-										webSocketRequestQueue,
-										new SocketMessageReader<>(new WebSocketMessageReader(), webSocketRequestParseTimer),
-										onError,
-										openTelemetry
-								)
-						))
+								appByteBufferPool
+						)
 				));
 		server.start();
 	}

@@ -52,13 +52,7 @@ public class DocumentStorageServiceImpl extends DocumentStorageServiceGrpc.Docum
 			SubscribeForDocumentChangesRequest request,
 			StreamObserver<DocumentChangedEvents> responseObserver
 	) {
-		var traceContext = contextProvider.get();
-		var scope = traceContext.makeCurrent();
-		var serverSpan = tracer.spanBuilder("Subscribe for document changes")
-				.setSpanKind(SpanKind.SERVER)
-				.startSpan();
-
-		documentsDAO.subscribeToDocumentsChanges(request).subscribe(new ClosingTracingContextDecorator<DocumentChangedEvents>(new Subscriber<>() {
+		documentsDAO.subscribeToDocumentsChanges(request).subscribe(new Subscriber<>() {
 			Subscription subscription;
 
 			@Override
@@ -85,7 +79,7 @@ public class DocumentStorageServiceImpl extends DocumentStorageServiceGrpc.Docum
 				LOGGER.info("Completed");
 				responseObserver.onCompleted();
 			}
-		}, serverSpan, scope));
+		});
 	}
 
 	@Override

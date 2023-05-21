@@ -5,6 +5,7 @@ import static java.nio.channels.SelectionKey.OP_WRITE;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.channels.SelectionKey;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 
 import org.slf4j.Logger;
@@ -27,11 +28,11 @@ import websocket.endpoint.WebSocketEndpoint;
 public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentStreamingWebSocketEndpoint.class);
 
-	private final BlockingQueue<Event> eventsQueue;
+	private final Queue<Event> eventsQueue;
 	private final ObjectMapper objectMapper;
 
 	public DocumentStreamingWebSocketEndpoint(
-			BlockingQueue<Event> eventsQueue,
+			Queue<Event> eventsQueue,
 			ObjectMapper objectMapper
 	) {
 		this.eventsQueue = eventsQueue;
@@ -55,36 +56,15 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 				socketConnection.changeOperation(OP_WRITE);
 			}
 			case TEXT, CONTINUATION, BINARY -> {
-				LOGGER.debug("Handling message... bytes in context {}", socketConnection.getContextLength());
+//				LOGGER.debug("Handling message... bytes in context {}", socketConnection.getContextLength());
 				var payload = message.getPayload();
 				if (message.isFin()) {
-//					var totalPayloadSize = payload.length + socketConnection.getContextLength();
-					var compositeInputStream = new CompositeInputStream(
-							socketConnection.getContextInputStream(),
-							new ByteArrayInputStream(payload)
-					);
 					try {
-						int totalPayloadSize = socketConnection.getContextLength() + payload.length;
-
-						var request = objectMapper.readValue(new InputStream() {
-							private int index = 0;
-
-							@Override
-							public int read() {
-								if (index == totalPayloadSize) {
-									return -1;
-								}
-								if (index < socketConnection.getContextLength()) {
-									return socketConnection.getByteFromContext(index++) & 0xff;
-								}
-								return payload[(index++) - socketConnection.getContextLength()] & 0xff;
-							}
-
-							@Override
-							public void close() {
-
-							}
-						}, Request.class);
+						var request = objectMapper.readValue(
+								new CompositeInputStream(
+										socketConnection.getContextInputStream(),
+										new ByteArrayInputStream(payload)
+								), Request.class);
 						onMessage(socketConnection, request);
 						socketConnection.freeContext();
 					} catch (Exception e) {
@@ -98,13 +78,13 @@ public class DocumentStreamingWebSocketEndpoint implements WebSocketEndpoint {
 		}
 	}
 
-	private void onMessage(SocketConnection socketConnection, Request request) throws InterruptedException {
+	private void onMessage(SocketConnection socketConnection, Request request) {
 		if (request.type() == RequestType.CONNECT) {
-			eventsQueue.put(new NewConnectionEvent(socketConnection));
+			eventsQueue.add(new NewConnectionEvent(socketConnection));
 		} else if (request.type() == RequestType.CHANGES) {
-			eventsQueue.put(new EditEvent(request.payload()));
+			eventsQueue.add(new EditEvent(request.payload()));
 		} else if (request.type() == RequestType.PING) {
-			eventsQueue.put(new PingEvent(socketConnection));
+			eventsQueue.add(new PingEvent(socketConnection));
 		}
 	}
 }

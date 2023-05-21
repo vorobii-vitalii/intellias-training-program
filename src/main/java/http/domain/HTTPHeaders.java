@@ -36,28 +36,15 @@ public class HTTPHeaders implements Serializable {
 	 *    whitespace between a header field-name and colon with a response code
 	 *    of 400 (Bad Request).
 	 */
-	private final Map<String, List<String>> headers = new HashMap<>();
+	private final Map<String, String> headers = new HashMap<>();
 
 	public HTTPHeaders addSingleHeader(String key, String value) {
-		headers.put(key, Collections.singletonList(value.trim()));
+		headers.put(key, value.trim());
 		return this;
-	}
-
-	public HTTPHeaders addHeaders(String key, List<String> values) {
-		headers.put(key, values);
-		return this;
-	}
-
-	public List<String> getHeaderValues(String header) {
-		return headers.getOrDefault(header, Collections.emptyList());
 	}
 
 	public Optional<String> getHeaderValue(String header) {
-		List<String> headerValues = getHeaderValues(header);
-		if (headerValues.isEmpty()) {
-			return Optional.empty();
-		}
-		return Optional.of(headerValues.get(0));
+		return Optional.ofNullable(headers.get(header));
 	}
 
 	@Override
@@ -66,7 +53,7 @@ public class HTTPHeaders implements Serializable {
 		for (var entry : headers.entrySet()) {
 			count += entry.getKey().length();
 			count += COLON;
-			count += entry.getValue().get(0).length();
+			count += entry.getValue().length();
 			count += CLRF_BYTES;
 		}
 		return count;
@@ -77,7 +64,7 @@ public class HTTPHeaders implements Serializable {
 		for (var entry : headers.entrySet()) {
 			dest.put(entry.getKey().getBytes(StandardCharsets.UTF_8));
 			dest.put(COLON_BYTE);
-			dest.put(entry.getValue().get(0).getBytes(StandardCharsets.UTF_8));
+			dest.put(entry.getValue().getBytes(StandardCharsets.UTF_8));
 			dest.put(CARRIAGE_RETURN);
 			dest.put(LINE_FEED);
 		}

@@ -23,15 +23,15 @@ public class SocketMessageReader<Message> {
 			throws IOException, ParseException {
 		var startTime = System.nanoTime();
 		try {
-			do {
-				span.addEvent("Read from context");
-				var res = messageReader.read(bufferContext, span::addEvent);
-				span.addEvent("Read from context end");
-				if (res != null) {
-					bufferContext.free(res.second());
-					span.addEvent("Buffer context clear");
-					return res.first();
-				}
+			while (tryRead(readableByteChannel, bufferContext, span)) {
+			}
+			span.addEvent("Read from context");
+			var res = messageReader.read(bufferContext, span::addEvent);
+			span.addEvent("Read from context end");
+			if (res != null) {
+				bufferContext.free(res.second());
+				span.addEvent("Buffer context clear");
+				return res.first();
 			}
 			while (tryRead(readableByteChannel, bufferContext, span));
 			return null;

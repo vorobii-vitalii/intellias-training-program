@@ -28,12 +28,18 @@ import util.Serializable;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
 
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.zip.GZIPOutputStream;
 
 import static java.nio.channels.SelectionKey.OP_WRITE;
 
@@ -62,6 +68,7 @@ public class NewConnectionEventHandler implements EventHandler {
     }
 
     private void sendMessage(SocketConnection socketConnection, Serializable serializable) {
+        socketConnection.changeOperation(OP_WRITE);
         socketConnection.appendResponse(serializable);
         socketConnection.changeOperation(OP_WRITE);
     }
@@ -69,6 +76,12 @@ public class NewConnectionEventHandler implements EventHandler {
     @Override
     public EventType getHandledEventType() {
         return EventType.CONNECT;
+    }
+
+    private byte[] serialize(Object obj) throws IOException {
+        var arrayOutputStream = new ByteArrayOutputStream();
+        objectMapper.writeValue(new GZIPOutputStream(arrayOutputStream), obj);
+        return arrayOutputStream.toByteArray();
     }
 
     @Override
@@ -80,11 +93,15 @@ public class NewConnectionEventHandler implements EventHandler {
             var webSocketMessage = new WebSocketMessage();
             webSocketMessage.setFin(true);
             try {
-                webSocketMessage.setPayload(objectMapper.writeValueAsBytes(new Response(
+//                objectMapper.writeValueAsBytes(new Response(
+//                        ResponseType.ON_CONNECT,
+//                        new ConnectDocumentReply(connectionIdProvider.get())))
+
+                webSocketMessage.setPayload(serialize(new Response(
                         ResponseType.ON_CONNECT,
                         new ConnectDocumentReply(connectionIdProvider.get()))));
             }
-            catch (JsonProcessingException e) {
+            catch (IOException e) {
                 throw new RuntimeException(e);
             }
             webSocketMessage.setOpCode(OpCode.BINARY);
@@ -92,7 +109,7 @@ public class NewConnectionEventHandler implements EventHandler {
                 sendMessage(socketConnection, webSocketMessage);
             }
             catch (Exception e) {
-                return;
+                continue;
             }
             eventContext.addOrUpdateConnection(socketConnection);
             socketConnections.add(socketConnection);
@@ -123,11 +140,11 @@ public class NewConnectionEventHandler implements EventHandler {
                                                     (char) doc.getCharacter()
                                             ))
                                             .collect(Collectors.toList());
-                                    message.setPayload(objectMapper.writeValueAsBytes(new Response(
-                                            ResponseType.ADD_BULK, changes)));
-                                } catch (JsonProcessingException e) {
+                                    message.setPayload(serialize(new Response(ResponseType.ADD_BULK, changes)));
+                                } catch (IOException e) {
                                     throw new RuntimeException(e);
                                 }
+                                getDocumentSpan.addEvent("Batch serialized");
                                 message.setOpCode(OpCode.BINARY);
                                 var iterator = socketConnections.iterator();
                                 while (iterator.hasNext()) {
@@ -138,6 +155,7 @@ public class NewConnectionEventHandler implements EventHandler {
                                         iterator.remove();
                                     }
                                 }
+                                getDocumentSpan.addEvent("Batch sent");
                             }
 
                             private List<TreePathEntry> toInternalPath(com.example.document.storage.TreePath path) {

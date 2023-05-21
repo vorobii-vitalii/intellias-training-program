@@ -7,12 +7,16 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import net.jcip.annotations.NotThreadSafe;
 import tcp.server.SocketConnection;
 import util.Serializable;
 
 @NotThreadSafe
 public class EventContext {
+	private static final Logger LOGGER = LoggerFactory.getLogger(EventContext.class);
 	private final Map<SocketConnection, Instant> connectionsMap = new HashMap<>();
 	private final int maxWaitMs;
 
@@ -21,6 +25,7 @@ public class EventContext {
 	}
 
 	public void addOrUpdateConnection(SocketConnection connection) {
+		LOGGER.info("Updating connection {}", connection);
 		connectionsMap.put(connection, Instant.now());
 	}
 

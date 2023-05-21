@@ -17,6 +17,8 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.grpc.Codec;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
@@ -29,7 +31,7 @@ public class MongoDocumentsDAO implements DocumentsDAO {
     public static final String DOCUMENT_ID = "documentId";
     public static final String PATH = "path";
     public static final String VALUE = "value";
-    public static final int BATCH_SIZE = 500;
+    public static final int BATCH_SIZE = 1000;
     private static final Logger LOGGER = LoggerFactory.getLogger(MongoDocumentsDAO.class);
     public static final String DELETING = "deleting";
     private final MongoCollection<Document> collection;
