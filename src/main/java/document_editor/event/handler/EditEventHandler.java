@@ -1,8 +1,8 @@
 package document_editor.event.handler;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,12 +13,12 @@ import com.example.document.storage.ChangesResponse;
 import com.example.document.storage.DocumentStorageServiceGrpc;
 
 import document_editor.HttpServer;
-import document_editor.dto.TreePathEntry;
+import document_editor.dto.TreePathDTO;
 import document_editor.event.EditEvent;
 import document_editor.event.Event;
-import document_editor.event.context.EventContext;
 import document_editor.event.EventHandler;
 import document_editor.event.EventType;
+import document_editor.event.context.EventContext;
 import grpc.TracingContextPropagator;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Timer;
@@ -90,12 +90,12 @@ public class EditEventHandler implements EventHandler {
 				});
 	}
 
-	private com.example.document.storage.TreePath toTreePath(List<TreePathEntry> entries) {
+	private com.example.document.storage.TreePath toTreePath(TreePathDTO treePathDTO) {
 		return com.example.document.storage.TreePath.newBuilder()
-				.addAllEntries(entries.stream()
-						.map(entry -> com.example.document.storage.TreePathEntry.newBuilder()
-								.setIsLeft(entry.isLeft())
-								.setDisambiguator(entry.disambiguator())
+				.addAllEntries(IntStream.range(0, treePathDTO.directions().length)
+						.mapToObj(i -> com.example.document.storage.TreePathEntry.newBuilder()
+								.setIsLeft(treePathDTO.directions()[i])
+								.setDisambiguator(treePathDTO.disambiguators()[i])
 								.build())
 						.collect(Collectors.toList()))
 				.build();

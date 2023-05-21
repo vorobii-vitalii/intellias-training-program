@@ -4,7 +4,7 @@ import {randomString, randomIntBetween} from 'https://jslib.k6.io/k6-utils/1.2.0
 import msgpack from 'https://cdnjs.cloudflare.com/ajax/libs/msgpack-lite/0.1.26/msgpack.min.js';
 import {SharedArray} from 'k6/data';
 
-const VIRTUAL_USERS = 1000;
+const VIRTUAL_USERS = 2000;
 const CHANGES_PER_USER = 1;
 
 export let options = {
@@ -13,47 +13,45 @@ export let options = {
     discardResponseBodies: true,
 }
 const comparePath = (a, b) => {
-    const m = Math.min(a.length, b.length);
+    const aLength = a.directions.length;
+    const bLength = b.directions.length;
+    const m = Math.min(aLength, bLength);
     for (let i = 0; i < m; i++) {
-        if (a[i].disambiguator && b[i].disambiguator) {
-            if (a[i].isLeft !== b[i].isLeft) {
-                return a[i].isLeft ? 1 : -1;
-            }
-            if (a[i].disambiguator !== b[i].disambiguator) {
-                return a[i].disambiguator < b[i].disambiguator ? -1 : 1;
-            }
-        } else if (!a[i].disambiguator && !b[i].disambiguator) {
-            if (a[i].isLeft !== b[i].isLeft) {
-                return a[i].isLeft ? 1 : -1;
-            }
-        } else if (a[i].disambiguator) {
-            return b[i].isLeft ? -1 : 1;
-        } else {
-            return a[i].isLeft ? 1 : -1;
+        if (a.directions[i] !== b.directions[i]) {
+            return a.directions[i] ? 1 : -1;
+        }
+        if (a.disambiguators[i]  !== b.disambiguators[i] ) {
+            return a.disambiguators[i] < b.disambiguators[i] ? -1 : 1;
         }
     }
-    if (a.length === b.length) {
+    if (aLength === bLength) {
         return 0;
     }
-    if (a.length === m) {
-        return b[m].isLeft ? -1 : 1;
+    if (aLength === m) {
+        return b.disambiguators[m] ? -1 : 1;
     }
-    return a[m].isLeft ? 1 : -1;
+    return a.disambiguators[m] ? 1 : -1;
 };
 
 const generateData = () => {
     let events = [];
     for (let k = 0; k < VIRTUAL_USERS * CHANGES_PER_USER; k++) {
-        const path = [];
+        const directions = [];
+        const disambiguators = [];
         const pathLength = randomIntBetween(1, 20);
         for (let i = 0; i < pathLength; i++) {
             const a = randomIntBetween(1, 3) == 2;
             const b = randomIntBetween(1, 1000);
-            path.splice(path.length, 0, {isLeft: a, disambiguator: b});
+            directions.splice(directions.length, 0, a);
+            disambiguators.splice(disambiguators.length, 0, b);
         }
-        path.splice(path.length, 0, {isLeft: 0, disambiguator: k});
+        directions.splice(directions.length, 0, false);
+        disambiguators.splice(disambiguators.length, 0, k);
         events.splice(events.length, 0, {
-            treePath: path,
+            treePath: {
+                directions: directions,
+                disambiguators: disambiguators
+            },
             character: randomString(1).charAt(0)
         });
     }

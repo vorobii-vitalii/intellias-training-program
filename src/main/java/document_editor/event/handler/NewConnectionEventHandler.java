@@ -1,8 +1,21 @@
 package document_editor.event.handler;
 
+import static java.nio.channels.SelectionKey.OP_WRITE;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.zip.GZIPOutputStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.example.document.storage.FetchDocumentContentRequest;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import document_editor.HttpServer;
@@ -10,15 +23,15 @@ import document_editor.dto.Change;
 import document_editor.dto.ConnectDocumentReply;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import document_editor.dto.TreePathEntry;
-import document_editor.event.*;
+import document_editor.dto.TreePathDTO;
+import document_editor.event.Event;
+import document_editor.event.EventHandler;
+import document_editor.event.EventType;
+import document_editor.event.NewConnectionEvent;
 import document_editor.event.context.EventContext;
 import grpc.TracingContextPropagator;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Timer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
@@ -27,21 +40,6 @@ import tcp.server.SocketConnection;
 import util.Serializable;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
-
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.zip.GZIPOutputStream;
-
-import static java.nio.channels.SelectionKey.OP_WRITE;
 
 public class NewConnectionEventHandler implements EventHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(NewConnectionEventHandler.class);
@@ -158,13 +156,24 @@ public class NewConnectionEventHandler implements EventHandler {
                                 getDocumentSpan.addEvent("Batch sent");
                             }
 
-                            private List<TreePathEntry> toInternalPath(com.example.document.storage.TreePath path) {
-                                return path.getEntriesList().stream()
-                                        .map(entry -> new TreePathEntry(
-                                                entry.getIsLeft(),
-                                                entry.getDisambiguator()
-                                        ))
-                                        .collect(Collectors.toList());
+                            private TreePathDTO toInternalPath(com.example.document.storage.TreePath path) {
+                                var entries = path.getEntriesList();
+                                var n = entries.size();
+                                var directions = new boolean[n];
+                                var disambiguators = new int[n];
+                                for (var i = 0; i < n; i++) {
+                                    var entry = entries.get(i);
+                                    directions[i] = entry.getIsLeft();
+                                    disambiguators[i] = entry.getDisambiguator();
+                                }
+                                return new TreePathDTO(directions, disambiguators);
+
+//                                return entries.stream()
+//                                        .map(entry -> new TreePathEntry(
+//                                                entry.getIsLeft(),
+//                                                entry.getDisambiguator()
+//                                        ))
+//                                        .collect(Collectors.toList());
                             }
 
                             @Override

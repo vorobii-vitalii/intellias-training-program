@@ -25,55 +25,79 @@
 
 <script>
   const comparePath = (a, b) => {
-    const m = Math.min(a.length, b.length);
+    const aLength = a.directions.length;
+    const bLength = b.directions.length;
+    const m = Math.min(aLength, bLength);
     for (let i = 0; i < m; i++) {
-      if (a[i].disambiguator && b[i].disambiguator) {
-        if (a[i].isLeft !== b[i].isLeft) {
-          return a[i].isLeft ? 1 : -1;
-        }
-        if (a[i].disambiguator !== b[i].disambiguator) {
-          return a[i].disambiguator < b[i].disambiguator ? -1 : 1;
-        }
-      } else if (!a[i].disambiguator && !b[i].disambiguator) {
-        if (a[i].isLeft !== b[i].isLeft) {
-          return a[i].isLeft ? 1 : -1;
-        }
-      } else if (a[i].disambiguator) {
-        return b[i].isLeft ? -1 : 1;
-      } else {
-        return a[i].isLeft ? 1 : -1;
+      if (a.directions[i] !== b.directions[i]) {
+        return a.directions[i] ? 1 : -1;
+      }
+      if (a.disambiguators[i]  !== b.disambiguators[i] ) {
+        return a.disambiguators[i] < b.disambiguators[i] ? -1 : 1;
       }
     }
-    if (a.length === b.length) {
+    if (aLength === bLength) {
       return 0;
     }
-    if (a.length === m) {
-      return b[m].isLeft ? -1 : 1;
+    if (aLength === m) {
+      return b.disambiguators[m] ? -1 : 1;
     }
-    return a[m].isLeft ? 1 : -1;
+    return a.disambiguators[m] ? 1 : -1;
   };
 
   const createPair = (left, right, c) => {
     if (!left && !right) {
-      return { treePath: [{ isLeft: false, disambiguator: connectionId }], character: c };
+      return {
+        treePath: {
+          directions: [false],
+          disambiguators: [connectionId]
+        },
+        character: c
+      };
     }
     if (!left) {
-      return { treePath: [...right.treePath, { isLeft: false, disambiguator: connectionId }], character: c };
+      return {
+        treePath: {
+          directions: [...right.treePath.directions, false],
+          disambiguators: [...right.treePath.disambiguators, connectionId]
+        },
+        character: c
+      };
     } else if (!right) {
-      return { treePath: [...left.treePath, { isLeft: true, disambiguator: connectionId }], character: c };
+      return {
+        treePath: {
+          directions: [...left.treePath.directions, true],
+          disambiguators: [...left.treePath.disambiguators, connectionId]
+        },
+        character: c
+      };
     }
     if (isAncestor(left.treePath, right.treePath)) {
-      return { treePath: [...right.treePath, { isLeft: false, disambiguator: connectionId }], character: c };
+      return {
+        treePath: {
+          directions: [...right.treePath.directions, false],
+          disambiguators: [...right.treePath.disambiguators, connectionId]
+        },
+        character: c
+      };
     }
-    return { treePath: [...left.treePath, { isLeft: true, disambiguator: connectionId }], character: c };
+    return {
+      treePath: {
+        directions: [...left.treePath.directions, true],
+        disambiguators: [...left.treePath.disambiguators, connectionId]
+      },
+      character: c
+    };
   };
 
   const isAncestor = (a, b) => {
-    if (b.length < a.length) {
+    const aLength = a.directions.length;
+    const bLength = b.directions.length;
+    if (bLength < aLength) {
       return false;
     }
-    for (let i = 0; i < a.length; i++) {
-      if (a[i].isLeft !== b[i].isLeft || a[i].disambiguator !== b[i].disambiguator) {
+    for (let i = 0; i < aLength; i++) {
+      if (a.directions[i] !== b.directions[i] || a.disambiguators[i] !== b.disambiguators[i]) {
         return false;
       }
     }

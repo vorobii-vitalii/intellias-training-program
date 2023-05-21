@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import document_editor.dto.Change;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import document_editor.dto.TreePathEntry;
+import document_editor.dto.TreePathDTO;
 import document_editor.event.Event;
 import document_editor.event.MessageDistributeEvent;
 import grpc.TracingContextPropagator;
@@ -142,12 +142,23 @@ public class DocumentChangeWatcher implements Runnable {
 		}
 	}
 
-	private List<TreePathEntry> toInternalPath(TreePath path) {
-		return path.getEntriesList().stream()
-				.map(entry -> new TreePathEntry(
-						entry.getIsLeft(),
-						entry.getDisambiguator()
-				))
-				.collect(Collectors.toList());
+	private TreePathDTO toInternalPath(com.example.document.storage.TreePath path) {
+		var entries = path.getEntriesList();
+		var n = entries.size();
+		var directions = new boolean[n];
+		var disambiguators = new int[n];
+		for (var i = 0; i < n; i++) {
+			var entry = entries.get(i);
+			directions[i] = entry.getIsLeft();
+			disambiguators[i] = entry.getDisambiguator();
+		}
+		return new TreePathDTO(directions, disambiguators);
+
+		//                                return entries.stream()
+		//                                        .map(entry -> new TreePathEntry(
+		//                                                entry.getIsLeft(),
+		//                                                entry.getDisambiguator()
+		//                                        ))
+		//                                        .collect(Collectors.toList());
 	}
 }
