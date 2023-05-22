@@ -9,7 +9,7 @@ const CHANGES_PER_USER = 1;
 
 export let options = {
     iterations: VIRTUAL_USERS,
-    vus: VIRTUAL_USERS,
+    vus: 100,
     discardResponseBodies: true,
 }
 const comparePath = (a, b) => {
@@ -38,7 +38,7 @@ const generateData = () => {
     for (let k = 0; k < VIRTUAL_USERS * CHANGES_PER_USER; k++) {
         const directions = [];
         const disambiguators = [];
-        const pathLength = randomIntBetween(1, 20);
+        const pathLength = randomIntBetween(1, 300);
         for (let i = 0; i < pathLength; i++) {
             const a = randomIntBetween(1, 3) == 2;
             const b = randomIntBetween(1, 1000);

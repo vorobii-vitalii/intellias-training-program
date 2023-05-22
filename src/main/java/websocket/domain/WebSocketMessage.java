@@ -98,40 +98,6 @@ public class WebSocketMessage implements Serializable {
 		dest.put(payload);
 	}
 
-	@Override
-	public byte[] serialize() {
-		byte firstByte = 0;
-		byte secondByte = 0;
-		byte[] payloadLengthBytes = new byte[]{};
-		firstByte |= (isFin ? 1 : 0) << 7;
-		firstByte |= opCode.getCode();
-		secondByte |= (maskingKey != null ? 1 : 0) << 7;
-		if (payload.length <= 125) {
-			secondByte |= payload.length;
-		}
-		else if (payload.length <= TWO_POW_16 - 1) {
-			secondByte |= 126;
-			payloadLengthBytes = pad(BigInteger.valueOf(payload.length).toByteArray(), 2);
-		}
-		else {
-			secondByte |= 127;
-			payloadLengthBytes = pad(BigInteger.valueOf(payload.length).toByteArray(), 8);
-		}
-		byte[] arr = merge(
-						new byte[]{firstByte, secondByte},
-						payloadLengthBytes,
-						maskingKey,
-						payload
-		);
-		if (maskingKey != null) {
-			int payloadPos = getTotal(payloadLengthBytes, maskingKey) + 2;
-			for (int i = 0; i < payload.length; i++) {
-				arr[payloadPos + i] = (byte) (arr[payloadPos + i] ^ maskingKey[i % maskingKey.length]);
-			}
-		}
-		return arr;
-	}
-
 	private byte[] pad(byte[] arr, int k) {
 		byte[] res = new byte[k];
 		for (int i = 0; i < arr.length; i++) {
@@ -150,19 +116,6 @@ public class WebSocketMessage implements Serializable {
 			}
 		}
 		return totalSize;
-	}
-
-	private byte[] merge(byte[]... byteArrays) {
-		var totalSize = getTotal(byteArrays);
-		var mergedArr = new byte[totalSize];
-		var current = 0;
-		for (var byteArray : byteArrays) {
-			if (byteArray != null) {
-				System.arraycopy(byteArray, 0, mergedArr, current, byteArray.length);
-				current += byteArray.length;
-			}
-		}
-		return mergedArr;
 	}
 
 	@Override

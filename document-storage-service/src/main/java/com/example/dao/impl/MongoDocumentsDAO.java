@@ -1,15 +1,10 @@
 package com.example.dao.impl;
 
-import com.example.dao.DocumentsDAO;
-import com.example.document.storage.*;
-import com.google.protobuf.InvalidProtocolBufferException;
-import com.mongodb.bulk.BulkWriteResult;
-import com.mongodb.client.model.*;
-import com.mongodb.client.model.changestream.ChangeStreamDocument;
-import com.mongodb.client.model.changestream.FullDocument;
-import com.mongodb.client.result.InsertManyResult;
-import com.mongodb.reactivestreams.client.ChangeStreamPublisher;
-import com.mongodb.reactivestreams.client.MongoCollection;
+import java.time.Duration;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
 import org.bson.BsonDocument;
 import org.bson.Document;
 import org.reactivestreams.Publisher;
@@ -18,20 +13,33 @@ import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.grpc.Codec;
-import reactor.core.publisher.Flux;
+import com.example.dao.DocumentsDAO;
+import com.example.document.storage.Change;
+import com.example.document.storage.ChangesRequest;
+import com.example.document.storage.DocumentChangedEvent;
+import com.example.document.storage.DocumentChangedEvents;
+import com.example.document.storage.DocumentElement;
+import com.example.document.storage.DocumentElements;
+import com.example.document.storage.SubscribeForDocumentChangesRequest;
+import com.mongodb.bulk.BulkWriteResult;
+import com.mongodb.client.model.BulkWriteOptions;
+import com.mongodb.client.model.DeleteManyModel;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.UpdateManyModel;
+import com.mongodb.client.model.WriteModel;
+import com.mongodb.client.model.changestream.ChangeStreamDocument;
+import com.mongodb.client.model.changestream.FullDocument;
+import com.mongodb.client.result.InsertManyResult;
+import com.mongodb.reactivestreams.client.MongoCollection;
 
-import java.time.Duration;
-import java.util.Base64;
-import java.util.List;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
+import reactor.core.publisher.Flux;
 
 public class MongoDocumentsDAO implements DocumentsDAO {
     public static final String DOCUMENT_ID = "documentId";
-    public static final String PATH = "path";
+    public static final String DIRECTIONS = "directions";
+    private static final String DISAMBIGUATORS = "disambiguators";
     public static final String VALUE = "value";
-    public static final int BATCH_SIZE = 1000;
+    public static final int BATCH_SIZE = 5000;
     private static final Logger LOGGER = LoggerFactory.getLogger(MongoDocumentsDAO.class);
     public static final String DELETING = "deleting";
     private final MongoCollection<Document> collection;
@@ -56,22 +64,19 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                                 Filters.eq(DOCUMENT_ID, documentId),
                                 Filters.not(Filters.exists("deleting"))
                         ))
-                        .projection(new Document().append(PATH, 1).append(VALUE, 1)))
+                        .projection(new Document().append(DIRECTIONS, 1).append(DISAMBIGUATORS, 1).append(VALUE, 1)))
                 .buffer(BATCH_SIZE)
                 .map(documents ->
                         DocumentElements.newBuilder()
                                 .addAllDocumentElements(documents.stream()
                                         .map(document ->
                                                 DocumentElement.newBuilder()
-                                                        .setPath(extractPath(document))
                                                         .setCharacter(document.getInteger(VALUE))
+                                                        .addAllDirections(document.getList(DIRECTIONS, Boolean.class))
+                                                        .addAllDisambiguators(document.getList(DISAMBIGUATORS, Integer.class))
                                                         .build())
                                         .collect(Collectors.toList()))
                                 .build());
-    }
-
-    private TreePath extractPath(Document document) {
-        return fromString(Base64.getDecoder().decode(document.getString(PATH)));
     }
 
     @Override
@@ -85,7 +90,8 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                                     var fullDocument = doc.getFullDocument();
                                     var changeBuilder = Change.newBuilder()
                                             .setDocumentId(fullDocument.getInteger(DOCUMENT_ID))
-                                            .setPath(extractPath(fullDocument));
+                                            .addAllDirections(fullDocument.getList(DIRECTIONS, Boolean.class))
+                                            .addAllDisambiguators(fullDocument.getList(DISAMBIGUATORS, Integer.class));
                                     if (!fullDocument.containsKey(DELETING)) {
                                         changeBuilder.setCharacter(fullDocument.getInteger(VALUE));
                                     }
@@ -113,7 +119,8 @@ public class MongoDocumentsDAO implements DocumentsDAO {
         var filters = deletes.stream()
                 .map(delete -> Filters.and(
                         Filters.eq(DOCUMENT_ID, delete.getDocumentId()),
-                        Filters.eq(PATH, toString(delete.getPath()))))
+                        Filters.eq(DIRECTIONS, delete.getDirectionsList()),
+                        Filters.eq(DISAMBIGUATORS, delete.getDisambiguatorsList())))
                 .toList();
         var filter = Filters.or(filters);
         List<WriteModel<Document>> aggregationPipeline = List.of(
@@ -146,13 +153,11 @@ public class MongoDocumentsDAO implements DocumentsDAO {
 
     private void doInserts(List<Change> inserts) {
         var documentsToInsert = inserts.stream()
-                .map(c -> {
-                    return new Document()
-                            .append(DOCUMENT_ID, c.getDocumentId())
-                            .append(PATH, toString(c.getPath()))
-                            .append(VALUE, c.getCharacter());
-
-                })
+                .map(c -> new Document()
+                        .append(DOCUMENT_ID, c.getDocumentId())
+                        .append(DIRECTIONS, c.getDirectionsList())
+                        .append(DISAMBIGUATORS, c.getDisambiguatorsList())
+                        .append(VALUE, c.getCharacter()))
                 .collect(Collectors.toList());
         collection.insertMany(documentsToInsert)
                 .subscribe(new Subscriber<>() {
@@ -183,17 +188,5 @@ public class MongoDocumentsDAO implements DocumentsDAO {
             return;
         }
         consumer.accept(list);
-    }
-
-    private TreePath fromString(byte[] bytes) {
-        try {
-            return TreePath.parseFrom(bytes);
-        } catch (InvalidProtocolBufferException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private String toString(TreePath path) {
-        return Base64.getEncoder().encodeToString(path.toByteArray());
     }
 }

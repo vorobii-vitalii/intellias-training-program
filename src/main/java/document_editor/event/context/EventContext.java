@@ -25,7 +25,6 @@ public class EventContext {
 	}
 
 	public void addOrUpdateConnection(SocketConnection connection) {
-		LOGGER.info("Updating connection {}", connection);
 		connectionsMap.put(connection, Instant.now());
 	}
 
@@ -43,7 +42,7 @@ public class EventContext {
 	}
 
 	public void removeDisconnectedClients() {
-		Set<SocketConnection> connectionsToRemove = new HashSet<>();
+		var connectionsToRemove = new HashSet<SocketConnection>();
 		for (var entry : connectionsMap.entrySet()) {
 			if (!isConnected(entry.getValue())) {
 				try {
@@ -52,7 +51,7 @@ public class EventContext {
 					connectionsToRemove.add(connection);
 				}
 				catch (Exception error) {
-
+					error.printStackTrace();
 				}
 			}
 		}

@@ -73,17 +73,6 @@ public class HTTPHeaders implements Serializable {
 	}
 
 	@Override
-	public byte[] serialize() {
-		return (this.headers.entrySet().stream()
-						.map(e -> {
-							String value = String.join(" ", e.getValue());
-							String key = e.getKey();
-							return key + ":" + value;
-						})
-						.collect(Collectors.joining("\r\n", "", "\r\n\r\n"))).getBytes(StandardCharsets.US_ASCII);
-	}
-
-	@Override
 	public String toString() {
 		return "HTTPHeaders{" + "headers=" + headers + '}';
 	}

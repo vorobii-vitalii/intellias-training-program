@@ -4,7 +4,6 @@ import java.util.Collection;
 
 import document_editor.event.Event;
 import document_editor.event.context.EventContext;
-import document_editor.event.EventHandler;
 import document_editor.event.EventType;
 import document_editor.event.MessageDistributeEvent;
 
@@ -17,7 +16,7 @@ public class MessageDistributeEventHandler implements EventHandler {
 
 	@Override
 	public void handle(Collection<Event> events, EventContext eventContext) {
-		for (Event event : events) {
+		for (var event : events) {
 			try {
 				eventContext.broadCastMessage(((MessageDistributeEvent) event).message());
 			}

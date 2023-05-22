@@ -2,7 +2,6 @@ package document_editor.event.handler;
 
 import java.util.Collection;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,10 +12,8 @@ import com.example.document.storage.ChangesResponse;
 import com.example.document.storage.DocumentStorageServiceGrpc;
 
 import document_editor.HttpServer;
-import document_editor.dto.TreePathDTO;
 import document_editor.event.EditEvent;
 import document_editor.event.Event;
-import document_editor.event.EventHandler;
 import document_editor.event.EventType;
 import document_editor.event.context.EventContext;
 import grpc.TracingContextPropagator;
@@ -55,7 +52,8 @@ public class EditEventHandler implements EventHandler {
 				.map(c -> {
 					var builder = Change.newBuilder()
 							.setDocumentId(HttpServer.DOCUMENT_ID)
-							.setPath(toTreePath(c.treePath()));
+							.addAllDirections(c.treePath().directions())
+							.addAllDisambiguators(c.treePath().disambiguators());
 					if (c.character() != null) {
 						builder.setCharacter(c.character());
 					}
@@ -88,17 +86,6 @@ public class EditEventHandler implements EventHandler {
 						scope.close();
 					}
 				});
-	}
-
-	private com.example.document.storage.TreePath toTreePath(TreePathDTO treePathDTO) {
-		return com.example.document.storage.TreePath.newBuilder()
-				.addAllEntries(IntStream.range(0, treePathDTO.directions().length)
-						.mapToObj(i -> com.example.document.storage.TreePathEntry.newBuilder()
-								.setIsLeft(treePathDTO.directions()[i])
-								.setDisambiguator(treePathDTO.disambiguators()[i])
-								.build())
-						.collect(Collectors.toList()))
-				.build();
 	}
 
 }

@@ -14,6 +14,7 @@ import java.util.zip.GZIPOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.example.document.storage.DocumentElement;
 import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.example.document.storage.FetchDocumentContentRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +26,6 @@ import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
 import document_editor.dto.TreePathDTO;
 import document_editor.event.Event;
-import document_editor.event.EventHandler;
 import document_editor.event.EventType;
 import document_editor.event.NewConnectionEvent;
 import document_editor.event.context.EventContext;
@@ -91,10 +91,6 @@ public class NewConnectionEventHandler implements EventHandler {
             var webSocketMessage = new WebSocketMessage();
             webSocketMessage.setFin(true);
             try {
-//                objectMapper.writeValueAsBytes(new Response(
-//                        ResponseType.ON_CONNECT,
-//                        new ConnectDocumentReply(connectionIdProvider.get())))
-
                 webSocketMessage.setPayload(serialize(new Response(
                         ResponseType.ON_CONNECT,
                         new ConnectDocumentReply(connectionIdProvider.get()))));
@@ -134,7 +130,7 @@ public class NewConnectionEventHandler implements EventHandler {
                                     var changes = documentElements.getDocumentElementsList()
                                             .stream()
                                             .map(doc -> new Change(
-                                                    toInternalPath(doc.getPath()),
+                                                    toInternalPath(doc),
                                                     (char) doc.getCharacter()
                                             ))
                                             .collect(Collectors.toList());
@@ -156,24 +152,8 @@ public class NewConnectionEventHandler implements EventHandler {
                                 getDocumentSpan.addEvent("Batch sent");
                             }
 
-                            private TreePathDTO toInternalPath(com.example.document.storage.TreePath path) {
-                                var entries = path.getEntriesList();
-                                var n = entries.size();
-                                var directions = new boolean[n];
-                                var disambiguators = new int[n];
-                                for (var i = 0; i < n; i++) {
-                                    var entry = entries.get(i);
-                                    directions[i] = entry.getIsLeft();
-                                    disambiguators[i] = entry.getDisambiguator();
-                                }
-                                return new TreePathDTO(directions, disambiguators);
-
-//                                return entries.stream()
-//                                        .map(entry -> new TreePathEntry(
-//                                                entry.getIsLeft(),
-//                                                entry.getDisambiguator()
-//                                        ))
-//                                        .collect(Collectors.toList());
+                            private TreePathDTO toInternalPath(DocumentElement path) {
+                                return new TreePathDTO(path.getDirectionsList(), path.getDisambiguatorsList());
                             }
 
                             @Override

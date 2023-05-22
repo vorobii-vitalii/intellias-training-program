@@ -49,8 +49,4 @@ public record HTTPVersion(int majorVersion, int minorVersion) implements Seriali
 		return HTTP_PREFIX + majorVersion + "." + minorVersion;
 	}
 
-	@Override
-	public byte[] serialize() {
-		return this.toString().getBytes(StandardCharsets.UTF_8);
-	}
 }

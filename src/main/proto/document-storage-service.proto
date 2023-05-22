@@ -6,24 +6,17 @@ option java_outer_classname = "DocumentStorage";
 
 package document_storage;
 
-message TreePathEntry {
-  bool isLeft = 1;
-  int32 disambiguator = 2;
-}
-
-message TreePath {
-  repeated TreePathEntry entries = 1;
-}
-
 message Change {
-  TreePath path = 1;
-  int32 documentId = 2;
+  repeated bool directions = 1 [packed=true];
+  repeated int32 disambiguators = 2 [packed=true];
+  int32 documentId = 3;
   // Not provided on deletion, provided on insertion
-  optional int32 character = 3;
+  optional int32 character = 4;
 }
 
 message DocumentElement {
-  TreePath path = 1;
+  repeated bool directions = 1 [packed=true];
+  repeated int32 disambiguators = 2 [packed=true];
   int32 character = 3;
 }
 

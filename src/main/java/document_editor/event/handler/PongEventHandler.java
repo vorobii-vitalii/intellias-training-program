@@ -8,13 +8,11 @@ import java.util.zip.GZIPOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
 import document_editor.event.Event;
-import document_editor.event.EventHandler;
 import document_editor.event.EventType;
 import document_editor.event.context.EventContext;
 import websocket.domain.OpCode;
@@ -47,7 +45,6 @@ public class PongEventHandler implements EventHandler {
 	@Override
 	public void handle(Collection<Event> events, EventContext eventContext) {
 		try {
-//			LOGGER.info("Sending PONG to clients");
 			eventContext.removeDisconnectedClients();
 			var webSocketMessage = new WebSocketMessage();
 			webSocketMessage.setFin(true);

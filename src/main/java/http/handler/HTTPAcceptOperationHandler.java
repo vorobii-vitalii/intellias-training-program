@@ -60,7 +60,6 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 			if (socketChannel == null) {
 				return;
 			}
-			socketChannel.socket().setSoTimeout(1);
 			requestSpan.addEvent("Connection accepted");
 			if (LOGGER.isDebugEnabled()) {
 				LOGGER.debug("Accepted new connection {}", socketChannel);

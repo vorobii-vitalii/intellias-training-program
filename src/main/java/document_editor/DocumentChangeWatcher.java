@@ -2,9 +2,7 @@ package document_editor;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPOutputStream;
@@ -15,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import com.example.document.storage.DocumentChangedEvents;
 import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.example.document.storage.SubscribeForDocumentChangesRequest;
-import com.example.document.storage.TreePath;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import document_editor.dto.Change;
@@ -128,7 +125,7 @@ public class DocumentChangeWatcher implements Runnable {
 							.map(e -> {
 								var change = e.getChange();
 								return new Change(
-										toInternalPath(change.getPath()),
+										toInternalPath(change),
 										change.hasCharacter() ? ((char) change.getCharacter()) : null
 								);
 							})
@@ -142,23 +139,7 @@ public class DocumentChangeWatcher implements Runnable {
 		}
 	}
 
-	private TreePathDTO toInternalPath(com.example.document.storage.TreePath path) {
-		var entries = path.getEntriesList();
-		var n = entries.size();
-		var directions = new boolean[n];
-		var disambiguators = new int[n];
-		for (var i = 0; i < n; i++) {
-			var entry = entries.get(i);
-			directions[i] = entry.getIsLeft();
-			disambiguators[i] = entry.getDisambiguator();
-		}
-		return new TreePathDTO(directions, disambiguators);
-
-		//                                return entries.stream()
-		//                                        .map(entry -> new TreePathEntry(
-		//                                                entry.getIsLeft(),
-		//                                                entry.getDisambiguator()
-		//                                        ))
-		//                                        .collect(Collectors.toList());
+	private TreePathDTO toInternalPath(com.example.document.storage.Change event) {
+		return new TreePathDTO(event.getDirectionsList(), event.getDisambiguatorsList());
 	}
 }

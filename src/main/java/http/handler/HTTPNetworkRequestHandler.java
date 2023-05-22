@@ -34,7 +34,7 @@ import util.UnsafeConsumer;
 
 public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequest> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HTTPNetworkRequestHandler.class);
-	private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+	private final ExecutorService executorService = Executors.newFixedThreadPool(4);
 	private final List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies;
 	private final Collection<HTTPResponsePostProcessor> httpResponsePostProcessor;
 	private final Tracer httpRequestHandlerTracer;

@@ -1,4 +1,6 @@
 package document_editor.dto;
 
-public record TreePathDTO(boolean[] directions, int[] disambiguators) {
+import java.util.List;
+
+public record TreePathDTO(List<Boolean> directions, List<Integer> disambiguators) {
 }

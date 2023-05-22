@@ -116,7 +116,7 @@ public class HttpServer {
 	public static final String PROMETHEUS_ENDPOINT = "/prometheus";
 	public static final int MAX_TOKENS_WRITE = 1000;
 	public static final int MAX_TOKENS_READ = 10;
-	public static final int SELECTION_TIMEOUT = 1;
+	public static final int SELECTION_TIMEOUT = 100;
 	public static final int DOCUMENT_ID = 13;
 	private static final AtomicInteger atomicInteger = new AtomicInteger(1);
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServer.class);
@@ -281,8 +281,8 @@ public class HttpServer {
 
 		Set<TokenBucket<SocketAddress>> tokenBuckets = Collections.synchronizedSet(new HashSet<>());
 
-		Selector[] wsSelectors = createSelectors(8);
-		Selector[] httpSelectors = createSelectors(8);
+		Selector[] wsSelectors = createSelectors(4);
+		Selector[] httpSelectors = createSelectors(4);
 
 		RoundRobinProvider<Selector> webSocketSelectorProvider = new RoundRobinProvider<>(wsSelectors);
 
@@ -305,16 +305,9 @@ public class HttpServer {
 		);
 		var webSocketNetworkRequestHandler = new WebSocketNetworkRequestHandler(webSocketEndpointProvider);
 
-		final RingBuffer<NetworkRequest<HTTPRequest>> httpRing = createNetworkDisruptor(httpRequestHandler);
-		final RingBuffer<NetworkRequest<WebSocketMessage>> wsRing = createNetworkDisruptor(webSocketNetworkRequestHandler);
+		var httpRing = createNetworkDisruptor(httpRequestHandler);
+		var wsRing = createNetworkDisruptor(webSocketNetworkRequestHandler);
 
-		//		var httpRequestProcessor = new NetworkRequestProcessor<>(httpRequestQueue, httpRequestHandler, httpRequestProcessingTimer, httpRequestsCount);
-//		var webSocketRequestProcessor = new NetworkRequestProcessor<>(
-//				webSocketRequestQueue,
-//				webSocketNetworkRequestHandler,
-//				webSocketRequestProcessingTimer,
-//				webSocketRequestsCount
-//		);
 		var eventContext = new EventContext(MAX_WAIT_FOR_PING_MS);
 
 		var documentStorageServiceChannel =
@@ -324,12 +317,9 @@ public class HttpServer {
 						.maxInboundMessageSize(Integer.MAX_VALUE)
 						.build();
 
-		DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService =
-				DocumentStorageServiceGrpc.newStub(documentStorageServiceChannel);
+		var documentStorageService = DocumentStorageServiceGrpc.newStub(documentStorageServiceChannel);
 
 		//		refillExecutor.scheduleWithFixedDelay(new RefillProcess<>(tokenBuckets), 1, 1, SECONDS);
-
-//		startProcess(httpRequestProcessor, "HTTP Request processor");
 
 		schedulePeriodically(2000, new FillQueueProcess<>(eventsQueue, new SendPongsEvent()));
 		schedulePeriodically(500, new DocumentMessageEventsHandler(eventsQueue, eventContext, List.of(
@@ -350,13 +340,13 @@ public class HttpServer {
 
 		Consumer<SelectionKey> closeConnection = selectionKey -> {
 			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());
-			LOGGER.debug("Closing connection {}", socketConnection);
+//			LOGGER.debug("Closing connection {}", socketConnection);
 			socketConnection.close();
 		};
 
 		BiConsumer<SelectionKey, Throwable> onError = (selectionKey, throwable) -> {
 			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());
-			LOGGER.info("Closing connection {} because of error", socketConnection, throwable);
+//			LOGGER.info("Closing connection {} because of error", socketConnection, throwable);
 			socketConnection.close();
 		};
 

@@ -14,7 +14,7 @@ import org.slf4j.Logger;
 
 import document_editor.event.Event;
 import document_editor.event.context.EventContext;
-import document_editor.event.EventHandler;
+import document_editor.event.handler.EventHandler;
 import document_editor.event.EventType;
 
 public class DocumentMessageEventsHandler implements Runnable {
