@@ -6,7 +6,7 @@ import document_editor.event.Event;
 import document_editor.event.EventType;
 import document_editor.event.context.EventContext;
 
-public interface EventHandler {
-	EventType getHandledEventType();
-	void handle(Collection<Event> events, EventContext eventContext);
+public interface EventHandler<E extends Event> {
+	EventType<E> getHandledEventType();
+	void handle(Collection<E> events, EventContext eventContext);
 }

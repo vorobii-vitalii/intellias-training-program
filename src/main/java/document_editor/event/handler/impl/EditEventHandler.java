@@ -1,4 +1,4 @@
-package document_editor.event.handler;
+package document_editor.event.handler.impl;
 
 import java.util.Collection;
 import java.util.stream.Collectors;
@@ -13,9 +13,9 @@ import com.example.document.storage.DocumentStorageServiceGrpc;
 
 import document_editor.HttpServer;
 import document_editor.event.EditEvent;
-import document_editor.event.Event;
 import document_editor.event.EventType;
 import document_editor.event.context.EventContext;
+import document_editor.event.handler.EventHandler;
 import grpc.TracingContextPropagator;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Timer;
@@ -24,7 +24,7 @@ import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 
-public class EditEventHandler implements EventHandler {
+public class EditEventHandler implements EventHandler<EditEvent> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(EditEventHandler.class);
 
 	private final DocumentStorageServiceGrpc.DocumentStorageServiceStub service;
@@ -40,14 +40,13 @@ public class EditEventHandler implements EventHandler {
 	}
 
 	@Override
-	public EventType getHandledEventType() {
+	public EventType<EditEvent> getHandledEventType() {
 		return EventType.EDIT;
 	}
 
 	@Override
-	public void handle(Collection<Event> events, EventContext eventContext) {
+	public void handle(Collection<EditEvent> events, EventContext eventContext) {
 		var changes = events.stream()
-				.map(event -> (EditEvent) event)
 				.flatMap(event -> event.changes().stream())
 				.map(c -> {
 					var builder = Change.newBuilder()

@@ -1,4 +1,4 @@
-package document_editor.event.handler;
+package document_editor.event.handler.impl;
 
 import java.util.Collection;
 
@@ -6,17 +6,17 @@ import document_editor.event.Event;
 import document_editor.event.EventType;
 import document_editor.event.PingEvent;
 import document_editor.event.context.EventContext;
+import document_editor.event.handler.EventHandler;
 
-public class PingEventHandler implements EventHandler {
+public class PingEventHandler implements EventHandler<PingEvent> {
 	@Override
-	public EventType getHandledEventType() {
+	public EventType<PingEvent> getHandledEventType() {
 		return EventType.PING;
 	}
 
 	@Override
-	public void handle(Collection<Event> events, EventContext eventContext) {
+	public void handle(Collection<PingEvent> events, EventContext eventContext) {
 		events.stream()
-				.map(e -> (PingEvent) e)
 				.map(PingEvent::socketConnection)
 				.forEach(eventContext::addOrUpdateConnection);
 	}

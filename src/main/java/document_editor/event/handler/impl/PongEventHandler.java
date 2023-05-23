@@ -1,4 +1,4 @@
-package document_editor.event.handler;
+package document_editor.event.handler.impl;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -12,19 +12,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import document_editor.event.Event;
 import document_editor.event.EventType;
+import document_editor.event.SendPongsEvent;
 import document_editor.event.context.EventContext;
+import document_editor.event.handler.EventHandler;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
 
-public class PongEventHandler implements EventHandler {
+public class PongEventHandler implements EventHandler<SendPongsEvent> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(PongEventHandler.class);
 
-	public static final Response PONG_RESPONSE = new Response(
-			ResponseType.PONG,
-			null
-	);
+	public static final Response PONG_RESPONSE = new Response(ResponseType.PONG, null);
 	private final ObjectMapper objectMapper;
 
 	public PongEventHandler(ObjectMapper objectMapper) {
@@ -32,7 +30,7 @@ public class PongEventHandler implements EventHandler {
 	}
 
 	@Override
-	public EventType getHandledEventType() {
+	public EventType<SendPongsEvent> getHandledEventType() {
 		return EventType.SEND_PONGS;
 	}
 
@@ -43,7 +41,7 @@ public class PongEventHandler implements EventHandler {
 	}
 
 	@Override
-	public void handle(Collection<Event> events, EventContext eventContext) {
+	public void handle(Collection<SendPongsEvent> events, EventContext eventContext) {
 		try {
 			eventContext.removeDisconnectedClients();
 			var webSocketMessage = new WebSocketMessage();

@@ -1,4 +1,4 @@
-package document_editor.event.handler;
+package document_editor.event.handler.impl;
 
 import static java.nio.channels.SelectionKey.OP_WRITE;
 
@@ -25,10 +25,10 @@ import document_editor.dto.ConnectDocumentReply;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
 import document_editor.dto.TreePathDTO;
-import document_editor.event.Event;
 import document_editor.event.EventType;
 import document_editor.event.NewConnectionEvent;
 import document_editor.event.context.EventContext;
+import document_editor.event.handler.EventHandler;
 import grpc.TracingContextPropagator;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Timer;
@@ -41,7 +41,7 @@ import util.Serializable;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
 
-public class NewConnectionEventHandler implements EventHandler {
+public class NewConnectionEventHandler implements EventHandler<NewConnectionEvent> {
     private static final Logger LOGGER = LoggerFactory.getLogger(NewConnectionEventHandler.class);
     private final Supplier<Integer> connectionIdProvider;
     private final ObjectMapper objectMapper;
@@ -72,7 +72,7 @@ public class NewConnectionEventHandler implements EventHandler {
     }
 
     @Override
-    public EventType getHandledEventType() {
+    public EventType<NewConnectionEvent> getHandledEventType() {
         return EventType.CONNECT;
     }
 
@@ -83,11 +83,10 @@ public class NewConnectionEventHandler implements EventHandler {
     }
 
     @Override
-    public void handle(Collection<Event> events, EventContext eventContext) {
+    public void handle(Collection<NewConnectionEvent> events, EventContext eventContext) {
         Set<SocketConnection> socketConnections = new HashSet<>();
         for (var event : events) {
-            var newConnectionEvent = (NewConnectionEvent) event;
-            var socketConnection = newConnectionEvent.connection();
+            var socketConnection = event.connection();
             var webSocketMessage = new WebSocketMessage();
             webSocketMessage.setFin(true);
             try {
