@@ -316,8 +316,8 @@ public class HttpServer {
 						documentStorageService,
 						atomicInteger::getAndIncrement,
 						objectMapper,
-						dbReadDocumentTimer,
-						openTelemetry
+						openTelemetry.getTracer("New connection handler"),
+						contextPropagationServiceDecorator
 				),
 				new MessageDistributeEventHandler(),
 				new PingEventHandler(),

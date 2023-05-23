@@ -22,12 +22,12 @@ public class DocumentMessageEventsHandler implements Runnable {
 
 	private final Queue<Event> eventsQueue;
 	private final EventContext eventContext;
-	private final Map<EventType, EventHandler> eventHandlerMap;
+	private final Map<EventType<?>, EventHandler> eventHandlerMap;
 
 	public DocumentMessageEventsHandler(
 			Queue<Event> eventsQueue,
 			EventContext eventContext,
-			List<EventHandler> eventHandlers
+			List<EventHandler<?>> eventHandlers
 	) {
 		this.eventsQueue = eventsQueue;
 		this.eventContext = eventContext;
@@ -38,7 +38,7 @@ public class DocumentMessageEventsHandler implements Runnable {
 	// diagrams
 	@Override
 	public void run() {
-		var eventsMap = new TreeMap<EventType, Collection<Event>>();
+		var eventsMap = new TreeMap<EventType<?>, Collection<Event>>();
 		var size = eventsQueue.size();
 		for (var i = 0; i < size; i++) {
 			var event = eventsQueue.poll();

@@ -70,7 +70,6 @@ public class DocumentChangeWatcher implements Runnable {
 			builder.setResumeToken(resumeToken);
 		}
 		documentStorageService
-				.withCallCredentials(new TracingContextPropagator(Context.current(), openTelemetry))
 				.subscribeForDocumentsChanges(builder.build(),
 						new StreamObserver<>() {
 							@Override

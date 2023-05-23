@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -15,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.example.document.storage.DocumentElement;
+import com.example.document.storage.DocumentElements;
 import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.example.document.storage.FetchDocumentContentRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,6 +31,7 @@ import document_editor.event.EventType;
 import document_editor.event.NewConnectionEvent;
 import document_editor.event.context.EventContext;
 import document_editor.event.handler.EventHandler;
+import grpc.ServiceDecorator;
 import grpc.TracingContextPropagator;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Timer;
@@ -45,28 +48,25 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionEven
     private static final Logger LOGGER = LoggerFactory.getLogger(NewConnectionEventHandler.class);
     private final Supplier<Integer> connectionIdProvider;
     private final ObjectMapper objectMapper;
-    private final Timer timer;
     private final DocumentStorageServiceGrpc.DocumentStorageServiceStub service;
-    private final OpenTelemetry openTelemetry;
     private final Tracer tracer;
+    private final ServiceDecorator serviceDecorator;
 
     public NewConnectionEventHandler(
             DocumentStorageServiceGrpc.DocumentStorageServiceStub service,
             Supplier<Integer> connectionIdProvider,
             ObjectMapper objectMapper,
-            Timer timer,
-            OpenTelemetry openTelemetry
+            Tracer tracer,
+            ServiceDecorator serviceDecorator
     ) {
         this.service = service;
         this.connectionIdProvider = connectionIdProvider;
         this.objectMapper = objectMapper;
-        this.timer = timer;
-        this.openTelemetry = openTelemetry;
-        tracer = openTelemetry.getTracer(NewConnectionEventHandler.class.getSimpleName());
+        this.tracer = tracer;
+        this.serviceDecorator = serviceDecorator;
     }
 
     private void sendMessage(SocketConnection socketConnection, Serializable serializable) {
-        socketConnection.changeOperation(OP_WRITE);
         socketConnection.appendResponse(serializable);
         socketConnection.changeOperation(OP_WRITE);
     }
@@ -85,6 +85,82 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionEven
     @Override
     public void handle(Collection<NewConnectionEvent> events, EventContext eventContext) {
         Set<SocketConnection> socketConnections = new HashSet<>();
+        sendConnectedAcknowledgements(events, eventContext, socketConnections);
+
+        var getDocumentSpan = tracer.spanBuilder("Get document").setSpanKind(SpanKind.CLIENT).startSpan();
+
+        var scope = getDocumentSpan.makeCurrent();
+
+        var fetchDocumentContentRequest = FetchDocumentContentRequest.newBuilder().setDocumentId(HttpServer.DOCUMENT_ID).build();
+        var streamObserver = new StreamObserver<DocumentElements>() {
+            @Override
+            public void onNext(DocumentElements documentElements) {
+                getDocumentSpan.addEvent("Batch received");
+                distributeChange(documentElements);
+            }
+
+            private void distributeChange(DocumentElements documentElements) {
+                var message = new WebSocketMessage();
+                message.setFin(true);
+                try {
+                    message.setPayload(serialize(new Response(ResponseType.ADD_BULK, computeChanges(documentElements))));
+                }
+                catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                getDocumentSpan.addEvent("Batch serialized");
+                message.setOpCode(OpCode.BINARY);
+                var iterator = socketConnections.iterator();
+                while (iterator.hasNext()) {
+                    var connection = iterator.next();
+                    try {
+                        sendMessage(connection, message);
+                    }
+                    catch (Exception e) {
+                        iterator.remove();
+                    }
+                }
+                getDocumentSpan.addEvent("Batch sent");
+            }
+
+            private List<Change> computeChanges(DocumentElements documentElements) {
+                return documentElements.getDocumentElementsList()
+                        .stream()
+                        .map(doc -> new Change(
+                                toInternalPath(doc),
+                                (char) doc.getCharacter()
+                        ))
+                        .collect(Collectors.toList());
+            }
+
+            private TreePathDTO toInternalPath(DocumentElement path) {
+                return new TreePathDTO(path.getDirectionsList(), path.getDisambiguatorsList());
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                getDocumentSpan.addEvent("Error occurred");
+                getDocumentSpan.recordException(throwable);
+                LOGGER.warn("Error when streaming document", throwable);
+                getDocumentSpan.end();
+                scope.close();
+            }
+
+            @Override
+            public void onCompleted() {
+                LOGGER.info("On complete streaming document");
+                getDocumentSpan.end();
+                scope.close();
+            }
+        };
+        serviceDecorator.decorateService(service).fetchDocumentContent(fetchDocumentContentRequest, streamObserver);
+    }
+
+    private void sendConnectedAcknowledgements(
+            Collection<NewConnectionEvent> events,
+            EventContext eventContext,
+            Set<SocketConnection> socketConnections
+    ) {
         for (var event : events) {
             var socketConnection = event.connection();
             var webSocketMessage = new WebSocketMessage();
@@ -107,69 +183,5 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionEven
             eventContext.addOrUpdateConnection(socketConnection);
             socketConnections.add(socketConnection);
         }
-
-        var getDocumentSpan = tracer.spanBuilder("Get document")
-                .setSpanKind(SpanKind.CLIENT)
-                .setParent(socketConnections.stream()
-                        .reduce(Context.current(), (ctx, conn) -> ctx.with(conn.getConnectionSpan()), (a, b) -> a))
-                .startSpan();
-
-        var scope = getDocumentSpan.makeCurrent();
-
-        service.withCallCredentials(new TracingContextPropagator(Context.current(), openTelemetry))
-                .fetchDocumentContent(
-                        FetchDocumentContentRequest.newBuilder().setDocumentId(HttpServer.DOCUMENT_ID).build(),
-                        new StreamObserver<>() {
-                            @Override
-                            public void onNext(com.example.document.storage.DocumentElements documentElements) {
-                                getDocumentSpan.addEvent("Batch received");
-                                var message = new WebSocketMessage();
-                                message.setFin(true);
-                                try {
-                                    var changes = documentElements.getDocumentElementsList()
-                                            .stream()
-                                            .map(doc -> new Change(
-                                                    toInternalPath(doc),
-                                                    (char) doc.getCharacter()
-                                            ))
-                                            .collect(Collectors.toList());
-                                    message.setPayload(serialize(new Response(ResponseType.ADD_BULK, changes)));
-                                } catch (IOException e) {
-                                    throw new RuntimeException(e);
-                                }
-                                getDocumentSpan.addEvent("Batch serialized");
-                                message.setOpCode(OpCode.BINARY);
-                                var iterator = socketConnections.iterator();
-                                while (iterator.hasNext()) {
-                                    var connection = iterator.next();
-                                    try {
-                                        sendMessage(connection, message);
-                                    } catch (Exception e) {
-                                        iterator.remove();
-                                    }
-                                }
-                                getDocumentSpan.addEvent("Batch sent");
-                            }
-
-                            private TreePathDTO toInternalPath(DocumentElement path) {
-                                return new TreePathDTO(path.getDirectionsList(), path.getDisambiguatorsList());
-                            }
-
-                            @Override
-                            public void onError(Throwable throwable) {
-                                getDocumentSpan.addEvent("Error occurred");
-                                getDocumentSpan.recordException(throwable);
-                                LOGGER.warn("Error when streaming document", throwable);
-                                getDocumentSpan.end();
-                                scope.close();
-                            }
-
-                            @Override
-                            public void onCompleted() {
-                                LOGGER.info("On complete streaming document");
-                                getDocumentSpan.end();
-                                scope.close();
-                            }
-                        });
     }
 }
