@@ -413,7 +413,7 @@ public class HttpServer {
 								MAX_TOKENS_READ,
 								selectionKey -> httpSelectorProvider.get(),
 								byteBufferPool,
-								openTelemetry,
+								openTelemetry.getTracer("HTTP accept connection handler"),
 								appByteBufferPool
 						)
 				));

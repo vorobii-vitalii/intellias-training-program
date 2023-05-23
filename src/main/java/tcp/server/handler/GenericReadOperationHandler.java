@@ -44,10 +44,6 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 			if (!serverAttachment.isReadable()) {
 				return;
 			}
-			if (!selectionKey.isReadable()) {
-				serverAttachment.getRequestSpan().addEvent("Not readable...");
-				return;
-			}
 			var socketChannel = (SocketChannel) selectionKey.channel();
 			var requestSpan = readOperationHandlerTracer
 					.spanBuilder("Socket message")

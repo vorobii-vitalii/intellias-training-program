@@ -12,12 +12,10 @@ import java.util.Objects;
 import java.util.Queue;
 
 public final class ServerAttachment {
-	private final TokenBucket<SocketAddress> writeTokenBucket;
 	private final BufferContext bufferContext;
 	private final Deque<MessageWriteRequest> responses;
 	private final Map<String, Object> context;
 	private final BufferContext clientBufferContext;
-	private final TokenBucket<SocketAddress> readTokenBucket;
 	private final Span requestSpan;
 	private final ByteBufferPool byteBufferPool;
 	private volatile String protocol;
@@ -29,8 +27,6 @@ public final class ServerAttachment {
 			BufferContext clientBufferContext,
 			Deque<MessageWriteRequest> responses,
 			Map<String, Object> context,
-			TokenBucket<SocketAddress> writeTokenBucket,
-			TokenBucket<SocketAddress> readTokenBucket,
 			Span requestSpan,
 			ByteBufferPool byteBufferPool,
 			SelectionKey selectionKey
@@ -40,8 +36,6 @@ public final class ServerAttachment {
 		this.clientBufferContext = clientBufferContext;
 		this.responses = responses;
 		this.context = context;
-		this.writeTokenBucket = writeTokenBucket;
-		this.readTokenBucket = readTokenBucket;
 		this.requestSpan = requestSpan;
 		this.byteBufferPool = byteBufferPool;
 		this.selectionKey = selectionKey;
@@ -53,14 +47,6 @@ public final class ServerAttachment {
 
 	public Span getRequestSpan() {
 		return requestSpan;
-	}
-
-	public TokenBucket<SocketAddress> getWriteTokenBucket() {
-		return writeTokenBucket;
-	}
-
-	public TokenBucket<SocketAddress> getReadTokenBucket() {
-		return readTokenBucket;
 	}
 
 	public BufferContext getClientBufferContext() {
@@ -115,13 +101,11 @@ public final class ServerAttachment {
 	}
 
 	public boolean isWritable() {
-		return true;
-//		return writeTokenBucket.takeToken();
+		return selectionKey.isWritable();
 	}
 
 	public boolean isReadable() {
-		return true;
-//		return readTokenBucket.takeToken();
+		return selectionKey.isReadable();
 	}
 
 	public SelectionKey getSelectionKey() {

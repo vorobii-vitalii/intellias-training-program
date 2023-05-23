@@ -28,7 +28,7 @@ public class EventContext {
 		connectionsMap.put(connection, Instant.now());
 	}
 
-	public void broadCastMessage(Serializable message) throws InterruptedException {
+	public void broadCastMessage(Serializable message) {
 		for (var entry : connectionsMap.entrySet()) {
 			if (isConnected(entry.getValue())) {
 				var connection = entry.getKey();

@@ -18,12 +18,7 @@ public class MessageDistributeEventHandler implements EventHandler<MessageDistri
 	@Override
 	public void handle(Collection<MessageDistributeEvent> events, EventContext eventContext) {
 		for (var event : events) {
-			try {
-				eventContext.broadCastMessage(event.message());
-			}
-			catch (InterruptedException e) {
-				throw new RuntimeException(e);
-			}
+			eventContext.broadCastMessage(event.message());
 		}
 	}
 }

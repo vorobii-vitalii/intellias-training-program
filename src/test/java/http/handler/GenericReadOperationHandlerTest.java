@@ -43,8 +43,6 @@ class GenericReadOperationHandlerTest {
 			new HashMap<>(),
 			null,
 			null,
-			null,
-			null,
 			null
 	);
 	@Mock

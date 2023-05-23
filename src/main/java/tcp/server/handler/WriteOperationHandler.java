@@ -66,7 +66,7 @@ public class WriteOperationHandler implements Consumer<SelectionKey> {
 				ByteBuffer[] buffers = new ByteBuffer[MAX_MSGS_WRITE];
 				List<Consumer<SocketConnection>> callbacks = new ArrayList<>(MAX_MSGS_WRITE);
 				int bufferIndex = 0;
-				for (int i = 0; i < MAX_MSGS_WRITE && selectionKey.isWritable() && attachmentObject.isWritable() && !responses.isEmpty(); i++) {
+				for (int i = 0; i < MAX_MSGS_WRITE && attachmentObject.isWritable() && !responses.isEmpty(); i++) {
 					var messageWriteRequest = responses.pollFirst();
 					buffers[bufferIndex++] = messageWriteRequest.message();
 					callbacks.add(messageWriteRequest.onWriteCallback());

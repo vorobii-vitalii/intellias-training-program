@@ -29,7 +29,7 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 	private final int maxTokensRead;
 	private final Function<SelectionKey, Selector> selectorSupplier;
 	private final ByteBufferPool networkByteBufferPool;
-	private final Tracer httpAcceptConnectionHandlerTracer;
+	private final Tracer tracer;
 	private final ByteBufferPool bufferPool;
 
 	public HTTPAcceptOperationHandler(
@@ -38,7 +38,7 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 			int maxTokensRead,
 			Function<SelectionKey, Selector> selectorSupplier,
 			ByteBufferPool networkByteBufferPool,
-			OpenTelemetry openTelemetry,
+			Tracer tracer,
 			ByteBufferPool bufferPool
 	) {
 		this.tokenBuckets = tokenBuckets;
@@ -46,14 +46,14 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 		this.maxTokensRead = maxTokensRead;
 		this.selectorSupplier = selectorSupplier;
 		this.networkByteBufferPool = networkByteBufferPool;
-		httpAcceptConnectionHandlerTracer = openTelemetry.getTracer("HTTP accept connection handler");
+		this.tracer = tracer;
 		this.bufferPool = bufferPool;
 	}
 
 	@Override
 	public void accept(SelectionKey selectionKey) {
 		try {
-			var requestSpan = httpAcceptConnectionHandlerTracer
+			var requestSpan = tracer
 					.spanBuilder("New HTTP connection")
 					.startSpan();
 			var socketChannel = ((ServerSocketChannel) selectionKey.channel()).accept();
@@ -65,19 +65,12 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 				LOGGER.debug("Accepted new connection {}", socketChannel);
 			}
 			socketChannel.configureBlocking(false);
-			//				TokenBucket<SocketAddress> writeTokenBucket = new TokenBucket<>(maxTokensWrite, maxTokensWrite, socketChannel.getRemoteAddress());
-			//				TokenBucket<SocketAddress> readTokenBucket = new TokenBucket<>(maxTokensRead, maxTokensRead, socketChannel.getRemoteAddress());
-			//				tokenBuckets.add(writeTokenBucket);
-			//				tokenBuckets.add(readTokenBucket);
-			// executor
 			var serverAttachment = new ServerAttachment(
 					Constants.Protocol.HTTP,
 					new BufferContext(networkByteBufferPool),
 					new BufferContext(bufferPool),
 					new ConcurrentLinkedDeque<>(),
 					new ConcurrentHashMap<>(),
-					null,
-					null,
 					requestSpan,
 					networkByteBufferPool,
 					null

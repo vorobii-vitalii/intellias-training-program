@@ -50,7 +50,7 @@ public class PongEventHandler implements EventHandler<SendPongsEvent> {
 			webSocketMessage.setPayload(serialize(PONG_RESPONSE));
 			eventContext.broadCastMessage(webSocketMessage);
 		}
-		catch (IOException | InterruptedException e) {
+		catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 
