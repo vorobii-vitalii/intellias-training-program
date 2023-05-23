@@ -33,6 +33,5 @@ public class TracingContextPropagator extends CallCredentials {
 
 	@Override
 	public void thisUsesUnstableApi() {
-
 	}
 }

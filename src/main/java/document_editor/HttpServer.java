@@ -48,6 +48,7 @@ import document_editor.event.handler.impl.MessageDistributeEventHandler;
 import document_editor.event.handler.impl.NewConnectionEventHandler;
 import document_editor.event.handler.impl.PingEventHandler;
 import document_editor.event.handler.impl.PongEventHandler;
+import grpc.ContextPropagationServiceDecorator;
 import http.domain.HTTPMethod;
 import http.handler.FileDownloadHTTPHandlerStrategy;
 import http.handler.HTTPAcceptOperationHandler;
@@ -306,9 +307,10 @@ public class HttpServer {
 
 		var documentStorageService = DocumentStorageServiceGrpc.newStub(documentStorageServiceChannel);
 
-		//		refillExecutor.scheduleWithFixedDelay(new RefillProcess<>(tokenBuckets), 1, 1, SECONDS);
-
 		schedulePeriodically(2000, new FillQueueProcess<>(eventsQueue, new SendPongsEvent()));
+
+		var contextPropagationServiceDecorator = new ContextPropagationServiceDecorator(openTelemetry);
+
 		schedulePeriodically(500, new DocumentMessageEventsHandler(eventsQueue, eventContext, List.of(
 				new NewConnectionEventHandler(
 						documentStorageService,
@@ -320,20 +322,18 @@ public class HttpServer {
 				new MessageDistributeEventHandler(),
 				new PingEventHandler(),
 				new PongEventHandler(objectMapper),
-				new EditEventHandler(documentStorageService, changesApplyTimer, openTelemetry)
+				new EditEventHandler(documentStorageService, openTelemetry.getTracer("Edit event handler"),
+						contextPropagationServiceDecorator)
 		)));
-//		startProcess(webSocketRequestProcessor, "WebSocket Request processor");
 		startProcess(new DocumentChangeWatcher(eventsQueue, objectMapper, documentStorageService, openTelemetry), "Document change watcher");
 
 		Consumer<SelectionKey> closeConnection = selectionKey -> {
 			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());
-//			LOGGER.debug("Closing connection {}", socketConnection);
 			socketConnection.close();
 		};
 
 		BiConsumer<SelectionKey, Throwable> onError = (selectionKey, throwable) -> {
 			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());
-//			LOGGER.info("Closing connection {} because of error", socketConnection, throwable);
 			socketConnection.close();
 		};
 
@@ -366,8 +366,7 @@ public class HttpServer {
 										onError,
 										openTelemetry,
 										"WEB_SOCKET"
-								)
-						))
+								)))
 				);
 		Map<Integer, Consumer<SelectionKey>> operationHandlerByTypeWebSockets =
 				Map.of(

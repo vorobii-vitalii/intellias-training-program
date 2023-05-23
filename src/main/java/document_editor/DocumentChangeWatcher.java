@@ -24,10 +24,6 @@ import document_editor.event.MessageDistributeEvent;
 import grpc.TracingContextPropagator;
 import io.grpc.stub.StreamObserver;
 import io.opentelemetry.api.OpenTelemetry;
-import io.opentelemetry.api.common.AttributeKey;
-import io.opentelemetry.api.common.Attributes;
-import io.opentelemetry.api.trace.SpanKind;
-import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
@@ -41,7 +37,6 @@ public class DocumentChangeWatcher implements Runnable {
 	private final ObjectMapper objectMapper;
 	private final DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService;
 	private final OpenTelemetry openTelemetry;
-	private final Tracer tracer;
 
 	public DocumentChangeWatcher(
 			Queue<Event> eventQueue,
@@ -53,7 +48,6 @@ public class DocumentChangeWatcher implements Runnable {
 		this.objectMapper = objectMapper;
 		this.documentStorageService = documentStorageService;
 		this.openTelemetry = openTelemetry;
-		this.tracer = openTelemetry.getTracer("Document change watcher");
 	}
 
 	@Override
@@ -68,11 +62,6 @@ public class DocumentChangeWatcher implements Runnable {
 	}
 
 	private void subscribeForDocumentChanges(String resumeToken) {
-		var subscribeSpan = tracer.spanBuilder("Subscribe to document changes")
-				.setSpanKind(SpanKind.CLIENT)
-				.setParent(Context.current())
-				.startSpan();
-		var scope = subscribeSpan.makeCurrent();
 		AtomicReference<String> lastToken = new AtomicReference<>(resumeToken);
 		var builder = SubscribeForDocumentChangesRequest.newBuilder()
 				.setBatchSize(BATCH_SIZE)
@@ -89,8 +78,6 @@ public class DocumentChangeWatcher implements Runnable {
 								if (documentChangedEvents.getEventsCount() == 0) {
 									return;
 								}
-								subscribeSpan.addEvent("Received changes",
-										Attributes.of(AttributeKey.longKey("count"), (long) documentChangedEvents.getEventsCount()));
 								distributeDocumentsChanges(documentChangedEvents);
 								lastToken.set(documentChangedEvents.getEvents(documentChangedEvents.getEventsCount() - 1).getResumeToken());
 							}
@@ -98,16 +85,12 @@ public class DocumentChangeWatcher implements Runnable {
 							@Override
 							public void onError(Throwable throwable) {
 								LOGGER.warn("Error, reconnecting", throwable);
-								subscribeSpan.end();
-								scope.close();
 								subscribeForDocumentChanges(lastToken.get());
 							}
 
 							@Override
 							public void onCompleted() {
 								LOGGER.info("Stream completed");
-								subscribeSpan.end();
-								scope.close();
 							}
 						});
 	}
