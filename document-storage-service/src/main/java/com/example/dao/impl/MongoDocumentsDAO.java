@@ -26,6 +26,8 @@ import com.mongodb.client.model.BulkWriteOptions;
 import com.mongodb.client.model.DeleteManyModel;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.UpdateManyModel;
+import com.mongodb.client.model.UpdateOneModel;
+import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.model.changestream.ChangeStreamDocument;
 import com.mongodb.client.model.changestream.FullDocument;
@@ -152,35 +154,38 @@ public class MongoDocumentsDAO implements DocumentsDAO {
     }
 
     private void doInserts(List<Change> inserts) {
-        var documentsToInsert = inserts.stream()
-                .map(c -> new Document()
-                        .append(DOCUMENT_ID, c.getDocumentId())
-                        .append(DIRECTIONS, c.getDirectionsList())
-                        .append(DISAMBIGUATORS, c.getDisambiguatorsList())
-                        .append(VALUE, c.getCharacter()))
-                .collect(Collectors.toList());
-        collection.insertMany(documentsToInsert)
-                .subscribe(new Subscriber<>() {
-                    @Override
-                    public void onSubscribe(Subscription s) {
-                        s.request(Long.MAX_VALUE);
-                    }
+        collection.bulkWrite(
+                inserts.stream()
+                        .map(c -> new UpdateOneModel<Document>(
+                                new Document()
+                                        .append(DOCUMENT_ID, c.getDocumentId())
+                                        .append(DIRECTIONS, c.getDirectionsList())
+                                        .append(DISAMBIGUATORS, c.getDisambiguatorsList()),
+                                new Document().append("$set", new Document().append(VALUE, c.getCharacter())),
+                                new UpdateOptions().upsert(true)
+                        ))
+                        .collect(Collectors.toList())
+        ).subscribe(new Subscriber<>() {
+            @Override
+            public void onSubscribe(Subscription s) {
+                s.request(Long.MAX_VALUE);
+            }
 
-                    @Override
-                    public void onNext(InsertManyResult insertManyResult) {
+            @Override
+            public void onNext(BulkWriteResult bulkWriteResult) {
 
-                    }
+            }
 
-                    @Override
-                    public void onError(Throwable t) {
-                        LOGGER.error("Error " + t);
-                    }
+            @Override
+            public void onError(Throwable t) {
+                LOGGER.error("Error", t);
+            }
 
-                    @Override
-                    public void onComplete() {
-                        LOGGER.debug("Insert complete");
-                    }
-                });
+            @Override
+            public void onComplete() {
+                LOGGER.info("Inserts complete");
+            }
+        });
     }
 
     private <T> void applyIfNotEmpty(List<T> list, Consumer<List<T>> consumer) {

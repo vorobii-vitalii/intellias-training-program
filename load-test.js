@@ -4,12 +4,12 @@ import {randomString, randomIntBetween} from 'https://jslib.k6.io/k6-utils/1.2.0
 import msgpack from 'https://cdnjs.cloudflare.com/ajax/libs/msgpack-lite/0.1.26/msgpack.min.js';
 import {SharedArray} from 'k6/data';
 
-const VIRTUAL_USERS = 2000;
+const VIRTUAL_USERS = 1000;
 const CHANGES_PER_USER = 1;
 
 export let options = {
     iterations: VIRTUAL_USERS,
-    vus: 100,
+    vus: VIRTUAL_USERS,
     discardResponseBodies: true,
 }
 const comparePath = (a, b) => {
