@@ -2,22 +2,21 @@ package document_editor.event.handler.impl;
 
 import java.util.Collection;
 
-import document_editor.event.Event;
-import document_editor.event.EventType;
-import document_editor.event.PingEvent;
-import document_editor.event.context.EventContext;
+import document_editor.event.DocumentsEventType;
+import document_editor.event.PingDocumentsEvent;
+import document_editor.event.context.ClientConnectionsContext;
 import document_editor.event.handler.EventHandler;
 
-public class PingEventHandler implements EventHandler<PingEvent> {
+public class PingEventHandler implements EventHandler<PingDocumentsEvent> {
 	@Override
-	public EventType<PingEvent> getHandledEventType() {
-		return EventType.PING;
+	public DocumentsEventType<PingDocumentsEvent> getHandledEventType() {
+		return DocumentsEventType.PING;
 	}
 
 	@Override
-	public void handle(Collection<PingEvent> events, EventContext eventContext) {
+	public void handle(Collection<PingDocumentsEvent> events, ClientConnectionsContext clientConnectionsContext) {
 		events.stream()
-				.map(PingEvent::socketConnection)
-				.forEach(eventContext::addOrUpdateConnection);
+				.map(PingDocumentsEvent::socketConnection)
+				.forEach(clientConnectionsContext::addOrUpdateConnection);
 	}
 }

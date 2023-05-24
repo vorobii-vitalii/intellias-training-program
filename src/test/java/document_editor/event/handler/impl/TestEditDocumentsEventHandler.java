@@ -20,21 +20,21 @@ import com.example.document.storage.DocumentStorageServiceGrpc;
 import document_editor.HttpServer;
 import document_editor.dto.Change;
 import document_editor.dto.TreePathDTO;
-import document_editor.event.EditEvent;
-import document_editor.event.EventType;
-import document_editor.event.context.EventContext;
+import document_editor.event.EditDocumentsEvent;
+import document_editor.event.DocumentsEventType;
+import document_editor.event.context.ClientConnectionsContext;
 import grpc.ServiceDecorator;
 import io.opentelemetry.api.trace.TracerProvider;
 
 @ExtendWith(MockitoExtension.class)
-class TestEditEventHandler {
+class TestEditDocumentsEventHandler {
 
 	@Mock
 	DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageServiceStub;
 	@Mock
 	ServiceDecorator serviceDecorator;
 	@Mock
-	EventContext eventContext;
+	ClientConnectionsContext clientConnectionsContext;
 	EditEventHandler editEventHandler;
 
 	@BeforeEach
@@ -44,24 +44,24 @@ class TestEditEventHandler {
 
 	@Test
 	void getHandledEventType() {
-		assertThat(editEventHandler.getHandledEventType()).isEqualTo(EventType.EDIT);
+		assertThat(editEventHandler.getHandledEventType()).isEqualTo(DocumentsEventType.EDIT);
 	}
 
 	@Test
 	void testHandle() {
 		var editEvents = List.of(
-				new EditEvent(
+				new EditDocumentsEvent(
 						List.of(new Change(new TreePathDTO(List.of(true), List.of(1)), 'a'))
 				),
-				new EditEvent(
+				new EditDocumentsEvent(
 						List.of(new Change(new TreePathDTO(List.of(false), List.of(2)), 'b'))
 				),
-				new EditEvent(
+				new EditDocumentsEvent(
 						List.of(new Change(new TreePathDTO(List.of(true, false), List.of(3)), null))
 				)
 		);
 		when(serviceDecorator.decorateService(any())).thenAnswer(i -> i.getArgument(0));
-		editEventHandler.handle(editEvents, eventContext);
+		editEventHandler.handle(editEvents, clientConnectionsContext);
 		verify(documentStorageServiceStub)
 				.applyChanges(eq(ChangesRequest.newBuilder()
 						.addAllChanges(List.of(

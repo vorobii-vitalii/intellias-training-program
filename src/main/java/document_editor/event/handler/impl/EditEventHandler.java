@@ -13,9 +13,9 @@ import com.example.document.storage.ChangesResponse;
 import com.example.document.storage.DocumentStorageServiceGrpc;
 
 import document_editor.HttpServer;
-import document_editor.event.EditEvent;
-import document_editor.event.EventType;
-import document_editor.event.context.EventContext;
+import document_editor.event.EditDocumentsEvent;
+import document_editor.event.DocumentsEventType;
+import document_editor.event.context.ClientConnectionsContext;
 import document_editor.event.handler.EventHandler;
 import grpc.ServiceDecorator;
 import io.grpc.stub.StreamObserver;
@@ -23,7 +23,7 @@ import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 
-public class EditEventHandler implements EventHandler<EditEvent> {
+public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(EditEventHandler.class);
 
 	private final DocumentStorageServiceGrpc.DocumentStorageServiceStub service;
@@ -41,12 +41,12 @@ public class EditEventHandler implements EventHandler<EditEvent> {
 	}
 
 	@Override
-	public EventType<EditEvent> getHandledEventType() {
-		return EventType.EDIT;
+	public DocumentsEventType<EditDocumentsEvent> getHandledEventType() {
+		return DocumentsEventType.EDIT;
 	}
 
 	@Override
-	public void handle(Collection<EditEvent> events, EventContext eventContext) {
+	public void handle(Collection<EditDocumentsEvent> events, ClientConnectionsContext clientConnectionsContext) {
 		var changes = calculateChanges(events);
 		LOGGER.debug("Applying changes {}", changes);
 		var applyChangesSpan = tracer.spanBuilder("Apply documents changes")
@@ -76,7 +76,7 @@ public class EditEventHandler implements EventHandler<EditEvent> {
 				});
 	}
 
-	private List<Change> calculateChanges(Collection<EditEvent> events) {
+	private List<Change> calculateChanges(Collection<EditDocumentsEvent> events) {
 		return events.stream()
 				.flatMap(event -> event.changes().stream())
 				.map(c -> {

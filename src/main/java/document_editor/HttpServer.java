@@ -5,6 +5,7 @@ import static java.nio.channels.SelectionKey.OP_READ;
 import static java.nio.channels.SelectionKey.OP_WRITE;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.StandardProtocolFamily;
@@ -13,6 +14,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.spi.SelectorProvider;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -27,6 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.zip.GZIPOutputStream;
 
 import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.slf4j.Logger;
@@ -43,12 +46,12 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
 
 import document_editor.dto.Request;
 import document_editor.dto.RequestType;
-import document_editor.event.EditEvent;
-import document_editor.event.Event;
-import document_editor.event.NewConnectionEvent;
-import document_editor.event.PingEvent;
-import document_editor.event.SendPongsEvent;
-import document_editor.event.context.EventContext;
+import document_editor.event.EditDocumentsEvent;
+import document_editor.event.DocumentsEvent;
+import document_editor.event.NewConnectionDocumentsEvent;
+import document_editor.event.PingDocumentsEvent;
+import document_editor.event.SendPongsDocumentsEvent;
+import document_editor.event.context.ClientConnectionsContext;
 import document_editor.event.handler.impl.EditEventHandler;
 import document_editor.event.handler.impl.MessageDistributeEventHandler;
 import document_editor.event.handler.impl.NewConnectionEventHandler;
@@ -90,6 +93,7 @@ import monitoring.PrometheusMetricsHTTPRequestHandler;
 import request_handler.NetworkRequest;
 import request_handler.NetworkRequestHandler;
 import serialization.JacksonDeserializer;
+import serialization.Serializer;
 import tcp.FillQueueProcess;
 import tcp.server.ByteBufferPool;
 import tcp.server.ConnectionImpl;
@@ -106,6 +110,7 @@ import tcp.server.handler.WriteOperationHandler;
 import token_bucket.TokenBucket;
 import util.Constants;
 import websocket.domain.OpCode;
+import websocket.domain.WebSocketMessage;
 import websocket.endpoint.DelegatingWebSocketEndpoint;
 import websocket.endpoint.OnMessageHandler;
 import websocket.endpoint.WebSocketEndpointProvider;
@@ -228,26 +233,34 @@ public class HttpServer {
 
 		var objectMapper = new ObjectMapper(new MessagePackFactory());
 
-		var eventsQueue = new ConcurrentLinkedQueue<Event>();
+		var eventsQueue = new ConcurrentLinkedQueue<DocumentsEvent>();
 
 		var prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
 
-		MessageProducer<Event> messageProducer = eventsQueue::add;
+		MessageProducer<DocumentsEvent> messageProducer = eventsQueue::add;
 
 		var messageHandler = new OnMessageHandler<>(
 				new JacksonDeserializer(objectMapper),
 				Request.class,
 				new DelegatingRequestHandler(Map.of(
-						RequestType.CONNECT, (r, c) -> messageProducer.produce(new NewConnectionEvent(c)),
-						RequestType.CHANGES, (r, c) -> messageProducer.produce(new EditEvent(r.payload())),
-						RequestType.PING, (r, c) -> messageProducer.produce(new PingEvent(c))
+						RequestType.CONNECT, (r, c) -> messageProducer.produce(new NewConnectionDocumentsEvent(c)),
+						RequestType.CHANGES, (r, c) -> messageProducer.produce(new EditDocumentsEvent(r.payload())),
+						RequestType.PING, (r, c) -> messageProducer.produce(new PingDocumentsEvent(c))
 				)),
 				error -> LOGGER.error("Error on deserialization", error));
 		var webSocketEndpointProvider = new WebSocketEndpointProvider(Map.of(
 				"/documents", new DelegatingWebSocketEndpoint(Map.of(
 						OpCode.BINARY, messageHandler,
 						OpCode.CONTINUATION, messageHandler,
-						OpCode.TEXT, messageHandler
+						OpCode.TEXT, messageHandler,
+						OpCode.CONNECTION_CLOSE, (s, m) -> {
+							var webSocketMessage = new WebSocketMessage();
+							webSocketMessage.setFin(true);
+							webSocketMessage.setOpCode(OpCode.CONNECTION_CLOSE);
+							webSocketMessage.setPayload(new byte[] {});
+							s.appendResponse(webSocketMessage, null, SocketConnection::close);
+							s.changeOperation(OP_WRITE);
+						}
 				), s -> LOGGER.info("Connected {}", s))
 		));
 
@@ -325,7 +338,7 @@ public class HttpServer {
 		var httpRing = createNetworkDisruptor(httpRequestHandler);
 		var wsRing = createNetworkDisruptor(webSocketNetworkRequestHandler);
 
-		var eventContext = new EventContext(MAX_WAIT_FOR_PING_MS);
+		var eventContext = new ClientConnectionsContext(MAX_WAIT_FOR_PING_MS, Instant::now);
 
 		var documentStorageServiceChannel =
 				Grpc.newChannelBuilder(
@@ -336,7 +349,7 @@ public class HttpServer {
 
 		var documentStorageService = DocumentStorageServiceGrpc.newStub(documentStorageServiceChannel);
 
-		schedulePeriodically(2000, new FillQueueProcess<>(eventsQueue, new SendPongsEvent()));
+		schedulePeriodically(2000, new FillQueueProcess<>(eventsQueue, new SendPongsDocumentsEvent()));
 
 		var contextPropagationServiceDecorator = new ContextPropagationServiceDecorator(openTelemetry);
 
@@ -354,7 +367,12 @@ public class HttpServer {
 				new EditEventHandler(documentStorageService, openTelemetry.getTracer("Edit event handler"),
 						contextPropagationServiceDecorator)
 		)));
-		startProcess(new DocumentChangeWatcher(eventsQueue, objectMapper, documentStorageService, openTelemetry), "Document change watcher");
+		var serializer = (Serializer) obj -> {
+			var arrayOutputStream = new ByteArrayOutputStream();
+			objectMapper.writeValue(new GZIPOutputStream(arrayOutputStream), obj);
+			return arrayOutputStream.toByteArray();
+		};
+		startProcess(new DocumentChangeWatcher(messageProducer, serializer, documentStorageService), "Document change watcher");
 
 		Consumer<SelectionKey> closeConnection = selectionKey -> {
 			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());

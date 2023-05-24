@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,17 +15,18 @@ import tcp.server.SocketConnection;
 import util.Serializable;
 
 @NotThreadSafe
-public class EventContext {
-	private static final Logger LOGGER = LoggerFactory.getLogger(EventContext.class);
+public class ClientConnectionsContext {
 	private final Map<SocketConnection, Instant> connectionsMap = new HashMap<>();
 	private final int maxWaitMs;
+	private final Supplier<Instant> currentTimeProvider;
 
-	public EventContext(int maxWaitMs) {
+	public ClientConnectionsContext(int maxWaitMs, Supplier<Instant> currentTimeProvider) {
 		this.maxWaitMs = maxWaitMs;
+		this.currentTimeProvider = currentTimeProvider;
 	}
 
 	public void addOrUpdateConnection(SocketConnection connection) {
-		connectionsMap.put(connection, Instant.now());
+		connectionsMap.put(connection, currentTimeProvider.get());
 	}
 
 	public void broadCastMessage(Serializable message) {
@@ -59,7 +60,7 @@ public class EventContext {
 	}
 
 	private boolean isConnected(Instant instant) {
-		return (Instant.now().toEpochMilli() - instant.toEpochMilli()) <= maxWaitMs;
+		return (currentTimeProvider.get().toEpochMilli() - instant.toEpochMilli()) <= maxWaitMs;
 	}
 
 }

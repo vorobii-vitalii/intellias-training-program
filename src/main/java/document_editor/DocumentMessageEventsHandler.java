@@ -12,25 +12,25 @@ import java.util.stream.Collectors;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 
-import document_editor.event.Event;
-import document_editor.event.context.EventContext;
+import document_editor.event.DocumentsEvent;
+import document_editor.event.context.ClientConnectionsContext;
 import document_editor.event.handler.EventHandler;
-import document_editor.event.EventType;
+import document_editor.event.DocumentsEventType;
 
 public class DocumentMessageEventsHandler implements Runnable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentMessageEventsHandler.class);
 
-	private final Queue<Event> eventsQueue;
-	private final EventContext eventContext;
-	private final Map<EventType<?>, EventHandler> eventHandlerMap;
+	private final Queue<DocumentsEvent> eventsQueue;
+	private final ClientConnectionsContext clientConnectionsContext;
+	private final Map<DocumentsEventType<?>, EventHandler> eventHandlerMap;
 
 	public DocumentMessageEventsHandler(
-			Queue<Event> eventsQueue,
-			EventContext eventContext,
+			Queue<DocumentsEvent> eventsQueue,
+			ClientConnectionsContext clientConnectionsContext,
 			List<EventHandler<?>> eventHandlers
 	) {
 		this.eventsQueue = eventsQueue;
-		this.eventContext = eventContext;
+		this.clientConnectionsContext = clientConnectionsContext;
 		this.eventHandlerMap = eventHandlers.stream()
 				.collect(Collectors.toMap(EventHandler::getHandledEventType, Function.identity()));
 	}
@@ -38,7 +38,7 @@ public class DocumentMessageEventsHandler implements Runnable {
 	// diagrams
 	@Override
 	public void run() {
-		var eventsMap = new TreeMap<EventType<?>, Collection<Event>>();
+		var eventsMap = new TreeMap<DocumentsEventType<?>, Collection<DocumentsEvent>>();
 		var size = eventsQueue.size();
 		for (var i = 0; i < size; i++) {
 			var event = eventsQueue.poll();
@@ -60,7 +60,7 @@ public class DocumentMessageEventsHandler implements Runnable {
 			try {
 				var eventHandler = eventHandlerMap.get(type);
 				if (eventHandler != null) {
-					eventHandler.handle(events, eventContext);
+					eventHandler.handle(events, clientConnectionsContext);
 				}
 			} catch (Exception error) {
 				LOGGER.error("Error", error);

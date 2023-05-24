@@ -27,24 +27,20 @@ import document_editor.dto.ConnectDocumentReply;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
 import document_editor.dto.TreePathDTO;
-import document_editor.event.EventType;
-import document_editor.event.NewConnectionEvent;
-import document_editor.event.context.EventContext;
+import document_editor.event.DocumentsEventType;
+import document_editor.event.NewConnectionDocumentsEvent;
+import document_editor.event.context.ClientConnectionsContext;
 import document_editor.event.handler.EventHandler;
 import grpc.ServiceDecorator;
-import grpc.TracingContextPropagator;
 import io.grpc.stub.StreamObserver;
-import io.micrometer.core.instrument.Timer;
-import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
-import io.opentelemetry.context.Context;
 import tcp.server.SocketConnection;
 import util.Serializable;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
 
-public class NewConnectionEventHandler implements EventHandler<NewConnectionEvent> {
+public class NewConnectionEventHandler implements EventHandler<NewConnectionDocumentsEvent> {
     private static final Logger LOGGER = LoggerFactory.getLogger(NewConnectionEventHandler.class);
     private final Supplier<Integer> connectionIdProvider;
     private final ObjectMapper objectMapper;
@@ -72,8 +68,8 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionEven
     }
 
     @Override
-    public EventType<NewConnectionEvent> getHandledEventType() {
-        return EventType.CONNECT;
+    public DocumentsEventType<NewConnectionDocumentsEvent> getHandledEventType() {
+        return DocumentsEventType.CONNECT;
     }
 
     private byte[] serialize(Object obj) throws IOException {
@@ -83,9 +79,9 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionEven
     }
 
     @Override
-    public void handle(Collection<NewConnectionEvent> events, EventContext eventContext) {
+    public void handle(Collection<NewConnectionDocumentsEvent> events, ClientConnectionsContext clientConnectionsContext) {
         Set<SocketConnection> socketConnections = new HashSet<>();
-        sendConnectedAcknowledgements(events, eventContext, socketConnections);
+        sendConnectedAcknowledgements(events, clientConnectionsContext, socketConnections);
 
         var getDocumentSpan = tracer.spanBuilder("Get document").setSpanKind(SpanKind.CLIENT).startSpan();
 
@@ -157,8 +153,8 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionEven
     }
 
     private void sendConnectedAcknowledgements(
-            Collection<NewConnectionEvent> events,
-            EventContext eventContext,
+            Collection<NewConnectionDocumentsEvent> events,
+            ClientConnectionsContext clientConnectionsContext,
             Set<SocketConnection> socketConnections
     ) {
         for (var event : events) {
@@ -180,7 +176,7 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionEven
             catch (Exception e) {
                 continue;
             }
-            eventContext.addOrUpdateConnection(socketConnection);
+            clientConnectionsContext.addOrUpdateConnection(socketConnection);
             socketConnections.add(socketConnection);
         }
     }
