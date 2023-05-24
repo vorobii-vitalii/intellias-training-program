@@ -7,7 +7,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 public class WebSocketMessage implements Serializable {
-
 	public static final double TWO_POW_16 = Math.pow(2, 16);
 	public static final int METADATA_BYTES = 2;
 	private boolean isFin;
@@ -106,16 +105,6 @@ public class WebSocketMessage implements Serializable {
 			}
 		}
 		return res;
-	}
-
-	private int getTotal(byte[]... arrays) {
-		var totalSize = 0;
-		for (var byteArray : arrays) {
-			if (byteArray != null) {
-				totalSize += byteArray.length;
-			}
-		}
-		return totalSize;
 	}
 
 	@Override

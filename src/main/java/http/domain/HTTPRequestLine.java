@@ -7,17 +7,6 @@ public record HTTPRequestLine(HTTPMethod httpMethod, String path, HTTPVersion ht
 
 	public static final byte SPACE = ' ';
 
-//	public static HTTPRequestLine parse(String requestLine) throws ParseException {
-//		var requestLineComponents = requestLine.split(" ");
-//		if (requestLineComponents.length != 3) {
-//			throw new ParseException("request-line   = method SP request-target SP HTTP-version CRLF");
-//		}
-//		var method = HTTPMethod.parse(requestLineComponents[0]);
-//		var path = requestLineComponents[1];
-//		var httpVersion = HTTPVersion.parse(requestLineComponents[2]);
-//		return new HTTPRequestLine(method, path, httpVersion);
-//	}
-
 	public static HTTPRequestLine parse(CharSequence charSequence) throws ParseException {
 		var n = charSequence.length();
 		var leftSpace = -1;

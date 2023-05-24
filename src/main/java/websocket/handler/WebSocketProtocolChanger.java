@@ -25,7 +25,7 @@ public class WebSocketProtocolChanger implements ProtocolChanger {
 		LOGGER.info("Changing protocol of {} to websocket, endpoint = {}", connection, endpoint);
 		connection.setProtocol(Constants.Protocol.WEB_SOCKET);
 		connection.setMetadata(Constants.WebSocketMetadata.ENDPOINT, endpoint);
-		webSocketEndpointProvider.getEndpoint(endpoint).onConnect(connection);
+		webSocketEndpointProvider.getEndpoint(endpoint).onHandshakeCompletion(connection);
 	}
 
 	@Override

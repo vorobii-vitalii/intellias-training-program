@@ -26,6 +26,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.slf4j.Logger;
@@ -40,7 +41,12 @@ import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 
+import document_editor.dto.Request;
+import document_editor.dto.RequestType;
+import document_editor.event.EditEvent;
 import document_editor.event.Event;
+import document_editor.event.NewConnectionEvent;
+import document_editor.event.PingEvent;
 import document_editor.event.SendPongsEvent;
 import document_editor.event.context.EventContext;
 import document_editor.event.handler.impl.EditEventHandler;
@@ -50,6 +56,7 @@ import document_editor.event.handler.impl.PingEventHandler;
 import document_editor.event.handler.impl.PongEventHandler;
 import grpc.ContextPropagationServiceDecorator;
 import http.domain.HTTPMethod;
+import http.domain.HTTPRequest;
 import http.handler.FileDownloadHTTPHandlerStrategy;
 import http.handler.HTTPAcceptOperationHandler;
 import http.handler.HTTPNetworkRequestHandler;
@@ -78,9 +85,11 @@ import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.semconv.resource.attributes.ResourceAttributes;
+import message_passing.MessageProducer;
 import monitoring.PrometheusMetricsHTTPRequestHandler;
 import request_handler.NetworkRequest;
 import request_handler.NetworkRequestHandler;
+import serialization.JacksonDeserializer;
 import tcp.FillQueueProcess;
 import tcp.server.ByteBufferPool;
 import tcp.server.ConnectionImpl;
@@ -96,6 +105,9 @@ import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
 import token_bucket.TokenBucket;
 import util.Constants;
+import websocket.domain.OpCode;
+import websocket.endpoint.DelegatingWebSocketEndpoint;
+import websocket.endpoint.OnMessageHandler;
 import websocket.endpoint.WebSocketEndpointProvider;
 import websocket.handler.WebSocketChangeProtocolHTTPHandlerStrategy;
 import websocket.handler.WebSocketNetworkRequestHandler;
@@ -111,6 +123,26 @@ public class HttpServer {
 	private static final AtomicInteger atomicInteger = new AtomicInteger(1);
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServer.class);
 	private static final Integer WS_VERSION = 13;
+	public static final List<Predicate<HTTPRequest>> WEBSOCKET_HANDSHAKE_REQUEST_PREDICATE = List.of(
+			request -> request.getHttpRequestLine().httpMethod() == HTTPMethod.GET,
+			request -> request.getHeaders()
+					.getHeaderValue(Constants.HTTPHeaders.HOST)
+					.isPresent(),
+			request -> request.getHeaders()
+					.getHeaderValue(Constants.HTTPHeaders.UPGRADE)
+					.filter("websocket"::equals)
+					.isPresent(),
+			request -> request.getHeaders()
+					.getHeaderValue(Constants.HTTPHeaders.CONNECTION)
+					.filter("Upgrade"::equalsIgnoreCase)
+					.isPresent(),
+			request -> request.getHeaders()
+					.getHeaderValue(Constants.HTTPHeaders.WEBSOCKET_KEY)
+					.isPresent(),
+			request -> request.getHeaders().getHeaderValue(Constants.HTTPHeaders.WEBSOCKET_VERSION)
+					.filter(String.valueOf(WS_VERSION)::equals)
+					.isPresent()
+	);
 	public static final int MAX_WAIT_FOR_PING_MS = 15_000;
 	public static final int RING_BUFFER_SIZE = (int) Math.pow(2, 14);
 
@@ -200,30 +232,27 @@ public class HttpServer {
 
 		var prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
 
+		MessageProducer<Event> messageProducer = eventsQueue::add;
+
+		var messageHandler = new OnMessageHandler<>(
+				new JacksonDeserializer(objectMapper),
+				Request.class,
+				new DelegatingRequestHandler(Map.of(
+						RequestType.CONNECT, (r, c) -> messageProducer.produce(new NewConnectionEvent(c)),
+						RequestType.CHANGES, (r, c) -> messageProducer.produce(new EditEvent(r.payload())),
+						RequestType.PING, (r, c) -> messageProducer.produce(new PingEvent(c))
+				)),
+				error -> LOGGER.error("Error on deserialization", error));
 		var webSocketEndpointProvider = new WebSocketEndpointProvider(Map.of(
-				"/documents", new DocumentStreamingWebSocketEndpoint(eventsQueue, objectMapper)
+				"/documents", new DelegatingWebSocketEndpoint(Map.of(
+						OpCode.BINARY, messageHandler,
+						OpCode.CONTINUATION, messageHandler,
+						OpCode.TEXT, messageHandler
+				), s -> LOGGER.info("Connected {}", s))
 		));
 
-		var webSocketChangeProtocolHTTPHandlerStrategy = new WebSocketChangeProtocolHTTPHandlerStrategy(List.of(
-				request -> request.getHttpRequestLine().httpMethod() == HTTPMethod.GET,
-				request -> request.getHeaders()
-						.getHeaderValue(Constants.HTTPHeaders.HOST)
-						.isPresent(),
-				request -> request.getHeaders()
-						.getHeaderValue(Constants.HTTPHeaders.UPGRADE)
-						.filter("websocket"::equals)
-						.isPresent(),
-				request -> request.getHeaders()
-						.getHeaderValue(Constants.HTTPHeaders.CONNECTION)
-						.filter("Upgrade"::equalsIgnoreCase)
-						.isPresent(),
-				request -> request.getHeaders()
-						.getHeaderValue(Constants.HTTPHeaders.WEBSOCKET_KEY)
-						.isPresent(),
-				request -> request.getHeaders().getHeaderValue(Constants.HTTPHeaders.WEBSOCKET_VERSION)
-						.filter(String.valueOf(WS_VERSION)::equals)
-						.isPresent()
-		), webSocketEndpointProvider);
+		var webSocketChangeProtocolHTTPHandlerStrategy =
+				new WebSocketChangeProtocolHTTPHandlerStrategy(WEBSOCKET_HANDSHAKE_REQUEST_PREDICATE, webSocketEndpointProvider);
 
 		Collection<HTTPResponsePostProcessor> httpResponsePostProcessors = List.of(
 				new ProtocolChangerHTTPResponsePostProcessor(List.of(new WebSocketProtocolChanger(webSocketEndpointProvider)))
