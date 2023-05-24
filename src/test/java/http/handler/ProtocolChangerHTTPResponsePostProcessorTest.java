@@ -1,26 +1,26 @@
 package http.handler;
 
-import http.domain.HTTPRequest;
-import http.domain.HTTPResponse;
-import http.post_processor.ProtocolChangerHTTPResponsePostProcessor;
-import http.protocol_change.ProtocolChangeContext;
-import http.protocol_change.ProtocolChanger;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import http.domain.HTTPRequest;
+import http.domain.HTTPResponse;
+import http.post_processor.ProtocolChangerHTTPResponsePostProcessor;
+import http.protocol_change.ProtocolChangeContext;
+import http.protocol_change.ProtocolChanger;
 import request_handler.NetworkRequest;
-import tcp.server.ConnectionImpl;
-
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.SocketChannel;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.*;
+import tcp.server.SocketConnection;
 
 @ExtendWith(MockitoExtension.class)
 class ProtocolChangerHTTPResponsePostProcessorTest {
@@ -37,13 +37,10 @@ class ProtocolChangerHTTPResponsePostProcessorTest {
 	HTTPRequest httpRequest;
 
 	@Mock
-	SelectionKey selectionKey;
-
-	@Mock
 	HTTPResponse httpResponse;
 
 	@Mock
-	SocketChannel socketChannel;
+	SocketConnection socketConnection;
 
 	ProtocolChangerHTTPResponsePostProcessor protocolChangerHTTPResponsePostProcessor;
 
@@ -62,7 +59,7 @@ class ProtocolChangerHTTPResponsePostProcessorTest {
 	void handleGivenNotUpgradeResponse() {
 		when(httpResponse.isUpgradeResponse()).thenReturn(false);
 		protocolChangerHTTPResponsePostProcessor
-						.handle(new NetworkRequest<>(httpRequest, new ConnectionImpl(null), null), httpResponse);
+						.handle(new NetworkRequest<>(httpRequest, socketConnection, null), httpResponse);
 		verify(protocolChanger1, never()).changeProtocol(any());
 		verify(protocolChanger2, never()).changeProtocol(any());
 	}
@@ -73,22 +70,19 @@ class ProtocolChangerHTTPResponsePostProcessorTest {
 		when(httpResponse.getUpgradeProtocol()).thenReturn("protocol-x");
 		assertThrows(IllegalArgumentException.class, () ->
 						protocolChangerHTTPResponsePostProcessor.handle(
-										new NetworkRequest<>(httpRequest, new ConnectionImpl(null), null), httpResponse)
-		);
+										new NetworkRequest<>(httpRequest, socketConnection, null), httpResponse));
 		verify(protocolChanger1, never()).changeProtocol(any());
 		verify(protocolChanger2, never()).changeProtocol(any());
 	}
 
 	@Test
-	void handleGivenProtocolSupported() throws IOException {
+	void handleGivenProtocolSupported() {
 		when(httpResponse.isUpgradeResponse()).thenReturn(true);
 		when(httpResponse.getUpgradeProtocol()).thenReturn(PROTOCOL_1);
-		when(selectionKey.channel()).thenReturn(socketChannel);
-		when(socketChannel.getRemoteAddress()).thenReturn(new InetSocketAddress(123));
 		protocolChangerHTTPResponsePostProcessor
-						.handle(new NetworkRequest<>(httpRequest, new ConnectionImpl(null), null), httpResponse);
+						.handle(new NetworkRequest<>(httpRequest, socketConnection, null), httpResponse);
 		verify(protocolChanger1)
-						.changeProtocol(new ProtocolChangeContext(httpRequest, httpResponse, new ConnectionImpl(null)));
+						.changeProtocol(new ProtocolChangeContext(httpRequest, httpResponse, socketConnection));
 		verify(protocolChanger2, never()).changeProtocol(any());
 	}
 
