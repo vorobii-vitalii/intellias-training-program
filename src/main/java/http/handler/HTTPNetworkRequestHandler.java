@@ -29,23 +29,27 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes;
 import request_handler.NetworkRequest;
 import request_handler.NetworkRequestHandler;
+import tcp.MessageSerializer;
 import tcp.server.SocketConnection;
 import util.UnsafeConsumer;
 
 public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequest> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HTTPNetworkRequestHandler.class);
-	private final ExecutorService executorService = Executors.newFixedThreadPool(4);
+	private final ExecutorService executorService = Executors.newFixedThreadPool(8);
 	private final List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies;
 	private final Collection<HTTPResponsePostProcessor> httpResponsePostProcessor;
 	private final Tracer httpRequestHandlerTracer;
 	private final List<Function<HTTPResponse, Consumer<SocketConnection>>> onWriteResponseStrategies;
+	private final MessageSerializer messageSerializer;
 
 	public HTTPNetworkRequestHandler(
 			List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies,
 			Collection<HTTPResponsePostProcessor> httpResponsePostProcessor,
 			List<Function<HTTPResponse, Consumer<SocketConnection>>> onWriteResponseStrategies,
+			MessageSerializer messageSerializer,
 			OpenTelemetry openTelemetry
 	) {
+		this.messageSerializer = messageSerializer;
 		this.httpResponsePostProcessor = httpResponsePostProcessor;
 		this.httpRequestHandlerStrategies = new ArrayList<>(httpRequestHandlerStrategies);
 		this.httpRequestHandlerStrategies.sort(Comparator.comparing(HTTPRequestHandlerStrategy::getPriority));
@@ -84,7 +88,7 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 
 				requestSpan.addEvent("Postprocessors finished");
 				var socketConnection = networkRequest.socketConnection();
-				socketConnection.appendResponse(response, requestSpan, onWriteResponseCallback);
+				socketConnection.appendResponse(messageSerializer.serialize(response, requestSpan::addEvent), onWriteResponseCallback);
 				socketConnection.changeOperation(SelectionKey.OP_WRITE);
 				requestSpan.addEvent("Response added to queue");
 			} finally {

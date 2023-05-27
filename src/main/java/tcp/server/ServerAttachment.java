@@ -1,118 +1,44 @@
 package tcp.server;
 
-import io.opentelemetry.api.trace.Span;
-import token_bucket.TokenBucket;
-
-import java.net.SocketAddress;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.util.Deque;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Queue;
 
-public final class ServerAttachment {
-	private final BufferContext bufferContext;
-	private final Deque<MessageWriteRequest> responses;
-	private final Map<String, Object> context;
-	private final BufferContext clientBufferContext;
-	private final Span requestSpan;
-	private final ByteBufferPool byteBufferPool;
-	private volatile String protocol;
-	private volatile SelectionKey selectionKey;
+import io.opentelemetry.api.trace.Span;
+import net.jcip.annotations.NotThreadSafe;
 
-	public ServerAttachment(
-			String protocol,
-			BufferContext bufferContext,
-			BufferContext clientBufferContext,
-			Deque<MessageWriteRequest> responses,
-			Map<String, Object> context,
-			Span requestSpan,
-			ByteBufferPool byteBufferPool,
-			SelectionKey selectionKey
-	) {
-		this.protocol = protocol;
-		this.bufferContext = bufferContext;
-		this.clientBufferContext = clientBufferContext;
-		this.responses = responses;
-		this.context = context;
-		this.requestSpan = requestSpan;
-		this.byteBufferPool = byteBufferPool;
-		this.selectionKey = selectionKey;
-	}
+@NotThreadSafe
+public interface ServerAttachment {
+	Channel getChannel();
+	SocketConnection toSocketConnection();
 
-	public ByteBuffer allocate(int bytes) {
-		return byteBufferPool.allocate(bytes);
-	}
+	ByteBuffer allocate(int bytes);
 
-	public Span getRequestSpan() {
-		return requestSpan;
-	}
+	Span getRequestSpan();
 
-	public BufferContext getClientBufferContext() {
-		return clientBufferContext;
-	}
+	void writeToClientBuffer(byte[] bytes);
 
-	public void setProtocol(String protocol) {
-		this.protocol = protocol;
-	}
+	void freeClientContext();
 
-	public String protocol() {
-		return protocol;
-	}
+	InputStream getClientBufferInputStream();
 
-	public BufferContext bufferContext() {
-		return bufferContext;
-	}
+	void setProtocol(String protocol);
 
-	public Deque<MessageWriteRequest> responses() {
-		return responses;
-	}
+	String protocol();
 
-	public Map<String, Object> context() {
-		return context;
-	}
+	BufferContext bufferContext();
 
-	@Override
-	public boolean equals(Object obj) {
-		if (obj == this) {
-			return true;
-		}
-		if (obj == null || obj.getClass() != this.getClass()) {
-			return false;
-		}
-		var that = (ServerAttachment) obj;
-		return Objects.equals(this.protocol, that.protocol) &&
-				Objects.equals(this.bufferContext, that.bufferContext) &&
-				Objects.equals(this.responses, that.responses) &&
-				Objects.equals(this.context, that.context);
-	}
+	Deque<MessageWriteRequest> responses();
 
-	@Override
-	public int hashCode() {
-		return Objects.hash(protocol, bufferContext, responses, context);
-	}
+	Map<String, Object> context();
 
-	@Override
-	public String toString() {
-		return "ServerAttachment[" +
-				"protocol=" + protocol + ", " +
-				+']';
-	}
+	boolean isWritable();
 
-	public boolean isWritable() {
-		return selectionKey.isWritable();
-	}
+	boolean isReadable();
 
-	public boolean isReadable() {
-		return selectionKey.isReadable();
-	}
+	SelectionKey getSelectionKey();
 
-	public SelectionKey getSelectionKey() {
-		return selectionKey;
-	}
-
-	public void setSelectionKey(SelectionKey selectionKey) {
-		this.selectionKey = selectionKey;
-	}
+	void setSelectionKey(SelectionKey selectionKey);
 }

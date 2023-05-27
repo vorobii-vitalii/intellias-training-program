@@ -2,10 +2,11 @@ package request_handler;
 
 import java.util.Objects;
 
+import document_editor.utils.Copyable;
 import io.opentelemetry.api.trace.Span;
 import tcp.server.SocketConnection;
 
-public final class NetworkRequest<Request> {
+public final class NetworkRequest<Request> implements Copyable<NetworkRequest<Request>> {
 	private Request request;
 	private SocketConnection socketConnection;
 	private Span span;
@@ -51,7 +52,7 @@ public final class NetworkRequest<Request> {
 		if (obj == null || obj.getClass() != this.getClass()) {
 			return false;
 		}
-		var that = (NetworkRequest) obj;
+		var that = (NetworkRequest<Request>) obj;
 		return Objects.equals(this.request, that.request) &&
 				Objects.equals(this.socketConnection, that.socketConnection) &&
 				Objects.equals(this.span, that.span);
@@ -70,4 +71,10 @@ public final class NetworkRequest<Request> {
 				"span=" + span + ']';
 	}
 
+	@Override
+	public void copy(NetworkRequest<Request> obj) {
+		this.setRequest(obj.request());
+		this.setSocketConnection(obj.socketConnection());
+		this.setSpan(obj.span());
+	}
 }

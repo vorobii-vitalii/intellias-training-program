@@ -5,36 +5,34 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
-import com.lmax.disruptor.RingBuffer;
-
-import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
+import message_passing.MessageProducer;
 import request_handler.NetworkRequest;
-import tcp.server.ConnectionImpl;
 import tcp.server.ServerAttachment;
 import tcp.server.SocketMessageReader;
 
 public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 	private final SocketMessageReader<T> socketMessageReader;
-	private final RingBuffer<NetworkRequest<T>> ringBuffer;
+	private final MessageProducer<NetworkRequest<T>> messageProducer;
 	private final BiConsumer<SelectionKey, Throwable> onError;
-	private final Tracer readOperationHandlerTracer;
-	private final String messageType;
+	private final Tracer tracer;
+	private final Supplier<Context> contextSupplier;
 
 	public GenericReadOperationHandler(
-			RingBuffer<NetworkRequest<T>> ringBuffer,
+			MessageProducer<NetworkRequest<T>> messageProducer,
 			SocketMessageReader<T> socketMessageReader,
 			BiConsumer<SelectionKey, Throwable> onError,
-			OpenTelemetry openTelemetry,
-			String messageType
+			Tracer tracer,
+			Supplier<Context> contextSupplier
 	) {
-		this.ringBuffer = ringBuffer;
-		this.messageType = messageType;
+		this.messageProducer = messageProducer;
+		this.tracer = tracer;
 		this.socketMessageReader = socketMessageReader;
 		this.onError = onError;
-		readOperationHandlerTracer = openTelemetry.getTracer("ReadOperationHandler");
+		this.contextSupplier = contextSupplier;
 	}
 
 	@Override
@@ -44,27 +42,20 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 			if (!serverAttachment.isReadable()) {
 				return;
 			}
-			var socketChannel = (SocketChannel) selectionKey.channel();
-			var requestSpan = readOperationHandlerTracer
+			var requestSpan = tracer
 					.spanBuilder("Socket message")
-					.setAttribute("message.type", messageType)
-					.setAttribute("client.ip", socketChannel.getRemoteAddress().toString())
-					.setParent(Context.current().with(serverAttachment.getRequestSpan()))
+					.setParent(contextSupplier.get().with(serverAttachment.getRequestSpan()))
 					.startSpan();
-			var request = socketMessageReader.readMessage(serverAttachment.bufferContext(), socketChannel, requestSpan);
+			var request = socketMessageReader.readMessage(
+					serverAttachment.bufferContext(),
+					serverAttachment.getChannel(),
+					requestSpan::addEvent
+			);
 			if (request == null) {
 				return;
 			}
 			requestSpan.addEvent("Message read from socket");
-//			NetworkRequest<T> networkRequest = new NetworkRequest<>(request, new ConnectionImpl(serverAttachment), requestSpan);
-			requestSpan.addEvent("Request created");
-			var seq = ringBuffer.next();
-			final NetworkRequest<T> networkRequest = ringBuffer.get(seq);
-			networkRequest.setRequest(request);
-			networkRequest.setSocketConnection(new ConnectionImpl(serverAttachment));
-			networkRequest.setSpan(requestSpan);
-			ringBuffer.publish(seq);
-//			ringBuffer.add(networkRequest);
+			messageProducer.produce(new NetworkRequest<>(request, serverAttachment.toSocketConnection(), requestSpan));
 			requestSpan.end();
 		} catch (CancelledKeyException cancelledKeyException) {
 			// Ignore

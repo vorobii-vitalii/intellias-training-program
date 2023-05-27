@@ -6,39 +6,28 @@ import util.UnsafeConsumer;
 
 import java.io.InputStream;
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.function.Consumer;
 
 // ISP
 // metrics, grafana, assertions in load test
+
+/**
+ * The interface should only be used in endpoints
+ */
 public interface SocketConnection {
 	void appendBytesToContext(byte[] data);
-	Span getConnectionSpan();
-
 	void freeContext();
-
-	int getContextLength();
-
-	byte getByteFromContext(int index);
-
 	InputStream getContextInputStream();
-
 	void setProtocol(String protocol);
-
 	void changeOperation(int operation);
-
 	void appendResponse(Serializable response);
-
-	void appendResponse(Serializable response, Span writeRequestSpan, Consumer<SocketConnection> onWriteCallback);
-
+	void appendResponse(Serializable response, EventEmitter eventEmitter, Consumer<SocketConnection> onWriteCallback);
+	void appendResponse(ByteBuffer buffer, Consumer<SocketConnection> onWriteCallback);
 	void setMetadata(String key, Object value);
-
 	String getMetadata(String key);
-
-	SocketAddress getAddress();
-
 	void close();
-
 	void changeSelector(Selector selector);
 }

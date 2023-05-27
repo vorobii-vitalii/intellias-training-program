@@ -1,5 +1,6 @@
 package tcp.server;
 
+import io.micrometer.core.instrument.Timer;
 import io.opentelemetry.api.trace.Span;
 import tcp.server.reader.exception.ParseException;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,9 @@ class SocketMessageReaderTest {
 	@Mock
 	MessageReader<Integer> messageReader;
 
+	@Mock
+	EventEmitter eventEmitter;
+
 	@InjectMocks
 	SocketMessageReader<Integer> socketMessageReader;
 
@@ -33,34 +37,31 @@ class SocketMessageReaderTest {
 	BufferContext bufferContext;
 
 	@Mock
-	ReadableByteChannel readableByteChannel;
-	private Span requestSpan;
+	Channel channel;
+
+	@Mock
+	Timer messageReadTimer;
 
 	@Test
 	void readMessageGivenEnoughBytesWereRead() throws IOException, ParseException {
 		when(bufferContext.getAvailableBuffer()).thenReturn(BYTE_BUFFER);
-		when(readableByteChannel.read(BYTE_BUFFER)).thenReturn(20, 20, 30, 20, 0);
-		when(messageReader.read(bufferContext, any()))
-						.thenReturn(null)
-						.thenReturn(null)
-						.thenReturn(null)
-						.thenReturn(null)
-						.thenReturn(new Pair<>(MESSAGE, MESSAGE_BYTES));
-		var readMessage = socketMessageReader.readMessage(bufferContext, readableByteChannel, requestSpan);
+		when(channel.read(BYTE_BUFFER)).thenReturn(20, 20, 30, 20, 0);
+		when(messageReader.read(eq(bufferContext), any())).thenReturn(new Pair<>(MESSAGE, MESSAGE_BYTES));
+		var readMessage = socketMessageReader.readMessage(bufferContext, channel, eventEmitter);
 		assertThat(readMessage).isEqualTo(MESSAGE);
 		verify(bufferContext).free(MESSAGE_BYTES);
-		verify(readableByteChannel, times(4)).read(BYTE_BUFFER);
+		verify(channel, times(5)).read(BYTE_BUFFER);
 	}
 
 	@Test
 	void readMessageGivenNotEnoughBytesWereRead() throws IOException, ParseException {
 		when(bufferContext.getAvailableBuffer()).thenReturn(BYTE_BUFFER);
-		when(readableByteChannel.read(BYTE_BUFFER)).thenReturn(20, 20, 30, 20, 0);
-		when(messageReader.read(bufferContext, any())).thenReturn(null);
-		var readMessage = socketMessageReader.readMessage(bufferContext, readableByteChannel, requestSpan);
+		when(channel.read(BYTE_BUFFER)).thenReturn(20, 20, 30, 20, 0);
+		when(messageReader.read(eq(bufferContext), any())).thenReturn(null);
+		var readMessage = socketMessageReader.readMessage(bufferContext, channel, eventEmitter);
 		assertThat(readMessage).isNull();
 		verify(bufferContext, never()).free(anyInt());
-		verify(readableByteChannel, times(5)).read(BYTE_BUFFER);
+		verify(channel, times(5)).read(BYTE_BUFFER);
 	}
 
 }

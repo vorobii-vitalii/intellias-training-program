@@ -4,6 +4,7 @@ import static java.nio.channels.SelectionKey.OP_WRITE;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -35,6 +36,8 @@ import grpc.ServiceDecorator;
 import io.grpc.stub.StreamObserver;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
+import tcp.MessageSerializer;
+import tcp.server.BufferCopier;
 import tcp.server.SocketConnection;
 import util.Serializable;
 import websocket.domain.OpCode;
@@ -47,23 +50,30 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
     private final DocumentStorageServiceGrpc.DocumentStorageServiceStub service;
     private final Tracer tracer;
     private final ServiceDecorator serviceDecorator;
+    private final MessageSerializer messageSerializer;
+    private final BufferCopier bufferCopier;
 
     public NewConnectionEventHandler(
             DocumentStorageServiceGrpc.DocumentStorageServiceStub service,
             Supplier<Integer> connectionIdProvider,
             ObjectMapper objectMapper,
             Tracer tracer,
-            ServiceDecorator serviceDecorator
+            ServiceDecorator serviceDecorator,
+            MessageSerializer messageSerializer,
+            BufferCopier bufferCopier
     ) {
         this.service = service;
         this.connectionIdProvider = connectionIdProvider;
         this.objectMapper = objectMapper;
         this.tracer = tracer;
         this.serviceDecorator = serviceDecorator;
+        this.messageSerializer = messageSerializer;
+        this.bufferCopier = bufferCopier;
     }
 
-    private void sendMessage(SocketConnection socketConnection, Serializable serializable) {
-        socketConnection.appendResponse(serializable);
+    private void sendMessage(SocketConnection socketConnection, ByteBuffer buffer) {
+        socketConnection.appendResponse(buffer, e -> {
+        });
         socketConnection.changeOperation(OP_WRITE);
     }
 
@@ -104,13 +114,15 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
                 catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-                getDocumentSpan.addEvent("Batch serialized");
                 message.setOpCode(OpCode.BINARY);
+                getDocumentSpan.addEvent("Batch serialized");
+                var buffer = messageSerializer.serialize(message, e -> {
+                });
                 var iterator = socketConnections.iterator();
                 while (iterator.hasNext()) {
                     var connection = iterator.next();
                     try {
-                        sendMessage(connection, message);
+                        sendMessage(connection, iterator.hasNext() ? bufferCopier.copy(buffer) : buffer);
                     }
                     catch (Exception e) {
                         iterator.remove();
@@ -171,7 +183,8 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
             }
             webSocketMessage.setOpCode(OpCode.BINARY);
             try {
-                sendMessage(socketConnection, webSocketMessage);
+                sendMessage(socketConnection, messageSerializer.serialize(webSocketMessage, e -> {
+                }));
             }
             catch (Exception e) {
                 continue;

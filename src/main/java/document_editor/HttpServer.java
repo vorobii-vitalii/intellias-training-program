@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
+import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.spi.SelectorProvider;
@@ -78,6 +79,7 @@ import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
+import io.opentelemetry.context.Context;
 import io.opentelemetry.context.propagation.ContextPropagators;
 import io.opentelemetry.exporter.otlp.metrics.OtlpGrpcMetricExporter;
 import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
@@ -88,6 +90,7 @@ import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.semconv.resource.attributes.ResourceAttributes;
+import message_passing.DisruptorMessageProducer;
 import message_passing.MessageProducer;
 import monitoring.PrometheusMetricsHTTPRequestHandler;
 import request_handler.NetworkRequest;
@@ -95,15 +98,18 @@ import request_handler.NetworkRequestHandler;
 import serialization.JacksonDeserializer;
 import serialization.Serializer;
 import tcp.FillQueueProcess;
+import tcp.MessageSerializer;
+import tcp.server.BufferCopier;
 import tcp.server.ByteBufferPool;
 import tcp.server.ConnectionImpl;
 import tcp.server.Poller;
 import tcp.server.RoundRobinProvider;
 import tcp.server.ServerAttachment;
 import tcp.server.SocketConnection;
-import tcp.server.SocketMessageReader;
+import tcp.server.SocketMessageReaderImpl;
 import tcp.server.TCPServer;
 import tcp.server.TCPServerConfig;
+import tcp.server.TimerSocketMessageReader;
 import tcp.server.handler.DelegatingReadOperationHandler;
 import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
@@ -123,7 +129,7 @@ public class HttpServer {
 	public static final String PROMETHEUS_ENDPOINT = "/prometheus";
 	public static final int MAX_TOKENS_WRITE = 1000;
 	public static final int MAX_TOKENS_READ = 10;
-	public static final int SELECTION_TIMEOUT = 100;
+	public static final int SELECTION_TIMEOUT = 1;
 	public static final int DOCUMENT_ID = 13;
 	private static final AtomicInteger atomicInteger = new AtomicInteger(1);
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServer.class);
@@ -149,7 +155,7 @@ public class HttpServer {
 					.isPresent()
 	);
 	public static final int MAX_WAIT_FOR_PING_MS = 15_000;
-	public static final int RING_BUFFER_SIZE = (int) Math.pow(2, 14);
+	public static final int RING_BUFFER_SIZE = (int) Math.pow(2, 10);
 
 	private static int getPort() {
 		return Optional.ofNullable(System.getenv("PORT"))
@@ -197,8 +203,9 @@ public class HttpServer {
 				requestHandler.handle(tNetworkRequest);
 			}
 			catch (Exception error) {
-				LOGGER.warn("Error", error);
-
+				if (!(error instanceof IOException) && !(error instanceof CancelledKeyException)) {
+					LOGGER.warn("Error occurred", error);
+				}
 			}
 		});
 		return disruptor.start();
@@ -261,7 +268,9 @@ public class HttpServer {
 							s.appendResponse(webSocketMessage, null, SocketConnection::close);
 							s.changeOperation(OP_WRITE);
 						}
-				), s -> LOGGER.info("Connected {}", s))
+				), s -> {
+//					LOGGER.info("Connected {}", s)
+				})
 		));
 
 		var webSocketChangeProtocolHTTPHandlerStrategy =
@@ -318,6 +327,9 @@ public class HttpServer {
 
 		Consumer<SocketConnection> changeSelector = connection -> connection.changeSelector(webSocketSelectorProvider.get());
 
+		var byteBufferPool = new ByteBufferPool(ByteBuffer::allocateDirect);
+		var appByteBufferPool = new ByteBufferPool(ByteBuffer::allocate);
+
 		var httpRequestHandler = new HTTPNetworkRequestHandler(
 				List.of(
 						webSocketChangeProtocolHTTPHandlerStrategy,
@@ -331,6 +343,7 @@ public class HttpServer {
 					}
 					return null;
 				}),
+				new MessageSerializer(byteBufferPool),
 				openTelemetry
 		);
 		var webSocketNetworkRequestHandler = new WebSocketNetworkRequestHandler(webSocketEndpointProvider);
@@ -338,7 +351,8 @@ public class HttpServer {
 		var httpRing = createNetworkDisruptor(httpRequestHandler);
 		var wsRing = createNetworkDisruptor(webSocketNetworkRequestHandler);
 
-		var eventContext = new ClientConnectionsContext(MAX_WAIT_FOR_PING_MS, Instant::now);
+		var eventContext = new ClientConnectionsContext(MAX_WAIT_FOR_PING_MS, Instant::now, new MessageSerializer(byteBufferPool),
+				new BufferCopier(byteBufferPool));
 
 		var documentStorageServiceChannel =
 				Grpc.newChannelBuilder(
@@ -353,13 +367,15 @@ public class HttpServer {
 
 		var contextPropagationServiceDecorator = new ContextPropagationServiceDecorator(openTelemetry);
 
-		schedulePeriodically(500, new DocumentMessageEventsHandler(eventsQueue, eventContext, List.of(
+		schedulePeriodically(250, new DocumentMessageEventsHandler(eventsQueue, eventContext, List.of(
 				new NewConnectionEventHandler(
 						documentStorageService,
 						atomicInteger::getAndIncrement,
 						objectMapper,
 						openTelemetry.getTracer("New connection handler"),
-						contextPropagationServiceDecorator
+						contextPropagationServiceDecorator,
+						new MessageSerializer(byteBufferPool),
+						new BufferCopier(byteBufferPool)
 				),
 				new MessageDistributeEventHandler(),
 				new PingEventHandler(),
@@ -376,16 +392,13 @@ public class HttpServer {
 
 		Consumer<SelectionKey> closeConnection = selectionKey -> {
 			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());
-			socketConnection.close();
+//			socketConnection.close();
 		};
 
 		BiConsumer<SelectionKey, Throwable> onError = (selectionKey, throwable) -> {
-			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());
-			socketConnection.close();
+			var socketConnection = ((ServerAttachment) selectionKey.attachment()).toSocketConnection();
+			LOGGER.warn("Error occurred", throwable);
 		};
-
-		var byteBufferPool = new ByteBufferPool(ByteBuffer::allocateDirect);
-		var appByteBufferPool = new ByteBufferPool(ByteBuffer::allocate);
 
 		Map<Integer, Consumer<SelectionKey>> operationHandlerByTypeHTTP =
 				Map.of(
@@ -398,31 +411,34 @@ public class HttpServer {
 						),
 						OP_READ, new DelegatingReadOperationHandler(Map.of(
 								Constants.Protocol.HTTP, new GenericReadOperationHandler<>(
-										httpRing,
-										new SocketMessageReader<>(
-												new HTTPRequestMessageReader((name, val) -> Collections.singletonList(val.toString().trim())),
-												httpRequestParseTimer
-										),
+										new DisruptorMessageProducer<>(httpRing),
+										new TimerSocketMessageReader<>(
+												httpRequestParseTimer,
+												new SocketMessageReaderImpl<>(
+														new HTTPRequestMessageReader(
+																(name, val) -> Collections.singletonList(val.toString().trim()))
+												)),
 										onError,
-										openTelemetry,
-										"HTTP"
+										openTelemetry.getTracer("HTTP request reader"),
+										Context::current
 								),
 								Constants.Protocol.WEB_SOCKET, new GenericReadOperationHandler<>(
-										wsRing,
-										new SocketMessageReader<>(new WebSocketMessageReader(), webSocketRequestParseTimer),
+										new DisruptorMessageProducer<>(wsRing),
+										new TimerSocketMessageReader<>(webSocketRequestParseTimer, new SocketMessageReaderImpl<>(new WebSocketMessageReader())),
 										onError,
-										openTelemetry,
-										"WEB_SOCKET"
+										openTelemetry.getTracer("WebSocket request reader"),
+										Context::current
 								)))
 				);
 		Map<Integer, Consumer<SelectionKey>> operationHandlerByTypeWebSockets =
 				Map.of(
 						OP_READ, new GenericReadOperationHandler<>(
-								wsRing,
-								new SocketMessageReader<>(new WebSocketMessageReader(), webSocketRequestParseTimer),
+								new DisruptorMessageProducer<>(wsRing),
+								new TimerSocketMessageReader<>(webSocketRequestParseTimer,
+										new SocketMessageReaderImpl<>(new WebSocketMessageReader())),
 								onError,
-								openTelemetry,
-								"WEB_SOCKET"
+								openTelemetry.getTracer("WebSocket request reader"),
+								Context::current
 						),
 						OP_WRITE, new WriteOperationHandler(
 								messagesWriteTimer,

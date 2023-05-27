@@ -1,2 +1,2 @@
 db.docCol.createIndex({ documentId: 1, directions: 1, disambiguators: 1 }, { unique: true });
-db.docCol.createIndex({ documentId: 1, deleting: 1 });
+db.docCol.createIndex({ documentId: 1, path: 1 });

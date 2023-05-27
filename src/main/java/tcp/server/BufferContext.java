@@ -10,9 +10,7 @@ import java.util.List;
 
 @NotThreadSafe
 public class BufferContext {
-	private static final Logger LOGGER = LoggerFactory.getLogger(BufferContext.class);
-	// TODO: Make it configurable
-	private static final int SINGLE_BUFFER_SIZE = 1024;
+	private static final int SINGLE_BUFFER_SIZE = 8192;
 
 	private final List<ByteBuffer> byteBuffers = new ArrayList<>();
 	private final List<Integer> list = new ArrayList<>();
@@ -28,6 +26,9 @@ public class BufferContext {
 	}
 
 	public byte[] extract(int from, int end) {
+		if (from == end) {
+			return new byte[] {};
+		}
 		if (from > end) {
 			throw new IllegalStateException("from = " + from + " > end = " + end);
 		}
@@ -72,8 +73,8 @@ public class BufferContext {
 	}
 
 	private int getBufferIndex(int pos) {
-		int low = 0;
-		int high = byteBuffers.size() - 1;
+		var low = 0;
+		var high = byteBuffers.size() - 1;
 		while (low <= high) {
 			int mid = low + (high - low) / 2;
 			int start = list.get(mid);
@@ -101,9 +102,7 @@ public class BufferContext {
 
 		if (bytesToKeep > 0) {
 			newBuffer = byteBufferPool.allocate(Math.max(bytesToKeep, SINGLE_BUFFER_SIZE));
-//			var lastBuffer = byteBuffers.get(byteBuffers.size() - 1);
 			for (var i = 0; i < bytesToKeep; i++) {
-//				newBuffer.put(i, lastBuffer.get(lastBuffer.position() - bytesToKeep + i));
 				newBuffer.put(i, get(currentSize - bytesToKeep + i));
 			}
 			newBuffer.position(bytesToKeep);
@@ -120,16 +119,13 @@ public class BufferContext {
 
 	private void validatePosition(int pos) {
 		if (pos < 0 || pos >= size()) {
-			throw new IllegalStateException("Position is not in bounds [0, " + size() + ")");
+			throw new IllegalStateException("Position is not in bounds [0, " + size() + ")" + " -> " + pos);
 		}
 	}
 
 	private void addByteBufferIfNeeded() {
 		if (byteBuffers.isEmpty() || isLastBufferFull()) {
-			var newBufferSize = byteBuffers.isEmpty()
-					? SINGLE_BUFFER_SIZE
-					: (list.get(list.size() - 1) + byteBuffers.get(list.size() - 1).capacity());
-			var buffer = byteBufferPool.allocate(newBufferSize);
+			var buffer = byteBufferPool.allocate(SINGLE_BUFFER_SIZE);
 			list.add(list.isEmpty() ? 0 : (list.get(list.size() - 1) + byteBuffers.get(list.size() - 1).capacity()));
 			byteBuffers.add(buffer);
 		}

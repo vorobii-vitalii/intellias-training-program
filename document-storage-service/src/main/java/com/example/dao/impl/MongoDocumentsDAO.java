@@ -41,7 +41,7 @@ public class MongoDocumentsDAO implements DocumentsDAO {
     public static final String DIRECTIONS = "directions";
     private static final String DISAMBIGUATORS = "disambiguators";
     public static final String VALUE = "value";
-    public static final int BATCH_SIZE = 5000;
+    public static final int BATCH_SIZE = 200;
     private static final Logger LOGGER = LoggerFactory.getLogger(MongoDocumentsDAO.class);
     public static final String DELETING = "deleting";
     private final MongoCollection<Document> collection;

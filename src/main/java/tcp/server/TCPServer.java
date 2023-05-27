@@ -65,8 +65,6 @@ public class TCPServer {
 			 var serverSocketChannel = selectorProvider.openServerSocketChannel(serverConfig.getProtocolFamily())
 		) {
 			serverSocketChannel.configureBlocking(false);
-//			serverSocketChannel.socket().setReceiveBufferSize(64 * 1024);
-//			serverSocketChannel.socket().setSoTimeout(1);
 			serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
 			serverSocketChannel.bind(new InetSocketAddress(serverConfig.getHost(), serverConfig.getPort()), BACKLOG);
 			new Poller(selector, operationHandlerByType, serverConfig.getOnConnectionClose(), TIMEOUT).run();

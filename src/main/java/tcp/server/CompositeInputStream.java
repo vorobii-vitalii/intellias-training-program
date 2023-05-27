@@ -4,6 +4,7 @@ import net.jcip.annotations.NotThreadSafe;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 
 @NotThreadSafe
 public class CompositeInputStream extends InputStream  {

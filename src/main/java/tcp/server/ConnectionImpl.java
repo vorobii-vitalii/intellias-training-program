@@ -24,57 +24,24 @@ import util.UnsafeConsumer;
 public class ConnectionImpl implements SocketConnection {
 	public static final int EOF = -1;
 	private final ServerAttachment serverAttachment;
-	private final SocketAddress address;
 
 	public ConnectionImpl(ServerAttachment serverAttachment) {
 		this.serverAttachment = serverAttachment;
-		try {
-			address = ((SocketChannel) (serverAttachment.getSelectionKey().channel())).getRemoteAddress();
-		}
-		catch (IOException e) {
-			throw new IllegalStateException(e);
-		}
 	}
 
 	@Override
 	public void appendBytesToContext(byte[] data) {
-		serverAttachment.getClientBufferContext().write(data);
-	}
-
-	@Override
-	public Span getConnectionSpan() {
-		return serverAttachment.getRequestSpan();
+		serverAttachment.writeToClientBuffer(data);
 	}
 
 	@Override
 	public void freeContext() {
-		serverAttachment.getClientBufferContext().free(serverAttachment.getClientBufferContext().size());
-	}
-
-	@Override
-	public int getContextLength() {
-		return serverAttachment.getClientBufferContext().size();
-	}
-
-	@Override
-	public byte getByteFromContext(int index) {
-		return serverAttachment.getClientBufferContext().get(index);
+		serverAttachment.freeClientContext();
 	}
 
 	@Override
 	public InputStream getContextInputStream() {
-		return new InputStream() {
-			private int index = 0;
-
-			@Override
-			public int read() {
-				var size = getContextLength();
-				if (index == size) {
-					return EOF;
-				}
-				return getByteFromContext(index++) & 0xff;
-			}
-		};
+		return serverAttachment.getClientBufferInputStream();
 	}
 
 	@Override
@@ -94,26 +61,36 @@ public class ConnectionImpl implements SocketConnection {
 	}
 
 	@Override
-	public void appendResponse(Serializable response, Span writeRequestSpan, Consumer<SocketConnection> onWriteCallback) {
+	public void appendResponse(Serializable response, EventEmitter eventEmitter, Consumer<SocketConnection> onWriteCallback) {
 		// Issue
 		if (!serverAttachment.getSelectionKey().isValid()) {
 			throw new CancelledKeyException();
 		}
 		ByteBuffer message = serverAttachment.allocate(response.getSize());
-		if (writeRequestSpan != null) {
-			writeRequestSpan.addEvent("Allocated buffer");
+		if (eventEmitter != null) {
+			eventEmitter.emit("Allocated buffer");
 		}
 		response.serialize(message);
-		if (writeRequestSpan != null) {
-			writeRequestSpan.addEvent("Serialized");
+		if (eventEmitter != null) {
+			eventEmitter.emit("Serialized");
 		}
 		message.flip();
 		serverAttachment
 				.responses()
 				.add(new MessageWriteRequest(message, onWriteCallback));
-		if (writeRequestSpan != null) {
-			writeRequestSpan.addEvent("Written to queue");
+		if (eventEmitter != null) {
+			eventEmitter.emit("Written to queue");
 		}
+	}
+
+	@Override
+	public void appendResponse(ByteBuffer buffer, Consumer<SocketConnection> onWriteCallback) {
+		if (!serverAttachment.getSelectionKey().isValid()) {
+			throw new CancelledKeyException();
+		}
+		serverAttachment
+				.responses()
+				.add(new MessageWriteRequest(buffer, onWriteCallback));
 	}
 
 	@Override
@@ -124,11 +101,6 @@ public class ConnectionImpl implements SocketConnection {
 	@Override
 	public String getMetadata(String key) {
 		return (String) serverAttachment.context().get(key);
-	}
-
-	@Override
-	public SocketAddress getAddress() {
-		return address;
 	}
 
 	@Override
@@ -174,7 +146,7 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public String toString() {
-		return "Connection[" + serverAttachment + " " + getAddress() + "]";
+		return "Connection[" + serverAttachment + "]";
 	}
 
 }

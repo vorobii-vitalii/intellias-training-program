@@ -50,7 +50,6 @@ public class HTTPRequestMessageReader implements MessageReader<HTTPRequest> {
 				}
 
 				var line = new CharSequenceImpl(bufferContext, prevCLRFIndex + CLRF_LENGTH, i);
-//				var line = new String(bytes, prevCLRFIndex + 2, i - (prevCLRFIndex + 2));
 				eventEmitter.emit("Extracted line");
 				if (requestLine == null) {
 					requestLine = HTTPRequestLine.parse(line);
@@ -84,8 +83,6 @@ public class HTTPRequestMessageReader implements MessageReader<HTTPRequest> {
 			return null;
 		}
 		var body = payloadSize == 0 ? new byte[0] : bufferContext.extract(bodyStartIndex, bodyStartIndex + payloadSize);
-//		var body = new byte[payloadSize];
-//		System.arraycopy(bytes, bodyStartIndex, body, 0, payloadSize);
 		return new Pair<>(new HTTPRequest(requestLine, httpHeaders, body), bodyStartIndex + payloadSize);
 	}
 

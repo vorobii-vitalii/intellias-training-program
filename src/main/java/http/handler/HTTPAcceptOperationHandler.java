@@ -3,11 +3,10 @@ package http.handler;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 
-import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.trace.Tracer;
 import tcp.server.BufferContext;
 import tcp.server.ByteBufferPool;
-import tcp.server.ServerAttachment;
+import tcp.server.ServerAttachmentImpl;
 import token_bucket.TokenBucket;
 import util.Constants;
 
@@ -30,6 +29,7 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 	private final Function<SelectionKey, Selector> selectorSupplier;
 	private final ByteBufferPool networkByteBufferPool;
 	private final Tracer tracer;
+	// TODO: Remove
 	private final ByteBufferPool bufferPool;
 
 	public HTTPAcceptOperationHandler(
@@ -61,14 +61,15 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 				return;
 			}
 			requestSpan.addEvent("Connection accepted");
-			if (LOGGER.isDebugEnabled()) {
-				LOGGER.debug("Accepted new connection {}", socketChannel);
-			}
+			LOGGER.debug("Accepted new connection {}", socketChannel);
 			socketChannel.configureBlocking(false);
-			var serverAttachment = new ServerAttachment(
+			socketChannel.socket().setSoTimeout(1);
+			socketChannel.socket().setTcpNoDelay(true);
+//			socketChannel.socket().setReceiveBufferSize(64 * 1024);
+//			socketChannel.socket().setSendBufferSize(64 * 1024);
+			var serverAttachment = new ServerAttachmentImpl(
 					Constants.Protocol.HTTP,
 					new BufferContext(networkByteBufferPool),
-					new BufferContext(bufferPool),
 					new ConcurrentLinkedDeque<>(),
 					new ConcurrentHashMap<>(),
 					requestSpan,
@@ -76,7 +77,9 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 					null
 			);
 			var newSelector = selectorSupplier.apply(selectionKey);
-			serverAttachment.setSelectionKey(socketChannel.register(newSelector, SelectionKey.OP_READ, serverAttachment));
+			final SelectionKey registered = socketChannel.register(newSelector, 0, serverAttachment);
+			serverAttachment.setSelectionKey(registered);
+			registered.interestOps(SelectionKey.OP_READ);
 			newSelector.wakeup();
 			requestSpan.end();
 		} catch (IOException e) {

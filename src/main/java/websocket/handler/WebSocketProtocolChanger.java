@@ -22,7 +22,7 @@ public class WebSocketProtocolChanger implements ProtocolChanger {
 		var request = protocolChangeContext.request();
 		var endpoint = request.getHttpRequestLine().path();
 		var connection = protocolChangeContext.connection();
-		LOGGER.info("Changing protocol of {} to websocket, endpoint = {}", connection, endpoint);
+//		LOGGER.info("Changing protocol of {} to websocket, endpoint = {}", connection, endpoint);
 		connection.setProtocol(Constants.Protocol.WEB_SOCKET);
 		connection.setMetadata(Constants.WebSocketMetadata.ENDPOINT, endpoint);
 		webSocketEndpointProvider.getEndpoint(endpoint).onHandshakeCompletion(connection);
