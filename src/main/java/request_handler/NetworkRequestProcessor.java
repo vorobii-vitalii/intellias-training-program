@@ -35,7 +35,7 @@ public class NetworkRequestProcessor<RequestMessage> implements Runnable {
 				var request = requestQueue.poll();
 				if (request != null) {
 					if (LOGGER.isDebugEnabled()) {
-						LOGGER.debug("Handling {}", request);
+						LOGGER.info("Handling {}", request);
 					}
 					requestsCounter.increment();
 					requestProcessingTimer.record(() -> networkRequestHandler.handle(request));

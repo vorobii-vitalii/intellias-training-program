@@ -20,6 +20,7 @@ import util.Serializable;
 
 @NotThreadSafe
 public class ClientConnectionsContext {
+	private static final Logger LOGGER = LoggerFactory.getLogger(ClientConnectionsContext.class);
 	private final Map<SocketConnection, Instant> connectionsMap = new HashMap<>();
 	private final int maxWaitMs;
 	private final Supplier<Instant> currentTimeProvider;
@@ -45,20 +46,19 @@ public class ClientConnectionsContext {
 	public void broadCastMessage(Serializable message) {
 		var buffer = messageSerializer.serialize(message, e -> {
 		});
-		var size = connectionsMap.size();
-		int i = 0;
-		for (var entry : connectionsMap.entrySet()) {
-			if (isConnected(entry.getValue())) {
-				var connection = entry.getKey();
-				try {
-					var b = i == size - 1 ? buffer : bufferCopier.copy(buffer);
-					connection.appendResponse(b, e -> {});
-					connection.changeOperation(SelectionKey.OP_WRITE);
-				} catch (Exception ignored) {
-				}
-			}
-			i++;
-		}
+		connectionsMap.entrySet().parallelStream()
+				.forEach(e -> {
+					if (isConnected(e.getValue())) {
+						var connection = e.getKey();
+						LOGGER.info("Sending message to {}", connection);
+						try {
+							connection.appendResponse(bufferCopier.copy(buffer), r -> {});
+							connection.changeOperation(SelectionKey.OP_WRITE);
+						} catch (Exception error) {
+							error.printStackTrace();
+						}
+					}
+				});
 	}
 
 	public void removeDisconnectedClients() {
@@ -67,8 +67,8 @@ public class ClientConnectionsContext {
 			if (!isConnected(entry.getValue())) {
 				try {
 					var connection = entry.getKey();
-					connection.close();
 					connectionsToRemove.add(connection);
+					connection.close();
 				}
 				catch (Exception error) {
 					error.printStackTrace();

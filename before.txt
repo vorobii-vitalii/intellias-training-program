@@ -75,3 +75,37 @@ default ✓ [ 100% ] 300 VUs  00m38.1s/10m0s  300/300 shared iters
      ws_session_duration...: avg=20.59s   min=20s    med=20.26s   max=22.57s p(90)=22.48s p(95)=22.5s
      ws_sessions...........: 300     13.27866/s
 
+
+1000
+
+     ✓ status is 101
+
+     checks................: 100.00% ✓ 1000      ✗ 0
+     data_received.........: 3.5 MB  168 kB/s
+     data_sent.............: 24 MB   1.2 MB/s
+     iteration_duration....: avg=20.58s   min=7.91s   med=20.62s   max=21.02s   p(90)=20.79s   p(95)=20.82s
+     iterations............: 1000    47.445687/s
+     vus...................: 974     min=0       max=1000
+     vus_max...............: 1000    min=374     max=1000
+     ws_connecting.........: avg=474.06ms min=90.31ms med=487.27ms max=829.63ms p(90)=651.56ms p(95)=659.83ms
+     ws_msgs_received......: 1054    50.007754/s
+     ws_msgs_sent..........: 11773   558.57807/s
+     ws_session_duration...: avg=20.58s   min=7.91s   med=20.62s   max=21.02s   p(90)=20.79s   p(95)=20.82s
+     ws_sessions...........: 1000    47.445687/s
+
+2000
+
+     ✓ status is 101
+
+     checks................: 100.00% ✓ 2000        ✗ 0
+     data_received.........: 2.2 MB  104 kB/s
+     data_sent.............: 49 MB   2.3 MB/s
+     iteration_duration....: avg=20.8s    min=20.18s   med=20.78s   max=21.37s p(90)=21.12s p(95)=21.18s
+     iterations............: 2000    93.277981/s
+     vus...................: 716     min=0         max=2000
+     vus_max...............: 2000    min=330       max=2000
+     ws_connecting.........: avg=617.88ms min=150.35ms med=575.29ms max=1.33s  p(90)=1.01s  p(95)=1.09s
+     ws_msgs_received......: 2068    96.449432/s
+     ws_msgs_sent..........: 23746   1107.489463/s
+     ws_session_duration...: avg=20.79s   min=20.18s   med=20.78s   max=21.37s p(90)=21.12s p(95)=21.18s
+     ws_sessions...........: 2000    93.277981/s

@@ -150,12 +150,6 @@
             <version>${junit-jupiter.version}</version>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.vitalii.vorobii</groupId>
-            <artifactId>treedoc-java</artifactId>
-            <version>1.0-SNAPSHOT</version>
-        </dependency>
-
         <!-- Logging -->
         <dependency>
             <groupId>ch.qos.logback</groupId>

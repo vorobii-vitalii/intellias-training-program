@@ -30,6 +30,11 @@ public class ConnectionImpl implements SocketConnection {
 	}
 
 	@Override
+	public boolean isOpen() {
+		return serverAttachment.getChannel().isOpen();
+	}
+
+	@Override
 	public void appendBytesToContext(byte[] data) {
 		serverAttachment.writeToClientBuffer(data);
 	}
@@ -51,13 +56,11 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public void changeOperation(int operation) {
+		if (!isOpen()) {
+			return;
+		}
 		serverAttachment.getSelectionKey().interestOps(operation);
-		serverAttachment.getSelectionKey().selector().wakeup();
-	}
-
-	@Override
-	public void appendResponse(Serializable response) {
-		appendResponse(response, null, null);
+//		serverAttachment.getSelectionKey().selector().wakeup();
 	}
 
 	@Override
@@ -85,6 +88,9 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public void appendResponse(ByteBuffer buffer, Consumer<SocketConnection> onWriteCallback) {
+		if (!isOpen()) {
+			return;
+		}
 		if (!serverAttachment.getSelectionKey().isValid()) {
 			throw new CancelledKeyException();
 		}
@@ -106,24 +112,9 @@ public class ConnectionImpl implements SocketConnection {
 	@Override
 	public void close() {
 		try {
-			serverAttachment.getSelectionKey().channel().close();
+			serverAttachment.getChannel().close();
 		} catch (IOException e) {
 			e.printStackTrace();
-		}
-	}
-
-	@Override
-	public void changeSelector(Selector selector) {
-		try {
-			var oldSelectionKey = serverAttachment.getSelectionKey();
-			var channel = oldSelectionKey.channel();
-			var newSelectionKey = channel.register(selector, OP_READ, serverAttachment);
-			serverAttachment.setSelectionKey(newSelectionKey);
-			selector.wakeup();
-			oldSelectionKey.cancel();
-		}
-		catch (ClosedChannelException e) {
-			throw new RuntimeException(e);
 		}
 	}
 

@@ -13,6 +13,7 @@ public class BufferCopier {
 		int size = byteBuffer.limit();
 		var copy = byteBufferPool.allocate(size);
 		copy.put(byteBuffer);
+		copy.flip();
 		return copy;
 	}
 }

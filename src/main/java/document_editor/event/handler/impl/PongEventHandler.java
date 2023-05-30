@@ -43,6 +43,7 @@ public class PongEventHandler implements EventHandler<SendPongsDocumentsEvent> {
 	@Override
 	public void handle(Collection<SendPongsDocumentsEvent> events, ClientConnectionsContext clientConnectionsContext) {
 		try {
+			LOGGER.info("Sending pongs");
 			clientConnectionsContext.removeDisconnectedClients();
 			var webSocketMessage = new WebSocketMessage();
 			webSocketMessage.setFin(true);

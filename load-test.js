@@ -75,35 +75,35 @@ export default function () {
     };
 
     const res = ws.connect(url, params, function (socket) {
+        socket.on('error', e => {
+            console.log('Error ', e);
+        });
         socket.on('open', () => {
 
-            socket.setTimeout(() => {
-                socket.sendBinary(msgpack.encode({
-                    type: 'CONNECT'
-                }).buffer);
-                const connectionId = __VU;
-                const changes = [];
-                for (let i = 0; i < VIRTUAL_USERS * CHANGES_PER_USER; i++) {
-                    if (i % connectionId === 0) {
-                        changes.splice(changes.length, 0, data[i]);
-                    }
+            socket.sendBinary(msgpack.encode({
+                type: 'CONNECT'
+            }).buffer);
+            const connectionId = __VU;
+            const changes = [];
+            for (let i = connectionId; i < VIRTUAL_USERS * CHANGES_PER_USER; i += VIRTUAL_USERS) {
+                if (i % connectionId === 0) {
+                    changes.splice(changes.length, 0, data[i]);
                 }
-                const sendMessageTimeout = randomIntBetween(500, 3000);
-                socket.setTimeout(() => {
-                    // console.log('Sending ', JSON.stringify(changes));
-                    socket.sendBinary(msgpack.encode({
-                        type: 'CHANGES',
-                        payload: changes
-                    }).buffer);
-                }, sendMessageTimeout);
+            }
+            const sendMessageTimeout = randomIntBetween(500, 3000);
+            socket.setTimeout(() => {
+                // console.log('Sending ', JSON.stringify(changes));
+                socket.sendBinary(msgpack.encode({
+                    type: 'CHANGES',
+                    payload: changes
+                }).buffer);
+            }, sendMessageTimeout);
 
-                socket.setInterval(() => {
-                    socket.sendBinary(msgpack.encode({
-                        type: 'PING',
-                    }).buffer);
-                }, 2000);
-
-            }, randomIntBetween(1, 2));
+            socket.setInterval(() => {
+                socket.sendBinary(msgpack.encode({
+                    type: 'PING',
+                }).buffer);
+            }, 2000);
 
 
             const binarySearch = (path) => {
@@ -133,7 +133,7 @@ export default function () {
             };
 
             socket.on('binaryMessage', function (message) {
-                // // console.log('Received message ', message);
+                // console.log('Received message ', message.byteLength);
                 // const eventPayload = msgpack.decode(new Uint8Array(message));
                 //
                 // if (eventPayload.responseType === 'ADD') {
@@ -156,7 +156,7 @@ export default function () {
                 //   'all changes received': c => c.length === data.length
                 // })
                 socket.close();
-            }, 6 * 1000);
+            }, 20 * 1000);
         });
     });
     // console.log(res)

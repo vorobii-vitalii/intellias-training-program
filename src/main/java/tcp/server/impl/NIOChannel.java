@@ -22,4 +22,14 @@ public class NIOChannel implements Channel {
 	public int write(ByteBuffer buffer) throws IOException {
 		return socketChannel.write(buffer);
 	}
+
+	@Override
+	public boolean isOpen() {
+		return socketChannel.isOpen();
+	}
+
+	@Override
+	public void close() throws IOException {
+		socketChannel.close();
+	}
 }

@@ -1,9 +1,12 @@
 package com.example.dao.impl;
 
 import java.time.Duration;
+import java.util.Base64;
+import java.util.BitSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.bson.BsonDocument;
 import org.bson.Document;
@@ -31,7 +34,6 @@ import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.model.changestream.ChangeStreamDocument;
 import com.mongodb.client.model.changestream.FullDocument;
-import com.mongodb.client.result.InsertManyResult;
 import com.mongodb.reactivestreams.client.MongoCollection;
 
 import reactor.core.publisher.Flux;
@@ -40,8 +42,9 @@ public class MongoDocumentsDAO implements DocumentsDAO {
     public static final String DOCUMENT_ID = "documentId";
     public static final String DIRECTIONS = "directions";
     private static final String DISAMBIGUATORS = "disambiguators";
+    private static final String DIRECTIONS_COUNT = "directionsCount";
     public static final String VALUE = "value";
-    public static final int BATCH_SIZE = 200;
+    public static final int BATCH_SIZE = 1000;
     private static final Logger LOGGER = LoggerFactory.getLogger(MongoDocumentsDAO.class);
     public static final String DELETING = "deleting";
     private final MongoCollection<Document> collection;
@@ -66,19 +69,39 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                                 Filters.eq(DOCUMENT_ID, documentId),
                                 Filters.not(Filters.exists("deleting"))
                         ))
-                        .projection(new Document().append(DIRECTIONS, 1).append(DISAMBIGUATORS, 1).append(VALUE, 1)))
+                        .projection(new Document()
+                                .append(DIRECTIONS, 1)
+                                .append(DISAMBIGUATORS, 1)
+                                .append(DIRECTIONS_COUNT, 1)
+                                .append(VALUE, 1)))
                 .buffer(BATCH_SIZE)
                 .map(documents ->
                         DocumentElements.newBuilder()
                                 .addAllDocumentElements(documents.stream()
-                                        .map(document ->
-                                                DocumentElement.newBuilder()
-                                                        .setCharacter(document.getInteger(VALUE))
-                                                        .addAllDirections(document.getList(DIRECTIONS, Boolean.class))
-                                                        .addAllDisambiguators(document.getList(DISAMBIGUATORS, Integer.class))
-                                                        .build())
+                                        .map(document -> {
+                                            return DocumentElement.newBuilder()
+                                                    .setCharacter(document.getInteger(VALUE))
+                                                    .addAllDirections(getDirections(document.getString(DIRECTIONS), document.getInteger(DIRECTIONS_COUNT)))
+                                                    .addAllDisambiguators(document.getList(DISAMBIGUATORS, Integer.class))
+                                                    .build();
+                                        })
                                         .collect(Collectors.toList()))
                                 .build());
+    }
+
+    private List<Boolean> getDirections(String s, Integer count) {
+        var set = BitSet.valueOf(Base64.getDecoder().decode(s));
+        return IntStream.range(0, count)
+                .mapToObj(set::get)
+                .collect(Collectors.toList());
+    }
+
+    private String toDirections(List<Boolean> list) {
+        BitSet bitSet = new BitSet(list.size());
+        for (int i = 0; i < list.size(); i++) {
+            bitSet.set(i, list.get(i));
+        }
+        return Base64.getEncoder().encodeToString(bitSet.toByteArray());
     }
 
     @Override
@@ -92,7 +115,8 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                                     var fullDocument = doc.getFullDocument();
                                     var changeBuilder = Change.newBuilder()
                                             .setDocumentId(fullDocument.getInteger(DOCUMENT_ID))
-                                            .addAllDirections(fullDocument.getList(DIRECTIONS, Boolean.class))
+                                            .addAllDirections(getDirections(fullDocument.getString(DIRECTIONS),
+                                                    fullDocument.getInteger(DIRECTIONS_COUNT)))
                                             .addAllDisambiguators(fullDocument.getList(DISAMBIGUATORS, Integer.class));
                                     if (!fullDocument.containsKey(DELETING)) {
                                         changeBuilder.setCharacter(fullDocument.getInteger(VALUE));
@@ -121,7 +145,7 @@ public class MongoDocumentsDAO implements DocumentsDAO {
         var filters = deletes.stream()
                 .map(delete -> Filters.and(
                         Filters.eq(DOCUMENT_ID, delete.getDocumentId()),
-                        Filters.eq(DIRECTIONS, delete.getDirectionsList()),
+                        Filters.eq(DIRECTIONS, toDirections(delete.getDirectionsList())),
                         Filters.eq(DISAMBIGUATORS, delete.getDisambiguatorsList())))
                 .toList();
         var filter = Filters.or(filters);
@@ -159,9 +183,10 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                         .map(c -> new UpdateOneModel<Document>(
                                 new Document()
                                         .append(DOCUMENT_ID, c.getDocumentId())
-                                        .append(DIRECTIONS, c.getDirectionsList())
+                                        .append(DIRECTIONS, toDirections(c.getDirectionsList()))
+                                        .append(DIRECTIONS_COUNT, c.getDirectionsList().size())
                                         .append(DISAMBIGUATORS, c.getDisambiguatorsList()),
-                                new Document().append("$set", new Document().append(VALUE, c.getCharacter())),
+                                new Document().append("$setOnInsert", new Document().append(VALUE, c.getCharacter())),
                                 new UpdateOptions().upsert(true)
                         ))
                         .collect(Collectors.toList())

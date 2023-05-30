@@ -1,9 +1,7 @@
 package tcp.server;
 
-import io.opentelemetry.api.trace.Span;
-import tcp.server.impl.NIOChannel;
-
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -12,7 +10,9 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+
+import io.opentelemetry.api.trace.Span;
+import tcp.server.impl.NIOChannel;
 
 public class ServerAttachmentImpl implements ServerAttachment {
 	private final BufferContext bufferContext;
@@ -106,30 +106,16 @@ public class ServerAttachmentImpl implements ServerAttachment {
 	}
 
 	@Override
-	public boolean equals(Object obj) {
-		if (obj == this) {
-			return true;
-		}
-		if (obj == null || obj.getClass() != this.getClass()) {
-			return false;
-		}
-		var that = (ServerAttachment) obj;
-		return Objects.equals(this.protocol, that.protocol()) &&
-				Objects.equals(this.bufferContext, that.bufferContext()) &&
-				Objects.equals(this.responses, that.responses()) &&
-				Objects.equals(this.context, that.context());
-	}
-
-	@Override
-	public int hashCode() {
-		return Objects.hash(protocol, bufferContext, responses, context);
-	}
-
-	@Override
 	public String toString() {
-		return "ServerAttachment[" +
-				"protocol=" + protocol + ", " +
-				+']';
+		try {
+			var channel = (SocketChannel) selectionKey.channel();
+			return "ServerAttachment[" +
+					(channel.isOpen() ? channel.getRemoteAddress() : "CLOSED")
+					+ ']';
+		}
+		catch (IOException e) {
+			return "Connection closed...";
+		}
 	}
 
 	@Override

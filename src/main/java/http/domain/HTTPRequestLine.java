@@ -24,7 +24,7 @@ public record HTTPRequestLine(HTTPMethod httpMethod, String path, HTTPVersion ht
 			}
 		}
 		if (leftSpace == -1 || rightSpace == -1 || leftSpace == rightSpace) {
-			throw new ParseException("request-line   = method SP request-target SP HTTP-version CRLF");
+			throw new ParseException("request-line   = method SP request-target SP HTTP-version CRLF " + charSequence);
 		}
 		var method = HTTPMethod.parse(charSequence.subSequence(0, leftSpace));
 		var path = charSequence.subSequence(leftSpace + 1, rightSpace).toString();

@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -34,6 +35,7 @@ import document_editor.event.context.ClientConnectionsContext;
 import document_editor.event.handler.EventHandler;
 import grpc.ServiceDecorator;
 import io.grpc.stub.StreamObserver;
+import io.micrometer.core.instrument.Timer;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import tcp.MessageSerializer;
@@ -74,7 +76,18 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
     private void sendMessage(SocketConnection socketConnection, ByteBuffer buffer) {
         socketConnection.appendResponse(buffer, e -> {
         });
-        socketConnection.changeOperation(OP_WRITE);
+    }
+
+    private void startWrite(Set<SocketConnection> socketConnections) {
+        socketConnections.parallelStream()
+                .forEach(connection -> {
+                    try {
+                        connection.changeOperation(OP_WRITE);
+                    }
+                    catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
     }
 
     @Override
@@ -90,9 +103,8 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
 
     @Override
     public void handle(Collection<NewConnectionDocumentsEvent> events, ClientConnectionsContext clientConnectionsContext) {
-        Set<SocketConnection> socketConnections = new HashSet<>();
+        Set<SocketConnection> socketConnections = Collections.synchronizedSet(new HashSet<>());
         sendConnectedAcknowledgements(events, clientConnectionsContext, socketConnections);
-
         var getDocumentSpan = tracer.spanBuilder("Get document").setSpanKind(SpanKind.CLIENT).startSpan();
 
         var scope = getDocumentSpan.makeCurrent();
@@ -118,16 +130,15 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
                 getDocumentSpan.addEvent("Batch serialized");
                 var buffer = messageSerializer.serialize(message, e -> {
                 });
-                var iterator = socketConnections.iterator();
-                while (iterator.hasNext()) {
-                    var connection = iterator.next();
-                    try {
-                        sendMessage(connection, iterator.hasNext() ? bufferCopier.copy(buffer) : buffer);
-                    }
-                    catch (Exception e) {
-                        iterator.remove();
-                    }
-                }
+                socketConnections.parallelStream()
+                        .forEach(connection -> {
+                            try {
+                                sendMessage(connection, bufferCopier.copy(buffer));
+                            }
+                            catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        });
                 getDocumentSpan.addEvent("Batch sent");
             }
 
@@ -157,6 +168,7 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
             @Override
             public void onCompleted() {
                 LOGGER.info("On complete streaming document");
+                startWrite(socketConnections);
                 getDocumentSpan.end();
                 scope.close();
             }
