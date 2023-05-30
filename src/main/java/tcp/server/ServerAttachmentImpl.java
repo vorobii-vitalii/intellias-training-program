@@ -3,11 +3,11 @@ package tcp.server;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
@@ -15,11 +15,15 @@ import io.opentelemetry.api.trace.Span;
 import tcp.server.impl.NIOChannel;
 
 public class ServerAttachmentImpl implements ServerAttachment {
+	private final Map<OperationType, Integer> CODE_BY_OPERATION_TYPE = new EnumMap<>(Map.of(
+			OperationType.READ, SelectionKey.OP_READ,
+			OperationType.WRITE, SelectionKey.OP_WRITE
+	));
+
 	private final BufferContext bufferContext;
 	private final Deque<MessageWriteRequest> responses;
 	private final Map<String, Object> context;
 	private final Span requestSpan;
-	private final ByteBufferPool byteBufferPool;
 	private volatile String protocol;
 	private volatile SelectionKey selectionKey;
 	private final List<byte[]> bytesArray = new ArrayList<>();
@@ -30,7 +34,6 @@ public class ServerAttachmentImpl implements ServerAttachment {
 			Deque<MessageWriteRequest> responses,
 			Map<String, Object> context,
 			Span requestSpan,
-			ByteBufferPool byteBufferPool,
 			SelectionKey selectionKey
 	) {
 		this.protocol = protocol;
@@ -38,7 +41,6 @@ public class ServerAttachmentImpl implements ServerAttachment {
 		this.responses = responses;
 		this.context = context;
 		this.requestSpan = requestSpan;
-		this.byteBufferPool = byteBufferPool;
 		this.selectionKey = selectionKey;
 	}
 
@@ -50,11 +52,6 @@ public class ServerAttachmentImpl implements ServerAttachment {
 	@Override
 	public SocketConnection toSocketConnection() {
 		return new ConnectionImpl(this);
-	}
-
-	@Override
-	public ByteBuffer allocate(int bytes) {
-		return byteBufferPool.allocate(bytes);
 	}
 
 	@Override
@@ -101,7 +98,7 @@ public class ServerAttachmentImpl implements ServerAttachment {
 	}
 
 	@Override
-	public Map<String, Object> context() {
+	public Map<String, Object> connectionMetadata() {
 		return context;
 	}
 
@@ -129,11 +126,10 @@ public class ServerAttachmentImpl implements ServerAttachment {
 	}
 
 	@Override
-	public SelectionKey getSelectionKey() {
-		return selectionKey;
+	public void changeInterestedOperation(OperationType operationType) {
+		selectionKey.interestOps(CODE_BY_OPERATION_TYPE.get(operationType));
 	}
 
-	@Override
 	public void setSelectionKey(SelectionKey selectionKey) {
 		this.selectionKey = selectionKey;
 	}

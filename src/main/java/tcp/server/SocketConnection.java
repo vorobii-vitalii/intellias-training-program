@@ -18,13 +18,12 @@ import java.util.function.Consumer;
  * The interface should only be used in endpoints
  */
 public interface SocketConnection {
-	boolean isOpen();
+	boolean isClosed();
+	void changeOperation(OperationType operationType);
 	void appendBytesToContext(byte[] data);
 	void freeContext();
 	InputStream getContextInputStream();
 	void setProtocol(String protocol);
-	void changeOperation(int operation);
-	void appendResponse(Serializable response, EventEmitter eventEmitter, Consumer<SocketConnection> onWriteCallback);
 	void appendResponse(ByteBuffer buffer, Consumer<SocketConnection> onWriteCallback);
 	void setMetadata(String key, Object value);
 	String getMetadata(String key);

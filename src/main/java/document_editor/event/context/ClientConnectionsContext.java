@@ -15,6 +15,7 @@ import net.jcip.annotations.NotThreadSafe;
 import tcp.MessageSerializer;
 import tcp.server.BufferCopier;
 import tcp.server.ByteBufferPool;
+import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 import util.Serializable;
 
@@ -53,7 +54,7 @@ public class ClientConnectionsContext {
 						LOGGER.info("Sending message to {}", connection);
 						try {
 							connection.appendResponse(bufferCopier.copy(buffer), r -> {});
-							connection.changeOperation(SelectionKey.OP_WRITE);
+							connection.changeOperation(OperationType.WRITE);
 						} catch (Exception error) {
 							error.printStackTrace();
 						}

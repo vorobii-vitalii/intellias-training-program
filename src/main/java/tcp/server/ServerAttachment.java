@@ -13,32 +13,16 @@ import net.jcip.annotations.NotThreadSafe;
 public interface ServerAttachment {
 	Channel getChannel();
 	SocketConnection toSocketConnection();
-
-	ByteBuffer allocate(int bytes);
-
 	Span getRequestSpan();
-
 	void writeToClientBuffer(byte[] bytes);
-
 	void freeClientContext();
-
 	InputStream getClientBufferInputStream();
-
 	void setProtocol(String protocol);
-
 	String protocol();
-
 	BufferContext bufferContext();
-
 	Deque<MessageWriteRequest> responses();
-
-	Map<String, Object> context();
-
+	Map<String, Object> connectionMetadata();
 	boolean isWritable();
-
 	boolean isReadable();
-
-	SelectionKey getSelectionKey();
-
-	void setSelectionKey(SelectionKey selectionKey);
+	void changeInterestedOperation(OperationType operationType);
 }

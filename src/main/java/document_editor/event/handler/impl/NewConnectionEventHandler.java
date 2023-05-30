@@ -40,6 +40,7 @@ import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import tcp.MessageSerializer;
 import tcp.server.BufferCopier;
+import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 import util.Serializable;
 import websocket.domain.OpCode;
@@ -82,7 +83,7 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
         socketConnections.parallelStream()
                 .forEach(connection -> {
                     try {
-                        connection.changeOperation(OP_WRITE);
+                        connection.changeOperation(OperationType.WRITE);
                     }
                     catch (Exception e) {
                         e.printStackTrace();

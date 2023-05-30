@@ -1,28 +1,15 @@
 package tcp.server;
 
-import static java.nio.channels.SelectionKey.OP_READ;
-
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.CancelledKeyException;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.SocketChannel;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-import io.opentelemetry.api.trace.Span;
 import net.jcip.annotations.ThreadSafe;
-import util.Serializable;
-import util.UnsafeConsumer;
 
 @ThreadSafe
 public class ConnectionImpl implements SocketConnection {
-	public static final int EOF = -1;
 	private final ServerAttachment serverAttachment;
 
 	public ConnectionImpl(ServerAttachment serverAttachment) {
@@ -30,8 +17,13 @@ public class ConnectionImpl implements SocketConnection {
 	}
 
 	@Override
-	public boolean isOpen() {
-		return serverAttachment.getChannel().isOpen();
+	public boolean isClosed() {
+		return !serverAttachment.getChannel().isOpen();
+	}
+
+	@Override
+	public void changeOperation(OperationType operationType) {
+		serverAttachment.changeInterestedOperation(operationType);
 	}
 
 	@Override
@@ -55,44 +47,9 @@ public class ConnectionImpl implements SocketConnection {
 	}
 
 	@Override
-	public void changeOperation(int operation) {
-		if (!isOpen()) {
-			return;
-		}
-		serverAttachment.getSelectionKey().interestOps(operation);
-//		serverAttachment.getSelectionKey().selector().wakeup();
-	}
-
-	@Override
-	public void appendResponse(Serializable response, EventEmitter eventEmitter, Consumer<SocketConnection> onWriteCallback) {
-		// Issue
-		if (!serverAttachment.getSelectionKey().isValid()) {
-			throw new CancelledKeyException();
-		}
-		ByteBuffer message = serverAttachment.allocate(response.getSize());
-		if (eventEmitter != null) {
-			eventEmitter.emit("Allocated buffer");
-		}
-		response.serialize(message);
-		if (eventEmitter != null) {
-			eventEmitter.emit("Serialized");
-		}
-		message.flip();
-		serverAttachment
-				.responses()
-				.add(new MessageWriteRequest(message, onWriteCallback));
-		if (eventEmitter != null) {
-			eventEmitter.emit("Written to queue");
-		}
-	}
-
-	@Override
 	public void appendResponse(ByteBuffer buffer, Consumer<SocketConnection> onWriteCallback) {
-		if (!isOpen()) {
+		if (isClosed()) {
 			return;
-		}
-		if (!serverAttachment.getSelectionKey().isValid()) {
-			throw new CancelledKeyException();
 		}
 		serverAttachment
 				.responses()
@@ -101,12 +58,12 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public void setMetadata(String key, Object value) {
-		serverAttachment.context().put(key, value);
+		serverAttachment.connectionMetadata().put(key, value);
 	}
 
 	@Override
 	public String getMetadata(String key) {
-		return (String) serverAttachment.context().get(key);
+		return (String) serverAttachment.connectionMetadata().get(key);
 	}
 
 	@Override

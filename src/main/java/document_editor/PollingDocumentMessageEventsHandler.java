@@ -17,14 +17,14 @@ import document_editor.event.context.ClientConnectionsContext;
 import document_editor.event.handler.EventHandler;
 import document_editor.event.DocumentsEventType;
 
-public class DocumentMessageEventsHandler implements Runnable {
-	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentMessageEventsHandler.class);
+public class PollingDocumentMessageEventsHandler implements Runnable {
+	private static final Logger LOGGER = LoggerFactory.getLogger(PollingDocumentMessageEventsHandler.class);
 
 	private final Queue<DocumentsEvent> eventsQueue;
 	private final ClientConnectionsContext clientConnectionsContext;
 	private final Map<DocumentsEventType<?>, EventHandler> eventHandlerMap;
 
-	public DocumentMessageEventsHandler(
+	public PollingDocumentMessageEventsHandler(
 			Queue<DocumentsEvent> eventsQueue,
 			ClientConnectionsContext clientConnectionsContext,
 			List<EventHandler<?>> eventHandlers
@@ -53,9 +53,7 @@ public class DocumentMessageEventsHandler implements Runnable {
 				return new ArrayList<>(List.of(event));
 			});
 		}
-		if (LOGGER.isDebugEnabled()) {
-			LOGGER.debug("Created events map = {}", eventsMap);
-		}
+		LOGGER.debug("Created events map = {}", eventsMap);
 		eventsMap.forEach((type, events) -> {
 			try {
 				var eventHandler = eventHandlerMap.get(type);

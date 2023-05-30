@@ -1,16 +1,13 @@
 package http.handler;
 
-import java.nio.channels.SelectionKey;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -22,7 +19,6 @@ import http.domain.HTTPResponse;
 import http.domain.HTTPResponseLine;
 import http.domain.HTTPVersion;
 import http.post_processor.HTTPResponsePostProcessor;
-import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
@@ -30,31 +26,30 @@ import io.opentelemetry.semconv.trace.attributes.SemanticAttributes;
 import request_handler.NetworkRequest;
 import request_handler.NetworkRequestHandler;
 import tcp.MessageSerializer;
+import tcp.server.OperationType;
 import tcp.server.SocketConnection;
-import util.UnsafeConsumer;
 
 public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequest> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HTTPNetworkRequestHandler.class);
+	public static final Consumer<SocketConnection> NOOP = s -> {
+	};
 	private final ExecutorService executorService = Executors.newFixedThreadPool(8);
 	private final List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies;
 	private final Collection<HTTPResponsePostProcessor> httpResponsePostProcessor;
 	private final Tracer httpRequestHandlerTracer;
-	private final List<Function<HTTPResponse, Consumer<SocketConnection>>> onWriteResponseStrategies;
 	private final MessageSerializer messageSerializer;
 
 	public HTTPNetworkRequestHandler(
 			List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies,
 			Collection<HTTPResponsePostProcessor> httpResponsePostProcessor,
-			List<Function<HTTPResponse, Consumer<SocketConnection>>> onWriteResponseStrategies,
 			MessageSerializer messageSerializer,
-			OpenTelemetry openTelemetry
+			Tracer tracer
 	) {
 		this.messageSerializer = messageSerializer;
 		this.httpResponsePostProcessor = httpResponsePostProcessor;
 		this.httpRequestHandlerStrategies = new ArrayList<>(httpRequestHandlerStrategies);
 		this.httpRequestHandlerStrategies.sort(Comparator.comparing(HTTPRequestHandlerStrategy::getPriority));
-		this.onWriteResponseStrategies = onWriteResponseStrategies;
-		httpRequestHandlerTracer = openTelemetry.getTracer("HTTP Request Handler");
+		this.httpRequestHandlerTracer = tracer;
 	}
 
 	@Override
@@ -80,16 +75,10 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 						.orElseGet(getNotFoundRequestHandler(networkRequest));
 				requestSpan.addEvent("Response created");
 				httpResponsePostProcessor.forEach(handlerStrategy -> handlerStrategy.handle(networkRequest, response));
-				var onWriteResponseCallback = onWriteResponseStrategies.stream()
-						.map(strategy -> strategy.apply(response))
-						.filter(Objects::nonNull)
-						.findFirst()
-						.orElse(null);
-
 				requestSpan.addEvent("Postprocessors finished");
 				var socketConnection = networkRequest.socketConnection();
-				socketConnection.appendResponse(messageSerializer.serialize(response, requestSpan::addEvent), onWriteResponseCallback);
-				socketConnection.changeOperation(SelectionKey.OP_WRITE);
+				socketConnection.appendResponse(messageSerializer.serialize(response, requestSpan::addEvent), NOOP);
+				socketConnection.changeOperation(OperationType.WRITE);
 				requestSpan.addEvent("Response added to queue");
 			} finally {
 				requestSpan.end();

@@ -10,12 +10,12 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
-import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.spi.SelectorProvider;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.GZIPOutputStream;
@@ -96,11 +97,12 @@ import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.semconv.resource.attributes.ResourceAttributes;
 import message_passing.DisruptorMessageProducer;
 import message_passing.MessageProducer;
+import message_passing.QueueMessageProducer;
 import monitoring.PrometheusMetricsHTTPRequestHandler;
-import request_handler.DelegatingNetworkRequestHandler;
+import request_handler.HashBasedLoadBalancer;
 import request_handler.NetworkRequest;
-import request_handler.NetworkRequestHandler;
 import request_handler.NetworkRequestProcessor;
+import request_handler.RequestHandler;
 import serialization.JacksonDeserializer;
 import serialization.Serializer;
 import tcp.FillQueueProcess;
@@ -108,6 +110,7 @@ import tcp.MessageSerializer;
 import tcp.server.BufferCopier;
 import tcp.server.ByteBufferPool;
 import tcp.server.ConnectionImpl;
+import tcp.server.OperationType;
 import tcp.server.Poller;
 import tcp.server.RoundRobinProvider;
 import tcp.server.ServerAttachment;
@@ -193,21 +196,21 @@ public class HttpServer {
 		executor.scheduleWithFixedDelay(process, delayMs, delayMs, MILLISECONDS);
 	}
 
-	private static <T> RingBuffer<NetworkRequest<T>> createNetworkDisruptor(NetworkRequestHandler<T> requestHandler, Timer timer) {
+	private static <T> RingBuffer<T> createDisruptor(RequestHandler<T> requestHandler, Supplier<T> objCreator, Timer timer) {
 		ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
 
 		WaitStrategy waitStrategy = new YieldingWaitStrategy();
-		Disruptor<NetworkRequest<T>> disruptor = new Disruptor<>(
-				NetworkRequest::new,
+		Disruptor<T> disruptor = new Disruptor<>(
+				objCreator::get,
 				RING_BUFFER_SIZE,
 				threadFactory,
 				ProducerType.MULTI,
 				waitStrategy
 		);
-		disruptor.handleEventsWith((tNetworkRequest, l, b) -> {
+		disruptor.handleEventsWith((request, l, b) -> {
 			if (timer == null) {
 				try {
-					requestHandler.handle(tNetworkRequest);
+					requestHandler.handle(request);
 				}
 				catch (Exception error) {
 					LOGGER.warn("Error occurred", error);
@@ -215,7 +218,7 @@ public class HttpServer {
 			} else {
 				timer.record(() -> {
 					try {
-						requestHandler.handle(tNetworkRequest);
+						requestHandler.handle(request);
 					}
 					catch (Exception error) {
 						LOGGER.warn("Error occurred", error);
@@ -229,6 +232,10 @@ public class HttpServer {
 	}
 
 	public static void main(String[] args) throws IOException {
+
+		var byteBufferPool = new ByteBufferPool(ByteBuffer::allocateDirect);
+
+		var messageSerializer = new MessageSerializer(byteBufferPool);
 
 		var resource = Resource.getDefault()
 				.merge(Resource.create(Attributes.of(ResourceAttributes.SERVICE_NAME, "documents-app")));
@@ -265,7 +272,7 @@ public class HttpServer {
 		var messageHandler = new OnMessageHandler<>(
 				new JacksonDeserializer(objectMapper),
 				Request.class,
-				new DelegatingRequestHandler(Map.of(
+				new document_editor.DelegatingRequestHandler(Map.of(
 						RequestType.CONNECT, (r, c) -> messageProducer.produce(new NewConnectionDocumentsEvent(c)),
 						RequestType.CHANGES, (r, c) -> messageProducer.produce(new EditDocumentsEvent(r.payload())),
 						RequestType.PING, (r, c) -> messageProducer.produce(new PingDocumentsEvent(c))
@@ -281,8 +288,8 @@ public class HttpServer {
 							webSocketMessage.setFin(true);
 							webSocketMessage.setOpCode(OpCode.CONNECTION_CLOSE);
 							webSocketMessage.setPayload(new byte[] {});
-							s.appendResponse(webSocketMessage, null, SocketConnection::close);
-							s.changeOperation(OP_WRITE);
+							s.appendResponse(messageSerializer.serialize(webSocketMessage, e -> {}), SocketConnection::close);
+							s.changeOperation(OperationType.WRITE);
 						}
 				), s -> {
 					//					LOGGER.info("Connected {}", s)
@@ -325,12 +332,8 @@ public class HttpServer {
 
 		var webSocketRequestsCount = Counter.builder("websocket.requests.count").register(prometheusRegistry);
 
-		Set<TokenBucket<SocketAddress>> tokenBuckets = Collections.synchronizedSet(new HashSet<>());
-
 		Selector[] httpSelectors = createSelectors(10);
 
-		var byteBufferPool = new ByteBufferPool(ByteBuffer::allocateDirect);
-		var appByteBufferPool = new ByteBufferPool(ByteBuffer::allocate);
 
 		var httpRequestHandler = new HTTPNetworkRequestHandler(
 				List.of(
@@ -339,14 +342,8 @@ public class HttpServer {
 						new PrometheusMetricsHTTPRequestHandler(prometheusRegistry, PROMETHEUS_ENDPOINT)
 				),
 				httpResponsePostProcessors,
-				List.of(response -> {
-//					if (response.isUpgradeResponse()) {
-//						return changeSelector;
-//					}
-					return null;
-				}),
-				new MessageSerializer(byteBufferPool),
-				openTelemetry
+				messageSerializer,
+				openTelemetry.getTracer("HTTP Request Handler")
 		);
 		var webSocketNetworkRequestHandler = new WebSocketNetworkRequestHandler(webSocketEndpointProvider);
 		var countWebSocketHandlers = 4;
@@ -358,10 +355,14 @@ public class HttpServer {
 			startProcess(new NetworkRequestProcessor<>(webSocketMessageQueues[i], webSocketNetworkRequestHandler,
 					webSocketRequestProcessingTimer, webSocketRequestsCount), "WS " + i);
 		}
-		var httpRing = createNetworkDisruptor(httpRequestHandler, httpRequestProcessingTimer);
-		var wsRing = createNetworkDisruptor(new DelegatingNetworkRequestHandler<>(webSocketMessageQueues), null);
+		var httpRing = createDisruptor(httpRequestHandler, NetworkRequest::new, httpRequestProcessingTimer);
+		var wsRing = createDisruptor(new HashBasedLoadBalancer<>(
+				e -> e.socketConnection().hashCode(),
+						Arrays.stream(webSocketMessageQueues).map(QueueMessageProducer::new).toList()),
+				NetworkRequest::new,
+				null);
 
-		var eventContext = new ClientConnectionsContext(MAX_WAIT_FOR_PING_MS, Instant::now, new MessageSerializer(byteBufferPool),
+		var eventContext = new ClientConnectionsContext(MAX_WAIT_FOR_PING_MS, Instant::now, messageSerializer,
 				new BufferCopier(byteBufferPool));
 
 		var documentStorageServiceChannel =
@@ -377,14 +378,14 @@ public class HttpServer {
 
 		var contextPropagationServiceDecorator = new ContextPropagationServiceDecorator(openTelemetry);
 
-		schedulePeriodically(500, new DocumentMessageEventsHandler(eventsQueue, eventContext, Stream.of(
+		schedulePeriodically(500, new PollingDocumentMessageEventsHandler(eventsQueue, eventContext, Stream.of(
 				new NewConnectionEventHandler(
 						documentStorageService,
 						atomicInteger::getAndIncrement,
 						objectMapper,
 						openTelemetry.getTracer("New connection handler"),
 						contextPropagationServiceDecorator,
-						new MessageSerializer(byteBufferPool),
+						messageSerializer,
 						new BufferCopier(byteBufferPool)
 				),
 				new MessageDistributeEventHandler(),
@@ -461,13 +462,9 @@ public class HttpServer {
 				// Yourkit
 				Map.of(
 						OP_ACCEPT, new HTTPAcceptOperationHandler(
-								tokenBuckets,
-								MAX_TOKENS_WRITE,
-								MAX_TOKENS_READ,
 								selectionKey -> httpSelectorProvider.get(),
 								byteBufferPool,
-								openTelemetry.getTracer("HTTP accept connection handler"),
-								appByteBufferPool
+								openTelemetry.getTracer("HTTP accept connection handler")
 						)
 				));
 		server.start();
