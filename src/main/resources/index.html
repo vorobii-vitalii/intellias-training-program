@@ -40,9 +40,9 @@
       return 0;
     }
     if (aLength === m) {
-      return b.disambiguators[m] ? -1 : 1;
+      return b.directions[m] ? -1 : 1;
     }
-    return a.disambiguators[m] ? 1 : -1;
+    return a.directions[m] ? 1 : -1;
   };
 
   const createPair = (left, right, c) => {
@@ -121,11 +121,14 @@
   const textArea = document.getElementById("editor");
 
   const binarySearch = (path) => {
+    if (arr.length > 0 && comparePath(path, arr[arr.length - 1].treePath) > 0) {
+      return arr.length;
+    }
     let low = 0;
     let high = arr.length - 1;
     let res = 0;
     while (low <= high) {
-      const mid = Math.floor((low + high) / 2);
+      const mid = (low + high) >> 1;
       const c = comparePath(path, arr[mid].treePath);
       if (c === 0) {
         return mid;
@@ -136,9 +139,6 @@
         res = mid;
         high = mid - 1;
       }
-    }
-    if (arr.length > 0 && res === arr.length - 1 && comparePath(path, arr[res].treePath) > 0) {
-      return arr.length;
     }
     return res;
   };
@@ -154,8 +154,11 @@
     if (eventPayload.responseType === 'ON_CONNECT') {
       connectionId = eventPayload.payload.connectionId;
     } else if (eventPayload.responseType === 'ADD_BULK') {
+      console.log('Received change ', JSON.stringify(eventPayload.payload));
       for (const change of eventPayload.payload) {
+        console.log('Current arr = ', JSON.stringify(arr));
         const index = binarySearch(change.treePath);
+        console.log('Index for ', JSON.stringify(change.treePath), ' = ', index);
         if (index >= arr.length || comparePath(arr[index].treePath, change.treePath) !== 0) {
           arr.splice(index, 0, change);
         }
@@ -164,7 +167,9 @@
     } else if (eventPayload.responseType === 'CHANGES') {
       console.log('Received change ', JSON.stringify(eventPayload.payload));
       for (const change of eventPayload.payload) {
+        console.log('Current arr = ', JSON.stringify(arr));
         const index = binarySearch(change.treePath);
+        console.log('Index for ', JSON.stringify(change.treePath), ' = ', index);
         if (!change.character) {
           if (index >= 0 && index < arr.length && comparePath(arr[index].treePath, change.treePath) === 0) {
             arr.splice(index, 1);
