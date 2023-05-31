@@ -8,22 +8,22 @@ import java.util.Queue;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 
-public class NetworkRequestProcessor<RequestMessage> implements Runnable {
-	private static final Logger LOGGER = LoggerFactory.getLogger(NetworkRequestProcessor.class);
+public class RequestProcessor<RequestMessage> implements Runnable {
+	private static final Logger LOGGER = LoggerFactory.getLogger(RequestProcessor.class);
 
-	private final Queue<NetworkRequest<RequestMessage>> requestQueue;
-	private final NetworkRequestHandler<RequestMessage> networkRequestHandler;
+	private final Queue<RequestMessage> requestQueue;
+	private final RequestHandler<RequestMessage> requestHandler;
 	private final Timer requestProcessingTimer;
 	private final Counter requestsCounter;
 
-	public NetworkRequestProcessor(
-			Queue<NetworkRequest<RequestMessage>> requestQueue,
-			NetworkRequestHandler<RequestMessage> networkRequestHandler,
+	public RequestProcessor(
+			Queue<RequestMessage> requestQueue,
+			RequestHandler<RequestMessage> requestHandler,
 			Timer requestProcessingTimer,
 			Counter requestsCounter
 	) {
 		this.requestQueue = requestQueue;
-		this.networkRequestHandler = networkRequestHandler;
+		this.requestHandler = requestHandler;
 		this.requestProcessingTimer = requestProcessingTimer;
 		this.requestsCounter = requestsCounter;
 	}
@@ -38,7 +38,7 @@ public class NetworkRequestProcessor<RequestMessage> implements Runnable {
 						LOGGER.info("Handling {}", request);
 					}
 					requestsCounter.increment();
-					requestProcessingTimer.record(() -> networkRequestHandler.handle(request));
+					requestProcessingTimer.record(() -> requestHandler.handle(request));
 				}
 			} catch (Throwable e) {
 				LOGGER.error("Exception on handle of request", e);

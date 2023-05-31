@@ -46,8 +46,19 @@ public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 	}
 
 	@Override
-	public void handle(Collection<EditDocumentsEvent> events, ClientConnectionsContext clientConnectionsContext) {
-		var changes = calculateChanges(events);
+	public void handle(EditDocumentsEvent event, ClientConnectionsContext clientConnectionsContext) {
+		var changes = event.changes().stream()
+				.map(c -> {
+					var builder = Change.newBuilder()
+							.setDocumentId(HttpServer.DOCUMENT_ID)
+							.addAllDirections(c.treePath().directions())
+							.addAllDisambiguators(c.treePath().disambiguators());
+					if (c.character() != null) {
+						builder.setCharacter(c.character());
+					}
+					return builder.build();
+				})
+				.collect(Collectors.toList());
 		LOGGER.debug("Applying changes {}", changes);
 		var applyChangesSpan = tracer.spanBuilder("Apply documents changes")
 				.setSpanKind(SpanKind.CLIENT)
@@ -74,22 +85,6 @@ public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 						scope.close();
 					}
 				});
-	}
-
-	private List<Change> calculateChanges(Collection<EditDocumentsEvent> events) {
-		return events.stream()
-				.flatMap(event -> event.changes().stream())
-				.map(c -> {
-					var builder = Change.newBuilder()
-							.setDocumentId(HttpServer.DOCUMENT_ID)
-							.addAllDirections(c.treePath().directions())
-							.addAllDisambiguators(c.treePath().disambiguators());
-					if (c.character() != null) {
-						builder.setCharacter(c.character());
-					}
-					return builder.build();
-				})
-				.collect(Collectors.toList());
 	}
 
 }

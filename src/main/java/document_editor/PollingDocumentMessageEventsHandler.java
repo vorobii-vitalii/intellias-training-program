@@ -54,15 +54,15 @@ public class PollingDocumentMessageEventsHandler implements Runnable {
 			});
 		}
 		LOGGER.debug("Created events map = {}", eventsMap);
-		eventsMap.forEach((type, events) -> {
-			try {
-				var eventHandler = eventHandlerMap.get(type);
-				if (eventHandler != null) {
-					eventHandler.handle(events, clientConnectionsContext);
-				}
-			} catch (Exception error) {
-				LOGGER.error("Error", error);
-			}
-		});
+//		eventsMap.forEach((type, events) -> {
+//			try {
+//				var eventHandler = eventHandlerMap.get(type);
+//				if (eventHandler != null) {
+//					eventHandler.handle(events, clientConnectionsContext);
+//				}
+//			} catch (Exception error) {
+//				LOGGER.error("Error", error);
+//			}
+//		});
 	}
 }

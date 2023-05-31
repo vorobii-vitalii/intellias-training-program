@@ -34,10 +34,7 @@ class TestMessageDistributeDocumentsEventHandler {
 		var serializable1 = mock(Serializable.class);
 		var serializable2 = mock(Serializable.class);
 
-		messageDistributeEventHandler.handle(List.of(
-				new MessageDistributeDocumentsEvent(serializable1),
-				new MessageDistributeDocumentsEvent(serializable2)
-		), clientConnectionsContext);
+		messageDistributeEventHandler.handle(new MessageDistributeDocumentsEvent(serializable1), clientConnectionsContext);
 
 		verify(clientConnectionsContext).broadCastMessage(serializable1);
 		verify(clientConnectionsContext).broadCastMessage(serializable2);

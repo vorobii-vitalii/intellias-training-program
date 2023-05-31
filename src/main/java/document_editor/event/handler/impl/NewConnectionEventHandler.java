@@ -1,18 +1,9 @@
 package document_editor.event.handler.impl;
 
-import static java.nio.channels.SelectionKey.OP_WRITE;
-
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.zip.GZIPOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +12,6 @@ import com.example.document.storage.DocumentElement;
 import com.example.document.storage.DocumentElements;
 import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.example.document.storage.FetchDocumentContentRequest;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import document_editor.HttpServer;
 import document_editor.dto.Change;
@@ -35,60 +25,38 @@ import document_editor.event.context.ClientConnectionsContext;
 import document_editor.event.handler.EventHandler;
 import grpc.ServiceDecorator;
 import io.grpc.stub.StreamObserver;
-import io.micrometer.core.instrument.Timer;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
+import serialization.Serializer;
 import tcp.MessageSerializer;
-import tcp.server.BufferCopier;
 import tcp.server.OperationType;
-import tcp.server.SocketConnection;
-import util.Serializable;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
 
 public class NewConnectionEventHandler implements EventHandler<NewConnectionDocumentsEvent> {
     private static final Logger LOGGER = LoggerFactory.getLogger(NewConnectionEventHandler.class);
     private final Supplier<Integer> connectionIdProvider;
-    private final ObjectMapper objectMapper;
     private final DocumentStorageServiceGrpc.DocumentStorageServiceStub service;
     private final Tracer tracer;
     private final ServiceDecorator serviceDecorator;
     private final MessageSerializer messageSerializer;
-    private final BufferCopier bufferCopier;
+    private final Serializer serializer;
 
     public NewConnectionEventHandler(
             DocumentStorageServiceGrpc.DocumentStorageServiceStub service,
             Supplier<Integer> connectionIdProvider,
-            ObjectMapper objectMapper,
             Tracer tracer,
             ServiceDecorator serviceDecorator,
             MessageSerializer messageSerializer,
-            BufferCopier bufferCopier
+            Serializer serializer
     ) {
         this.service = service;
         this.connectionIdProvider = connectionIdProvider;
-        this.objectMapper = objectMapper;
         this.tracer = tracer;
         this.serviceDecorator = serviceDecorator;
         this.messageSerializer = messageSerializer;
-        this.bufferCopier = bufferCopier;
-    }
-
-    private void sendMessage(SocketConnection socketConnection, ByteBuffer buffer) {
-        socketConnection.appendResponse(buffer, e -> {
-        });
-    }
-
-    private void startWrite(Set<SocketConnection> socketConnections) {
-        socketConnections.parallelStream()
-                .forEach(connection -> {
-                    try {
-                        connection.changeOperation(OperationType.WRITE);
-                    }
-                    catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                });
+        this.serializer = serializer;
     }
 
     @Override
@@ -96,33 +64,46 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
         return DocumentsEventType.CONNECT;
     }
 
-    private byte[] serialize(Object obj) throws IOException {
-        var arrayOutputStream = new ByteArrayOutputStream();
-        objectMapper.writeValue(new GZIPOutputStream(arrayOutputStream), obj);
-        return arrayOutputStream.toByteArray();
-    }
-
     @Override
-    public void handle(Collection<NewConnectionDocumentsEvent> events, ClientConnectionsContext clientConnectionsContext) {
-        Set<SocketConnection> socketConnections = Collections.synchronizedSet(new HashSet<>());
-        sendConnectedAcknowledgements(events, clientConnectionsContext, socketConnections);
-        var getDocumentSpan = tracer.spanBuilder("Get document").setSpanKind(SpanKind.CLIENT).startSpan();
-
+    public void handle(NewConnectionDocumentsEvent event, ClientConnectionsContext clientConnectionsContext) {
+        var connection = event.connection();
+        var webSocketMessage = new WebSocketMessage();
+        webSocketMessage.setFin(true);
+        try {
+            webSocketMessage.setPayload(serializer.serialize(new Response(
+                    ResponseType.ON_CONNECT,
+                    new ConnectDocumentReply(connectionIdProvider.get()))));
+        }
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        webSocketMessage.setOpCode(OpCode.BINARY);
+        try {
+            connection.appendResponse(messageSerializer.serialize(webSocketMessage));
+            connection.changeOperation(OperationType.WRITE);
+        }
+        catch (Exception e) {
+            LOGGER.error("Serialization error", e);
+            return;
+        }
+        LOGGER.info("Adding connection {} to context", connection);
+        clientConnectionsContext.addOrUpdateConnection(connection);
+        var getDocumentSpan = tracer.spanBuilder("Get document")
+                .setSpanKind(SpanKind.CLIENT)
+                .setParent(Context.current().with(connection.getSpan()))
+                .startSpan();
         var scope = getDocumentSpan.makeCurrent();
 
         var fetchDocumentContentRequest = FetchDocumentContentRequest.newBuilder().setDocumentId(HttpServer.DOCUMENT_ID).build();
         var streamObserver = new StreamObserver<DocumentElements>() {
+
             @Override
             public void onNext(DocumentElements documentElements) {
                 getDocumentSpan.addEvent("Batch received");
-                distributeChange(documentElements);
-            }
-
-            private void distributeChange(DocumentElements documentElements) {
                 var message = new WebSocketMessage();
                 message.setFin(true);
                 try {
-                    message.setPayload(serialize(new Response(ResponseType.ADD_BULK, computeChanges(documentElements))));
+                    message.setPayload(serializer.serialize(new Response(ResponseType.ADD_BULK, computeChanges(documentElements))));
                 }
                 catch (IOException e) {
                     throw new RuntimeException(e);
@@ -131,15 +112,7 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
                 getDocumentSpan.addEvent("Batch serialized");
                 var buffer = messageSerializer.serialize(message, e -> {
                 });
-                socketConnections.parallelStream()
-                        .forEach(connection -> {
-                            try {
-                                sendMessage(connection, bufferCopier.copy(buffer));
-                            }
-                            catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                        });
+                connection.appendResponse(buffer);
                 getDocumentSpan.addEvent("Batch sent");
             }
 
@@ -162,49 +135,16 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
                 getDocumentSpan.addEvent("Error occurred");
                 getDocumentSpan.recordException(throwable);
                 LOGGER.warn("Error when streaming document", throwable);
-                getDocumentSpan.end();
-                scope.close();
             }
 
             @Override
             public void onCompleted() {
                 LOGGER.info("On complete streaming document");
-                startWrite(socketConnections);
+                connection.changeOperation(OperationType.WRITE);
                 getDocumentSpan.end();
                 scope.close();
             }
         };
         serviceDecorator.decorateService(service).fetchDocumentContent(fetchDocumentContentRequest, streamObserver);
-    }
-
-    private void sendConnectedAcknowledgements(
-            Collection<NewConnectionDocumentsEvent> events,
-            ClientConnectionsContext clientConnectionsContext,
-            Set<SocketConnection> socketConnections
-    ) {
-        for (var event : events) {
-            var socketConnection = event.connection();
-            var webSocketMessage = new WebSocketMessage();
-            webSocketMessage.setFin(true);
-            try {
-                webSocketMessage.setPayload(serialize(new Response(
-                        ResponseType.ON_CONNECT,
-                        new ConnectDocumentReply(connectionIdProvider.get()))));
-            }
-            catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            webSocketMessage.setOpCode(OpCode.BINARY);
-            try {
-                sendMessage(socketConnection, messageSerializer.serialize(webSocketMessage));
-            }
-            catch (Exception e) {
-                LOGGER.error("Serialization error", e);
-                continue;
-            }
-            LOGGER.info("Adding connection {} to context", socketConnection);
-            clientConnectionsContext.addOrUpdateConnection(socketConnection);
-            socketConnections.add(socketConnection);
-        }
     }
 }

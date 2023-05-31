@@ -49,19 +49,11 @@ class TestEditDocumentsEventHandler {
 
 	@Test
 	void testHandle() {
-		var editEvents = List.of(
-				new EditDocumentsEvent(
-						List.of(new Change(new TreePathDTO(List.of(true), List.of(1)), 'a'))
-				),
-				new EditDocumentsEvent(
-						List.of(new Change(new TreePathDTO(List.of(false), List.of(2)), 'b'))
-				),
-				new EditDocumentsEvent(
-						List.of(new Change(new TreePathDTO(List.of(true, false), List.of(3)), null))
-				)
+		var editEvent = new EditDocumentsEvent(
+				List.of(new Change(new TreePathDTO(List.of(true), List.of(1)), 'a'))
 		);
 		when(serviceDecorator.decorateService(any())).thenAnswer(i -> i.getArgument(0));
-		editEventHandler.handle(editEvents, clientConnectionsContext);
+		editEventHandler.handle(editEvent, clientConnectionsContext);
 		verify(documentStorageServiceStub)
 				.applyChanges(eq(ChangesRequest.newBuilder()
 						.addAllChanges(List.of(

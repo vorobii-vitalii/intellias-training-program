@@ -154,22 +154,22 @@
     if (eventPayload.responseType === 'ON_CONNECT') {
       connectionId = eventPayload.payload.connectionId;
     } else if (eventPayload.responseType === 'ADD_BULK') {
-      console.log('Received change ', JSON.stringify(eventPayload.payload));
+      // console.log('Received change ', JSON.stringify(eventPayload.payload));
       for (const change of eventPayload.payload) {
-        console.log('Current arr = ', JSON.stringify(arr));
+        // console.log('Current arr = ', JSON.stringify(arr));
         const index = binarySearch(change.treePath);
-        console.log('Index for ', JSON.stringify(change.treePath), ' = ', index);
+        // console.log('Index for ', JSON.stringify(change.treePath), ' = ', index);
         if (index >= arr.length || comparePath(arr[index].treePath, change.treePath) !== 0) {
           arr.splice(index, 0, change);
         }
       }
 
     } else if (eventPayload.responseType === 'CHANGES') {
-      console.log('Received change ', JSON.stringify(eventPayload.payload));
+      // console.log('Received change ', JSON.stringify(eventPayload.payload));
       for (const change of eventPayload.payload) {
-        console.log('Current arr = ', JSON.stringify(arr));
+        // console.log('Current arr = ', JSON.stringify(arr));
         const index = binarySearch(change.treePath);
-        console.log('Index for ', JSON.stringify(change.treePath), ' = ', index);
+        // console.log('Index for ', JSON.stringify(change.treePath), ' = ', index);
         if (!change.character) {
           if (index >= 0 && index < arr.length && comparePath(arr[index].treePath, change.treePath) === 0) {
             arr.splice(index, 1);
@@ -211,7 +211,7 @@
 
   setInterval(() => {
     const d = new Date().getTime() - lastPong.getTime();
-    console.log('Ms since last PONG ', d);
+    // console.log('Ms since last PONG ', d);
     if (d >= 5000) {
       console.log("Disconnected");
     }

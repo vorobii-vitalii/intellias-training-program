@@ -1,7 +1,5 @@
 package document_editor.event.handler;
 
-import java.util.Collection;
-
 import document_editor.event.DocumentsEvent;
 import document_editor.event.DocumentsEventType;
 import document_editor.event.context.ClientConnectionsContext;
@@ -22,7 +20,7 @@ public class TimeMeasureEventHandler<E extends DocumentsEvent> implements EventH
 	}
 
 	@Override
-	public void handle(Collection<E> events, ClientConnectionsContext clientConnectionsContext) {
-		timer.record(() -> eventHandler.handle(events, clientConnectionsContext));
+	public void handle(E event, ClientConnectionsContext clientConnectionsContext) {
+		timer.record(() -> eventHandler.handle(event, clientConnectionsContext));
 	}
 }

@@ -127,6 +127,9 @@ public class ServerAttachmentImpl implements ServerAttachment {
 
 	@Override
 	public void changeInterestedOperation(OperationType operationType) {
+		if (!selectionKey.isValid()) {
+			return;
+		}
 		selectionKey.interestOps(CODE_BY_OPERATION_TYPE.get(operationType));
 	}
 

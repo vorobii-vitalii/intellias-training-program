@@ -4,6 +4,9 @@ import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.ImplicitContextKeyed;
+
 // ISP
 // metrics, grafana, assertions in load test
 
@@ -16,4 +19,6 @@ public interface SocketConnection extends BytesStorage, Metadata, Closeable {
 	void changeOperation(OperationType operationType);
 	void setProtocol(String protocol);
 	void appendResponse(ByteBuffer buffer, Consumer<SocketConnection> onWriteCallback);
+	void appendResponse(ByteBuffer buffer);
+	Span getSpan();
 }

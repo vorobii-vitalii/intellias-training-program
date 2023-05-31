@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.function.Consumer;
 
+import io.opentelemetry.api.trace.Span;
 import net.jcip.annotations.ThreadSafe;
 
 @ThreadSafe
@@ -54,6 +55,16 @@ public class ConnectionImpl implements SocketConnection {
 		serverAttachment
 				.responses()
 				.add(new MessageWriteRequest(buffer, onWriteCallback));
+	}
+
+	@Override
+	public void appendResponse(ByteBuffer buffer) {
+		appendResponse(buffer, s -> {});
+	}
+
+	@Override
+	public Span getSpan() {
+		return serverAttachment.getRequestSpan();
 	}
 
 	@Override

@@ -1,6 +1,7 @@
 package document_editor.event.context;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -46,8 +47,7 @@ public class ClientConnectionsContext {
 	}
 
 	public void broadCastMessage(Serializable message) {
-		var buffer = messageSerializer.serialize(message, e -> {
-		});
+		var buffer = messageSerializer.serialize(message);
 		doForConnectedClients(connection -> {
 			connection.appendResponse(bufferCopier.copy(buffer), r -> {});
 			connection.changeOperation(OperationType.WRITE);
@@ -89,7 +89,8 @@ public class ClientConnectionsContext {
 	}
 
 	private boolean isConnected(Instant instant, SocketConnection connection) {
-		return !connection.isClosed() && (currentTimeProvider.get().toEpochMilli() - instant.toEpochMilli()) <= maxWaitMs;
+		long millisSinceLastPing = Duration.between(instant, currentTimeProvider.get()).toMillis();
+		return !connection.isClosed() && millisSinceLastPing <= maxWaitMs;
 	}
 
 }

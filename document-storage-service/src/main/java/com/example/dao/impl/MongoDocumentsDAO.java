@@ -113,6 +113,7 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                         .addAllEvents(documents.stream()
                                 .filter(doc -> doc.getFullDocument() != null)
                                 .map(doc -> {
+                                    LOGGER.info("Document has changed");
                                     var fullDocument = doc.getFullDocument();
                                     var changeBuilder = Change.newBuilder()
                                             .setDocumentId(fullDocument.getInteger(DOCUMENT_ID))

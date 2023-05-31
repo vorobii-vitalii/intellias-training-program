@@ -54,6 +54,7 @@ import document_editor.event.NewConnectionDocumentsEvent;
 import document_editor.event.PingDocumentsEvent;
 import document_editor.event.SendPongsDocumentsEvent;
 import document_editor.event.context.ClientConnectionsContext;
+import document_editor.event.handler.EventHandler;
 import document_editor.event.handler.TimeMeasureEventHandler;
 import document_editor.event.handler.impl.EditEventHandler;
 import document_editor.event.handler.impl.MessageDistributeEventHandler;
@@ -98,7 +99,7 @@ import message_passing.QueueMessageProducer;
 import monitoring.PrometheusMetricsHTTPRequestHandler;
 import request_handler.HashBasedLoadBalancer;
 import request_handler.NetworkRequest;
-import request_handler.NetworkRequestProcessor;
+import request_handler.RequestProcessor;
 import request_handler.RequestHandler;
 import serialization.JacksonDeserializer;
 import serialization.Serializer;
@@ -111,7 +112,6 @@ import tcp.server.OperationType;
 import tcp.server.Poller;
 import tcp.server.RoundRobinProvider;
 import tcp.server.ServerAttachment;
-import tcp.server.SocketConnection;
 import tcp.server.SocketMessageReaderImpl;
 import tcp.server.TCPServer;
 import tcp.server.TCPServerConfig;
@@ -230,6 +230,7 @@ public class HttpServer {
 
 	public static void main(String[] args) throws IOException {
 
+
 		var byteBufferPool = new ByteBufferPool(ByteBuffer::allocateDirect);
 
 		var messageSerializer = new MessageSerializer(byteBufferPool);
@@ -259,6 +260,12 @@ public class HttpServer {
 				.buildAndRegisterGlobal();
 
 		var objectMapper = new ObjectMapper(new MessagePackFactory());
+
+		var serializer = (Serializer) obj -> {
+			var arrayOutputStream = new ByteArrayOutputStream();
+			objectMapper.writeValue(new GZIPOutputStream(arrayOutputStream), obj);
+			return arrayOutputStream.toByteArray();
+		};
 
 		var eventsQueue = new ConcurrentLinkedQueue<DocumentsEvent>();
 
@@ -338,7 +345,6 @@ public class HttpServer {
 
 		Selector[] httpSelectors = createSelectors(10);
 
-
 		var httpRequestHandler = new HTTPNetworkRequestHandler(
 				List.of(
 						webSocketChangeProtocolHTTPHandlerStrategy,
@@ -356,7 +362,7 @@ public class HttpServer {
 			webSocketMessageQueues[i] = new ConcurrentLinkedQueue<>();
 		}
 		for (int i = 0; i < countWebSocketHandlers; i++) {
-			startProcess(new NetworkRequestProcessor<>(webSocketMessageQueues[i], webSocketNetworkRequestHandler,
+			startProcess(new RequestProcessor<>(webSocketMessageQueues[i], webSocketNetworkRequestHandler,
 					webSocketRequestProcessingTimer, webSocketRequestsCount), "WS " + i);
 		}
 		var httpRing = createDisruptor(httpRequestHandler, NetworkRequest::new, httpRequestProcessingTimer);
@@ -382,28 +388,30 @@ public class HttpServer {
 
 		var contextPropagationServiceDecorator = new ContextPropagationServiceDecorator(openTelemetry);
 
-		schedulePeriodically(500, new PollingDocumentMessageEventsHandler(eventsQueue, eventContext, Stream.of(
-				new NewConnectionEventHandler(
-						documentStorageService,
-						atomicInteger::getAndIncrement,
-						objectMapper,
-						openTelemetry.getTracer("New connection handler"),
-						contextPropagationServiceDecorator,
-						messageSerializer,
-						new BufferCopier(byteBufferPool)
-				),
-				new MessageDistributeEventHandler(),
-				new PingEventHandler(),
-				new PongEventHandler(objectMapper),
-				new EditEventHandler(documentStorageService, openTelemetry.getTracer("Edit event handler"),
-						contextPropagationServiceDecorator)
-		).map(handler -> new TimeMeasureEventHandler<>(handler, Timer.builder("operation.handle." + handler.getHandledEventType().name() + ".time")
-				.register(prometheusRegistry))).collect(Collectors.toList())));
-		var serializer = (Serializer) obj -> {
-			var arrayOutputStream = new ByteArrayOutputStream();
-			objectMapper.writeValue(new GZIPOutputStream(arrayOutputStream), obj);
-			return arrayOutputStream.toByteArray();
-		};
+		List<EventHandler<?>> eventHandlers = Stream.of(
+						new NewConnectionEventHandler(
+								documentStorageService,
+								atomicInteger::getAndIncrement,
+								openTelemetry.getTracer("New connection handler"),
+								contextPropagationServiceDecorator,
+								messageSerializer,
+								serializer
+						),
+						new MessageDistributeEventHandler(),
+						new PingEventHandler(),
+						new PongEventHandler(serializer),
+						new EditEventHandler(documentStorageService, openTelemetry.getTracer("Edit event handler"),
+								contextPropagationServiceDecorator))
+				.map(handler -> new TimeMeasureEventHandler<>(
+						handler,
+						Timer.builder("operation.handle." + handler.getHandledEventType().name() + ".time")
+								.register(prometheusRegistry)))
+				.collect(Collectors.toList());
+
+		startProcess(new RequestProcessor<>(eventsQueue, new DelegatingEventHandler(eventContext, eventHandlers),
+						Timer.builder("Event processing").register(prometheusRegistry), Counter.builder("Events count").register(prometheusRegistry)),
+				"Event handler");
+
 		LOGGER.info("Starting document changes process...");
 		startProcess(new DocumentChangeWatcher(eventsProducer, serializer, documentStorageService), "Document change watcher");
 

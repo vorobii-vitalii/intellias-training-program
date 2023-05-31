@@ -15,8 +15,7 @@ public class MessageDistributeEventHandler implements EventHandler<MessageDistri
 	}
 
 	@Override
-	public void handle(Collection<MessageDistributeDocumentsEvent> events, ClientConnectionsContext clientConnectionsContext) {
-		events.parallelStream()
-				.forEach(e -> clientConnectionsContext.broadCastMessage(e.message()));
+	public void handle(MessageDistributeDocumentsEvent event, ClientConnectionsContext clientConnectionsContext) {
+		clientConnectionsContext.broadCastMessage(event.message());
 	}
 }

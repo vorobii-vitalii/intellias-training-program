@@ -14,9 +14,7 @@ public class PingEventHandler implements EventHandler<PingDocumentsEvent> {
 	}
 
 	@Override
-	public void handle(Collection<PingDocumentsEvent> events, ClientConnectionsContext clientConnectionsContext) {
-		events.stream()
-				.map(PingDocumentsEvent::socketConnection)
-				.forEach(clientConnectionsContext::addOrUpdateConnection);
+	public void handle(PingDocumentsEvent event, ClientConnectionsContext clientConnectionsContext) {
+		clientConnectionsContext.addOrUpdateConnection(event.socketConnection());
 	}
 }

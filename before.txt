@@ -109,3 +109,22 @@ default ✓ [ 100% ] 300 VUs  00m38.1s/10m0s  300/300 shared iters
      ws_msgs_sent..........: 23746   1107.489463/s
      ws_session_duration...: avg=20.79s   min=20.18s   med=20.78s   max=21.37s p(90)=21.12s p(95)=21.18s
      ws_sessions...........: 2000    93.277981/s
+
+
+Fix pong:
+
+1000
+     ✓ status is 101
+
+     checks................: 100.00% ✓ 1000       ✗ 0
+     data_received.........: 52 MB   2.5 MB/s
+     data_sent.............: 25 MB   1.2 MB/s
+     iteration_duration....: avg=20.43s   min=20.07s  med=20.46s  max=20.79s   p(90)=20.59s   p(95)=20.62s
+     iterations............: 1000    48.019543/s
+     vus...................: 1000    min=0        max=1000
+     vus_max...............: 1000    min=352      max=1000
+     ws_connecting.........: avg=342.54ms min=73.12ms med=329.1ms max=761.54ms p(90)=501.79ms p(95)=536.85ms
+     ws_msgs_received......: 20756   996.693641/s
+     ws_msgs_sent..........: 11836   568.359315/s
+     ws_session_duration...: avg=20.42s   min=20.07s  med=20.45s  max=20.79s   p(90)=20.58s   p(95)=20.61s
+     ws_sessions...........: 1000    48.019543/s

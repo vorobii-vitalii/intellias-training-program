@@ -17,7 +17,6 @@ public class MessagePublishProcess<T> implements Runnable {
 
 	@Override
 	public void run() {
-		LOGGER.info("Producing message {}", msg);
 		queue.produce(msg);
 	}
 }
