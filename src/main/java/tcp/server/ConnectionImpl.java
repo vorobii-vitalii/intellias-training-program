@@ -67,12 +67,11 @@ public class ConnectionImpl implements SocketConnection {
 	}
 
 	@Override
-	public void close() {
-		try {
-			serverAttachment.getChannel().close();
-		} catch (IOException e) {
-			e.printStackTrace();
+	public void close() throws IOException {
+		if (isClosed()) {
+			return;
 		}
+		serverAttachment.getChannel().close();
 	}
 
 	@Override

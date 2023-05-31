@@ -1,14 +1,7 @@
 package tcp.server;
 
-import io.opentelemetry.api.trace.Span;
-import util.Serializable;
-import util.UnsafeConsumer;
-
-import java.io.InputStream;
-import java.net.SocketAddress;
+import java.io.Closeable;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
 import java.util.function.Consumer;
 
 // ISP
@@ -16,16 +9,11 @@ import java.util.function.Consumer;
 
 /**
  * The interface should only be used in endpoints
+ * Implementation MUST be thread safe
  */
-public interface SocketConnection {
+public interface SocketConnection extends BytesStorage, Metadata, Closeable {
 	boolean isClosed();
 	void changeOperation(OperationType operationType);
-	void appendBytesToContext(byte[] data);
-	void freeContext();
-	InputStream getContextInputStream();
 	void setProtocol(String protocol);
 	void appendResponse(ByteBuffer buffer, Consumer<SocketConnection> onWriteCallback);
-	void setMetadata(String key, Object value);
-	String getMetadata(String key);
-	void close();
 }

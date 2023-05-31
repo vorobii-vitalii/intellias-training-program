@@ -285,7 +285,14 @@ public class HttpServer {
 							webSocketMessage.setFin(true);
 							webSocketMessage.setOpCode(OpCode.CONNECTION_CLOSE);
 							webSocketMessage.setPayload(new byte[] {});
-							s.appendResponse(messageSerializer.serialize(webSocketMessage), SocketConnection::close);
+							s.appendResponse(messageSerializer.serialize(webSocketMessage), c -> {
+								try {
+									c.close();
+								}
+								catch (IOException e) {
+									LOGGER.warn("Unable to close connection", e);
+								}
+							});
 							s.changeOperation(OperationType.WRITE);
 						}
 				), s -> {

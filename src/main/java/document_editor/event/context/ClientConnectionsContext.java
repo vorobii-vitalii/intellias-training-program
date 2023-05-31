@@ -1,5 +1,6 @@
 package document_editor.event.context;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -55,8 +56,13 @@ public class ClientConnectionsContext {
 
 	private void disconnectClients(HashSet<SocketConnection> connectionsToRemove) {
 		connectionsToRemove.forEach(c -> {
-			c.close();
 			connectionsMap.remove(c);
+			try {
+				c.close();
+			}
+			catch (IOException e) {
+				LOGGER.warn("Error when closing connection");
+			}
 		});
 	}
 
