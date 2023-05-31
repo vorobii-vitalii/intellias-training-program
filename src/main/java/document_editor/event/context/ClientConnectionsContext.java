@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -44,13 +46,30 @@ public class ClientConnectionsContext {
 	public void broadCastMessage(Serializable message) {
 		var buffer = messageSerializer.serialize(message, e -> {
 		});
+		doForConnectedClients(connection -> {
+			connection.appendResponse(bufferCopier.copy(buffer), r -> {});
+			connection.changeOperation(OperationType.WRITE);
+		});
+	}
+
+	private void disconnectClients(HashSet<SocketConnection> connectionsToRemove) {
+		connectionsToRemove.forEach(c -> {
+			c.close();
+			connectionsMap.remove(c);
+		});
+	}
+
+	public void removeDisconnectedClients() {
+		doForConnectedClients(connection -> {});
+	}
+
+	private void doForConnectedClients(Consumer<SocketConnection> connectionConsumer) {
 		var connectionsToRemove = new HashSet<SocketConnection>();
 		for (Map.Entry<SocketConnection, Instant> e : connectionsMap.entrySet()) {
 			var connection = e.getKey();
 			if (isConnected(e.getValue(), connection)) {
 				try {
-					connection.appendResponse(bufferCopier.copy(buffer), r -> {});
-					connection.changeOperation(OperationType.WRITE);
+					connectionConsumer.accept(connection);
 				} catch (Exception error) {
 					error.printStackTrace();
 					connectionsToRemove.add(connection);
@@ -59,29 +78,7 @@ public class ClientConnectionsContext {
 				connectionsToRemove.add(connection);
 			}
 		}
-		connectionsToRemove.forEach(c -> {
-			c.close();
-			connectionsMap.remove(c);
-		});
-	}
-
-	public void removeDisconnectedClients() {
-		var connectionsToRemove = new HashSet<SocketConnection>();
-		for (var entry : connectionsMap.entrySet()) {
-			var connection = entry.getKey();
-			if (!isConnected(entry.getValue(), connection)) {
-				try {
-					connectionsToRemove.add(connection);
-				}
-				catch (Exception error) {
-					error.printStackTrace();
-				}
-			}
-		}
-		connectionsToRemove.forEach(c -> {
-			c.close();
-			connectionsMap.remove(c);
-		});
+		disconnectClients(connectionsToRemove);
 	}
 
 	private boolean isConnected(Instant instant, SocketConnection connection) {
