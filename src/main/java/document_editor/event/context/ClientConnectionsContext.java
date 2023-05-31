@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -21,7 +22,7 @@ import util.Serializable;
 @NotThreadSafe
 public class ClientConnectionsContext {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ClientConnectionsContext.class);
-	private final Map<SocketConnection, Instant> connectionsMap = new HashMap<>();
+	private final Map<SocketConnection, Instant> connectionsMap = new ConcurrentHashMap<>();
 	private final int maxWaitMs;
 	private final Supplier<Instant> currentTimeProvider;
 	private final MessageSerializer messageSerializer;
