@@ -196,12 +196,13 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
             }
             webSocketMessage.setOpCode(OpCode.BINARY);
             try {
-                sendMessage(socketConnection, messageSerializer.serialize(webSocketMessage, e -> {
-                }));
+                sendMessage(socketConnection, messageSerializer.serialize(webSocketMessage));
             }
             catch (Exception e) {
+                LOGGER.error("Serialization error", e);
                 continue;
             }
+            LOGGER.info("Adding connection {} to context", socketConnection);
             clientConnectionsContext.addOrUpdateConnection(socketConnection);
             socketConnections.add(socketConnection);
         }

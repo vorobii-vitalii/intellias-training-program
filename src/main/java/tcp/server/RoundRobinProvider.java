@@ -9,11 +9,15 @@ public class RoundRobinProvider<T> implements Supplier<T> {
 	private final List<T> arr;
 	private final AtomicInteger atomicInteger = new AtomicInteger(0);
 
+	@SafeVarargs
 	public RoundRobinProvider(T... arr) {
-		this.arr = Arrays.asList(arr);
+		this(List.of(arr));
 	}
 
 	public RoundRobinProvider(List<T> list) {
+		if (list == null || list.isEmpty()) {
+			throw new IllegalArgumentException("List is null or empty");
+		}
 		this.arr = list;
 	}
 

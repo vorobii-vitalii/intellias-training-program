@@ -44,6 +44,7 @@ public class DocumentChangeWatcher implements Runnable {
 
 	@Override
 	public void run() {
+		LOGGER.info("Starting watching for documents changes");
 		subscribeForDocumentChanges(null);
 	}
 
@@ -56,6 +57,7 @@ public class DocumentChangeWatcher implements Runnable {
 		var streamCompleted = new StreamObserver<DocumentChangedEvents>() {
 			@Override
 			public void onNext(DocumentChangedEvents documentChangedEvents) {
+				LOGGER.info("Received event about updated documents");
 				distributeDocumentsChanges(documentChangedEvents);
 				lastToken.set(documentChangedEvents.getEvents(documentChangedEvents.getEventsCount() - 1).getResumeToken());
 			}

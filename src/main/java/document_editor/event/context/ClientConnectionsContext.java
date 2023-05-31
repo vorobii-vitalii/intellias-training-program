@@ -1,7 +1,5 @@
 package document_editor.event.context;
 
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import net.jcip.annotations.NotThreadSafe;
 import tcp.MessageSerializer;
 import tcp.server.BufferCopier;
-import tcp.server.ByteBufferPool;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 import util.Serializable;
@@ -47,40 +44,48 @@ public class ClientConnectionsContext {
 	public void broadCastMessage(Serializable message) {
 		var buffer = messageSerializer.serialize(message, e -> {
 		});
-		connectionsMap.entrySet().parallelStream()
-				.forEach(e -> {
-					if (isConnected(e.getValue())) {
-						var connection = e.getKey();
-						LOGGER.info("Sending message to {}", connection);
-						try {
-							connection.appendResponse(bufferCopier.copy(buffer), r -> {});
-							connection.changeOperation(OperationType.WRITE);
-						} catch (Exception error) {
-							error.printStackTrace();
-						}
-					}
-				});
+		var connectionsToRemove = new HashSet<SocketConnection>();
+		for (Map.Entry<SocketConnection, Instant> e : connectionsMap.entrySet()) {
+			var connection = e.getKey();
+			if (isConnected(e.getValue(), connection)) {
+				try {
+					connection.appendResponse(bufferCopier.copy(buffer), r -> {});
+					connection.changeOperation(OperationType.WRITE);
+				} catch (Exception error) {
+					error.printStackTrace();
+					connectionsToRemove.add(connection);
+				}
+			} else {
+				connectionsToRemove.add(connection);
+			}
+		}
+		connectionsToRemove.forEach(c -> {
+			c.close();
+			connectionsMap.remove(c);
+		});
 	}
 
 	public void removeDisconnectedClients() {
 		var connectionsToRemove = new HashSet<SocketConnection>();
 		for (var entry : connectionsMap.entrySet()) {
-			if (!isConnected(entry.getValue())) {
+			var connection = entry.getKey();
+			if (!isConnected(entry.getValue(), connection)) {
 				try {
-					var connection = entry.getKey();
 					connectionsToRemove.add(connection);
-					connection.close();
 				}
 				catch (Exception error) {
 					error.printStackTrace();
 				}
 			}
 		}
-		connectionsToRemove.forEach(connectionsMap::remove);
+		connectionsToRemove.forEach(c -> {
+			c.close();
+			connectionsMap.remove(c);
+		});
 	}
 
-	private boolean isConnected(Instant instant) {
-		return (currentTimeProvider.get().toEpochMilli() - instant.toEpochMilli()) <= maxWaitMs;
+	private boolean isConnected(Instant instant, SocketConnection connection) {
+		return !connection.isClosed() && (currentTimeProvider.get().toEpochMilli() - instant.toEpochMilli()) <= maxWaitMs;
 	}
 
 }

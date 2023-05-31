@@ -106,6 +106,7 @@ public class MongoDocumentsDAO implements DocumentsDAO {
 
     @Override
     public Publisher<DocumentChangedEvents> subscribeToDocumentsChanges(SubscribeForDocumentChangesRequest request) {
+        LOGGER.info("Watching for documents changes {}", request);
         return Flux.from(getChangeStreamDocumentPublisher(request))
                 .bufferTimeout(request.getBatchSize(), Duration.ofMillis(request.getBatchTimeout()))
                 .map(documents -> DocumentChangedEvents.newBuilder()

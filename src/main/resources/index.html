@@ -131,9 +131,9 @@
         return mid;
       }
       if (c > 0) {
-        res = mid;
         low = mid + 1;
       } else {
+        res = mid;
         high = mid - 1;
       }
     }
@@ -162,6 +162,7 @@
       }
 
     } else if (eventPayload.responseType === 'CHANGES') {
+      console.log('Received change ', JSON.stringify(eventPayload.payload));
       for (const change of eventPayload.payload) {
         const index = binarySearch(change.treePath);
         if (!change.character) {

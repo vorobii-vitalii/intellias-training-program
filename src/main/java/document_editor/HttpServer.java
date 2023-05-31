@@ -7,7 +7,6 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.SocketAddress;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -18,12 +17,10 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
-import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -105,7 +102,7 @@ import request_handler.NetworkRequestProcessor;
 import request_handler.RequestHandler;
 import serialization.JacksonDeserializer;
 import serialization.Serializer;
-import tcp.FillQueueProcess;
+import tcp.MessagePublishProcess;
 import tcp.MessageSerializer;
 import tcp.server.BufferCopier;
 import tcp.server.ByteBufferPool;
@@ -122,7 +119,6 @@ import tcp.server.TimerSocketMessageReader;
 import tcp.server.handler.DelegatingReadOperationHandler;
 import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
-import token_bucket.TokenBucket;
 import util.Constants;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
@@ -180,6 +176,7 @@ public class HttpServer {
 	private static void startProcess(Runnable process, String processName) {
 		var thread = new Thread(process);
 		thread.setName(processName);
+		thread.setUncaughtExceptionHandler((t, e) -> LOGGER.error("Error in thread {}", t, e));
 		thread.start();
 	}
 
@@ -193,7 +190,7 @@ public class HttpServer {
 
 	private static void schedulePeriodically(int delayMs, Runnable process) {
 		var executor = Executors.newSingleThreadScheduledExecutor();
-		executor.scheduleWithFixedDelay(process, delayMs, delayMs, MILLISECONDS);
+		executor.scheduleAtFixedRate(process, delayMs, delayMs, MILLISECONDS);
 	}
 
 	private static <T> RingBuffer<T> createDisruptor(RequestHandler<T> requestHandler, Supplier<T> objCreator, Timer timer) {
@@ -267,15 +264,15 @@ public class HttpServer {
 
 		var prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
 
-		MessageProducer<DocumentsEvent> messageProducer = eventsQueue::add;
+		MessageProducer<DocumentsEvent> eventsProducer = eventsQueue::add;
 
 		var messageHandler = new OnMessageHandler<>(
 				new JacksonDeserializer(objectMapper),
 				Request.class,
 				new document_editor.DelegatingRequestHandler(Map.of(
-						RequestType.CONNECT, (r, c) -> messageProducer.produce(new NewConnectionDocumentsEvent(c)),
-						RequestType.CHANGES, (r, c) -> messageProducer.produce(new EditDocumentsEvent(r.payload())),
-						RequestType.PING, (r, c) -> messageProducer.produce(new PingDocumentsEvent(c))
+						RequestType.CONNECT, (r, c) -> eventsProducer.produce(new NewConnectionDocumentsEvent(c)),
+						RequestType.CHANGES, (r, c) -> eventsProducer.produce(new EditDocumentsEvent(r.payload())),
+						RequestType.PING, (r, c) -> eventsProducer.produce(new PingDocumentsEvent(c))
 				)),
 				error -> LOGGER.error("Error on deserialization", error));
 		var webSocketEndpointProvider = new WebSocketEndpointProvider(Map.of(
@@ -288,7 +285,7 @@ public class HttpServer {
 							webSocketMessage.setFin(true);
 							webSocketMessage.setOpCode(OpCode.CONNECTION_CLOSE);
 							webSocketMessage.setPayload(new byte[] {});
-							s.appendResponse(messageSerializer.serialize(webSocketMessage, e -> {}), SocketConnection::close);
+							s.appendResponse(messageSerializer.serialize(webSocketMessage), SocketConnection::close);
 							s.changeOperation(OperationType.WRITE);
 						}
 				), s -> {
@@ -374,7 +371,7 @@ public class HttpServer {
 
 		var documentStorageService = DocumentStorageServiceGrpc.newStub(documentStorageServiceChannel);
 
-		schedulePeriodically(1000, new FillQueueProcess<>(eventsQueue, new SendPongsDocumentsEvent()));
+		schedulePeriodically(1000, new MessagePublishProcess<>(new QueueMessageProducer<>(eventsQueue), new SendPongsDocumentsEvent()));
 
 		var contextPropagationServiceDecorator = new ContextPropagationServiceDecorator(openTelemetry);
 
@@ -400,7 +397,8 @@ public class HttpServer {
 			objectMapper.writeValue(new GZIPOutputStream(arrayOutputStream), obj);
 			return arrayOutputStream.toByteArray();
 		};
-		startProcess(new DocumentChangeWatcher(messageProducer, serializer, documentStorageService), "Document change watcher");
+		LOGGER.info("Starting document changes process...");
+		startProcess(new DocumentChangeWatcher(eventsProducer, serializer, documentStorageService), "Document change watcher");
 
 		Consumer<SelectionKey> closeConnection = selectionKey -> {
 			var socketConnection = new ConnectionImpl((ServerAttachment) selectionKey.attachment());
