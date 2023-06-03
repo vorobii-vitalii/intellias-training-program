@@ -15,10 +15,10 @@ import com.example.document.storage.FetchDocumentContentRequest;
 
 import document_editor.HttpServer;
 import document_editor.dto.Change;
+import document_editor.dto.Changes;
 import document_editor.dto.ConnectDocumentReply;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import document_editor.dto.TreePathDTO;
 import document_editor.event.DocumentsEventType;
 import document_editor.event.NewConnectionDocumentsEvent;
 import document_editor.event.context.ClientConnectionsContext;
@@ -103,7 +103,10 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
                 var message = new WebSocketMessage();
                 message.setFin(true);
                 try {
-                    message.setPayload(serializer.serialize(new Response(ResponseType.ADD_BULK, computeChanges(documentElements))));
+                    message.setPayload(serializer.serialize(new Response(
+                            ResponseType.CHANGES,
+                            new Changes(computeChanges(documentElements), false)
+                    )));
                 }
                 catch (IOException e) {
                     throw new RuntimeException(e);
@@ -120,14 +123,13 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
                 return documentElements.getDocumentElementsList()
                         .stream()
                         .map(doc -> new Change(
-                                toInternalPath(doc),
-                                (char) doc.getCharacter()
+                                doc.getCharId(),
+                                doc.getParentCharId(),
+                                doc.getIsRight(),
+                                doc.getDisambiguator(),
+                                doc.hasCharacter() ? ((char) doc.getCharacter()) : null
                         ))
                         .collect(Collectors.toList());
-            }
-
-            private TreePathDTO toInternalPath(DocumentElement path) {
-                return new TreePathDTO(path.getDirectionsList(), path.getDisambiguatorsList());
             }
 
             @Override
@@ -135,11 +137,30 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
                 getDocumentSpan.addEvent("Error occurred");
                 getDocumentSpan.recordException(throwable);
                 LOGGER.warn("Error when streaming document", throwable);
+                // TODO: Send error to client
             }
 
             @Override
             public void onCompleted() {
                 LOGGER.info("On complete streaming document");
+                getDocumentSpan.addEvent("Batch received");
+                var message = new WebSocketMessage();
+                message.setFin(true);
+                try {
+                    message.setPayload(serializer.serialize(new Response(
+                            ResponseType.CHANGES,
+                            new Changes(List.of(), true)
+                    )));
+                }
+                catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                message.setOpCode(OpCode.BINARY);
+                getDocumentSpan.addEvent("Batch serialized");
+                var buffer = messageSerializer.serialize(message, e -> {
+                });
+                connection.appendResponse(buffer);
+                getDocumentSpan.addEvent("Batch sent");
                 connection.changeOperation(OperationType.WRITE);
                 getDocumentSpan.end();
                 scope.close();

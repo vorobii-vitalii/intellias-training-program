@@ -51,8 +51,12 @@ public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 				.map(c -> {
 					var builder = Change.newBuilder()
 							.setDocumentId(HttpServer.DOCUMENT_ID)
-							.addAllDirections(c.treePath().directions())
-							.addAllDisambiguators(c.treePath().disambiguators());
+							.setCharId(c.charId())
+							.setIsRight(c.isRight())
+							.setDisambiguator(c.disambiguator());
+					if (c.parentCharId() != null) {
+						builder.setParentCharId(c.parentCharId());
+					}
 					if (c.character() != null) {
 						builder.setCharacter(c.character());
 					}

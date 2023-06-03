@@ -7,17 +7,22 @@ option java_outer_classname = "DocumentStorage";
 package document_storage;
 
 message Change {
-  repeated bool directions = 1 [packed=true];
-  repeated int32 disambiguators = 2 [packed=true];
-  int32 documentId = 3;
+  string charId = 1;
+  optional string parentCharId = 2;
+  optional bool isRight = 3;
+  optional int32 disambiguator = 4;
   // Not provided on deletion, provided on insertion
-  optional int32 character = 4;
+  optional int32 character = 5;
+  int32 documentId = 6;
 }
 
 message DocumentElement {
-  repeated bool directions = 1 [packed=true];
-  repeated int32 disambiguators = 2 [packed=true];
-  int32 character = 3;
+  string charId = 1;
+  optional string parentCharId = 2;
+  optional bool isRight = 3;
+  optional int32 disambiguator = 4;
+  // Not provided on deletion, provided on insertion
+  optional int32 character = 5;
 }
 
 message DocumentElements {

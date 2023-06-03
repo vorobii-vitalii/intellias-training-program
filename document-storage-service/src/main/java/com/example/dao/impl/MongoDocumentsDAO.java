@@ -40,17 +40,44 @@ import reactor.core.publisher.Flux;
 
 public class MongoDocumentsDAO implements DocumentsDAO {
     public static final String DOCUMENT_ID = "documentId";
-    public static final String DIRECTIONS = "directions";
-    private static final String DISAMBIGUATORS = "disambiguators";
-    private static final String DIRECTIONS_COUNT = "directionsCount";
+    public static final String CHAR_ID = "charId";
+    public static final String PARENT_CHAR_ID = "parentCharId";
+    public static final String IS_RIGHT = "isRight";
+    public static final String DISAMBIGUATOR = "disambiguator";
     public static final String VALUE = "value";
     public static final int BATCH_SIZE = 1000;
     private static final Logger LOGGER = LoggerFactory.getLogger(MongoDocumentsDAO.class);
-    public static final String DELETING = "deleting";
     private final MongoCollection<Document> collection;
 
     public MongoDocumentsDAO(MongoCollection<Document> collection) {
         this.collection = collection;
+    }
+
+    private static DocumentElement toDocumentElement(Document document) {
+        var value = document.getInteger(VALUE);
+        var builder = DocumentElement.newBuilder()
+                .setCharId(document.getString(CHAR_ID))
+                .setParentCharId(document.getString(PARENT_CHAR_ID))
+                .setIsRight(document.getBoolean(IS_RIGHT))
+                .setDisambiguator(document.getInteger(DISAMBIGUATOR));
+        if (value != null) {
+            builder.setCharacter(value);
+        }
+        return builder.build();
+    }
+
+    private static Change toChange(Document document) {
+        var value = document.getInteger(VALUE);
+        var builder = Change.newBuilder()
+                .setCharId(document.getString(CHAR_ID))
+                .setParentCharId(document.getString(PARENT_CHAR_ID))
+                .setIsRight(document.getBoolean(IS_RIGHT))
+                .setDocumentId(document.getInteger(DOCUMENT_ID))
+                .setDisambiguator(document.getInteger(DISAMBIGUATOR));
+        if (value != null) {
+            builder.setCharacter(value);
+        }
+        return builder.build();
     }
 
     @Override
@@ -66,42 +93,21 @@ public class MongoDocumentsDAO implements DocumentsDAO {
     public Publisher<DocumentElements> fetchDocumentElements(int documentId) {
         return Flux.from(collection
                         .find(Filters.and(
-                                Filters.eq(DOCUMENT_ID, documentId),
-                                Filters.not(Filters.exists("deleting"))
+                                Filters.eq(DOCUMENT_ID, documentId)
                         ))
                         .projection(new Document()
-                                .append(DIRECTIONS, 1)
-                                .append(DISAMBIGUATORS, 1)
-                                .append(DIRECTIONS_COUNT, 1)
+                                .append(CHAR_ID, 1)
+                                .append(PARENT_CHAR_ID, 1)
+                                .append(IS_RIGHT, 1)
+                                .append(DISAMBIGUATOR, 1)
                                 .append(VALUE, 1)))
                 .buffer(BATCH_SIZE)
                 .map(documents ->
                         DocumentElements.newBuilder()
                                 .addAllDocumentElements(documents.stream()
-                                        .map(document -> {
-                                            return DocumentElement.newBuilder()
-                                                    .setCharacter(document.getInteger(VALUE))
-                                                    .addAllDirections(getDirections(document.getString(DIRECTIONS), document.getInteger(DIRECTIONS_COUNT)))
-                                                    .addAllDisambiguators(document.getList(DISAMBIGUATORS, Integer.class))
-                                                    .build();
-                                        })
+                                        .map(MongoDocumentsDAO::toDocumentElement)
                                         .collect(Collectors.toList()))
                                 .build());
-    }
-
-    private List<Boolean> getDirections(String s, Integer count) {
-        var set = BitSet.valueOf(Base64.getDecoder().decode(s));
-        return IntStream.range(0, count)
-                .mapToObj(set::get)
-                .collect(Collectors.toList());
-    }
-
-    private String toDirections(List<Boolean> list) {
-        BitSet bitSet = new BitSet(list.size());
-        for (int i = 0; i < list.size(); i++) {
-            bitSet.set(i, list.get(i));
-        }
-        return Base64.getEncoder().encodeToString(bitSet.toByteArray());
     }
 
     @Override
@@ -114,18 +120,9 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                                 .filter(doc -> doc.getFullDocument() != null)
                                 .map(doc -> {
                                     LOGGER.info("Document has changed");
-                                    var fullDocument = doc.getFullDocument();
-                                    var changeBuilder = Change.newBuilder()
-                                            .setDocumentId(fullDocument.getInteger(DOCUMENT_ID))
-                                            .addAllDirections(getDirections(fullDocument.getString(DIRECTIONS),
-                                                    fullDocument.getInteger(DIRECTIONS_COUNT)))
-                                            .addAllDisambiguators(fullDocument.getList(DISAMBIGUATORS, Integer.class));
-                                    if (!fullDocument.containsKey(DELETING)) {
-                                        changeBuilder.setCharacter(fullDocument.getInteger(VALUE));
-                                    }
                                     return DocumentChangedEvent.newBuilder()
                                             .setResumeToken(doc.getResumeToken().toJson())
-                                            .setChange(changeBuilder.build())
+                                            .setChange(toChange(doc.getFullDocument()))
                                             .build();
                                 })
                                 .collect(Collectors.toList()))
@@ -147,13 +144,13 @@ public class MongoDocumentsDAO implements DocumentsDAO {
         var filters = deletes.stream()
                 .map(delete -> Filters.and(
                         Filters.eq(DOCUMENT_ID, delete.getDocumentId()),
-                        Filters.eq(DIRECTIONS, toDirections(delete.getDirectionsList())),
-                        Filters.eq(DISAMBIGUATORS, delete.getDisambiguatorsList())))
+                        Filters.eq(CHAR_ID, delete.getCharId())
+                ))
                 .toList();
         var filter = Filters.or(filters);
         List<WriteModel<Document>> aggregationPipeline = List.of(
-                new UpdateManyModel<>(filter, new Document().append("$set", new Document(DELETING, true))),
-                new DeleteManyModel<>(filter));
+                new UpdateManyModel<>(filter, new Document().append("$set", new Document(VALUE, null)))
+        );
         var bulkWriteOptions = new BulkWriteOptions().ordered(true);
         collection.bulkWrite(aggregationPipeline, bulkWriteOptions)
                 .subscribe(new Subscriber<>() {
@@ -185,9 +182,10 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                         .map(c -> new UpdateOneModel<Document>(
                                 new Document()
                                         .append(DOCUMENT_ID, c.getDocumentId())
-                                        .append(DIRECTIONS, toDirections(c.getDirectionsList()))
-                                        .append(DIRECTIONS_COUNT, c.getDirectionsList().size())
-                                        .append(DISAMBIGUATORS, c.getDisambiguatorsList()),
+                                        .append(CHAR_ID, c.getCharId())
+                                        .append(PARENT_CHAR_ID, c.getParentCharId())
+                                        .append(IS_RIGHT, c.getIsRight())
+                                        .append(DISAMBIGUATOR, c.getDisambiguator()),
                                 new Document().append("$setOnInsert", new Document().append(VALUE, c.getCharacter())),
                                 new UpdateOptions().upsert(true)
                         ))

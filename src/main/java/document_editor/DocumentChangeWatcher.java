@@ -12,9 +12,9 @@ import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.example.document.storage.SubscribeForDocumentChangesRequest;
 
 import document_editor.dto.Change;
+import document_editor.dto.Changes;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import document_editor.dto.TreePathDTO;
 import document_editor.event.DocumentsEvent;
 import document_editor.event.MessageDistributeDocumentsEvent;
 import io.grpc.stub.StreamObserver;
@@ -90,7 +90,7 @@ public class DocumentChangeWatcher implements Runnable {
 	}
 
 	private Response getResponse(DocumentChangedEvents documentChangedEvents) {
-		return new Response(ResponseType.CHANGES, calculateChanges(documentChangedEvents));
+		return new Response(ResponseType.CHANGES, new Changes(calculateChanges(documentChangedEvents), false));
 	}
 
 	private List<Change> calculateChanges(DocumentChangedEvents documentChangedEvents) {
@@ -100,14 +100,13 @@ public class DocumentChangeWatcher implements Runnable {
 				.map(e -> {
 					var change = e.getChange();
 					return new Change(
-							toInternalPath(change),
+							change.getCharId(),
+							change.getParentCharId(),
+							change.getIsRight(),
+							change.getDisambiguator(),
 							change.hasCharacter() ? ((char) change.getCharacter()) : null
 					);
 				})
 				.collect(Collectors.toList());
-	}
-
-	private TreePathDTO toInternalPath(com.example.document.storage.Change event) {
-		return new TreePathDTO(event.getDirectionsList(), event.getDisambiguatorsList());
 	}
 }

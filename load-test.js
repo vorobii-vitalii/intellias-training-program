@@ -5,7 +5,7 @@ import msgpack from 'https://cdnjs.cloudflare.com/ajax/libs/msgpack-lite/0.1.26/
 import {SharedArray} from 'k6/data';
 
 const VIRTUAL_USERS = 1000;
-const CHANGES_PER_USER = 1;
+const CHANGES_PER_USER = 0;
 
 export let options = {
     iterations: VIRTUAL_USERS,

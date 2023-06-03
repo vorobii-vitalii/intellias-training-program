@@ -24,80 +24,121 @@
 </body>
 
 <script>
+  const dp = {};
+  const charsMap = {};
+
+  const solve = charId => {
+    // TODO: Use stack!
+    if (!charId) {
+      return [[], []];
+    }
+    if (dp[charId]) {
+      return dp[charId];
+    }
+    const v = charsMap[charId];
+    const parentV = solve(v.parentCharId);
+    const res = [ [...parentV[0], v.isRight], [...parentV[1], v.disambiguator]];
+    dp[charId] = res;
+    return res;
+  };
+
+  const generateUniqueId = () => {
+    return crypto.randomUUID();
+  }
+
   const comparePath = (a, b) => {
-    const aLength = a.directions.length;
-    const bLength = b.directions.length;
+    const r1 = solve(a);
+    const r2 = solve(b);
+
+    const directionsA = r1[0];
+    const directionsB = r2[0];
+
+    const disambiguatorsB = r2[1];
+    const disambiguatorsA = r1[1];
+
+    const aLength = directionsA.length;
+    const bLength = directionsB.length;
+
     const m = Math.min(aLength, bLength);
+
     for (let i = 0; i < m; i++) {
-      if (a.directions[i] !== b.directions[i]) {
-        return a.directions[i] ? 1 : -1;
+      if (directionsA[i] !== directionsB[i]) {
+        return directionsA[i] ? 1 : -1;
       }
-      if (a.disambiguators[i]  !== b.disambiguators[i] ) {
-        return a.disambiguators[i] < b.disambiguators[i] ? -1 : 1;
+      if (disambiguatorsA[i]  !== disambiguatorsB[i] ) {
+        return disambiguatorsA[i] < disambiguatorsB[i] ? -1 : 1;
       }
     }
     if (aLength === bLength) {
       return 0;
     }
     if (aLength === m) {
-      return b.directions[m] ? -1 : 1;
+      return directionsB[m] ? -1 : 1;
     }
-    return a.directions[m] ? 1 : -1;
+    return directionsA[m] ? 1 : -1;
   };
 
-  const createPair = (left, right, c) => {
+  const createNewCharacter = (left, right, c) => {
     if (!left && !right) {
       return {
-        treePath: {
-          directions: [false],
-          disambiguators: [connectionId]
-        },
+        isRight: true,
+        disambiguator: connectionId,
+        charId: generateUniqueId(),
         character: c
       };
     }
     if (!left) {
       return {
-        treePath: {
-          directions: [...right.treePath.directions, false],
-          disambiguators: [...right.treePath.disambiguators, connectionId]
-        },
+        isRight: false,
+        disambiguator: connectionId,
+        parentCharId: right,
+        charId: generateUniqueId(),
         character: c
       };
     } else if (!right) {
       return {
-        treePath: {
-          directions: [...left.treePath.directions, true],
-          disambiguators: [...left.treePath.disambiguators, connectionId]
-        },
+        isRight: true,
+        disambiguator: connectionId,
+        parentCharId: left,
+        charId: generateUniqueId(),
         character: c
       };
     }
-    if (isAncestor(left.treePath, right.treePath)) {
+    if (isAncestor(left, right)) {
       return {
-        treePath: {
-          directions: [...right.treePath.directions, false],
-          disambiguators: [...right.treePath.disambiguators, connectionId]
-        },
+        isRight: false,
+        disambiguator: connectionId,
+        parentCharId: right,
+        charId: generateUniqueId(),
         character: c
       };
     }
     return {
-      treePath: {
-        directions: [...left.treePath.directions, true],
-        disambiguators: [...left.treePath.disambiguators, connectionId]
-      },
+      isRight: true,
+      disambiguator: connectionId,
+      parentCharId: left,
+      charId: generateUniqueId(),
       character: c
     };
   };
 
   const isAncestor = (a, b) => {
-    const aLength = a.directions.length;
-    const bLength = b.directions.length;
+    const r1 = solve(a);
+    const r2 = solve(b);
+
+    const directionsA = r1[0];
+    const directionsB = r2[0];
+
+    const disambiguatorsA = r1[1];
+    const disambiguatorsB = r2[1];
+
+    const aLength = directionsA.length;
+    const bLength = directionsB.length;
     if (bLength < aLength) {
       return false;
     }
     for (let i = 0; i < aLength; i++) {
-      if (a.directions[i] !== b.directions[i] || a.disambiguators[i] !== b.disambiguators[i]) {
+      if (directionsA[i] !== directionsB[i] || disambiguatorsA[i] !== disambiguatorsB[i]) {
         return false;
       }
     }
@@ -121,7 +162,7 @@
   const textArea = document.getElementById("editor");
 
   const binarySearch = (path) => {
-    if (arr.length > 0 && comparePath(path, arr[arr.length - 1].treePath) > 0) {
+    if (arr.length > 0 && comparePath(path, arr[arr.length - 1]) > 0) {
       return arr.length;
     }
     let low = 0;
@@ -129,7 +170,7 @@
     let res = 0;
     while (low <= high) {
       const mid = (low + high) >> 1;
-      const c = comparePath(path, arr[mid].treePath);
+      const c = comparePath(path, arr[mid]);
       if (c === 0) {
         return mid;
       }
@@ -147,43 +188,48 @@
 
   socket = new WebSocket("ws://localhost:8001/documents");
   socket.binaryType = "arraybuffer";
+  let shouldRender = false;
   socket.onmessage = function(event) {
     const data = pako.ungzip(event.data)
     const eventPayload = msgpack.decode(new Uint8Array(data));
-
     if (eventPayload.responseType === 'ON_CONNECT') {
       connectionId = eventPayload.payload.connectionId;
-    } else if (eventPayload.responseType === 'ADD_BULK') {
-      // console.log('Received change ', JSON.stringify(eventPayload.payload));
-      for (const change of eventPayload.payload) {
-        // console.log('Current arr = ', JSON.stringify(arr));
-        const index = binarySearch(change.treePath);
-        // console.log('Index for ', JSON.stringify(change.treePath), ' = ', index);
-        if (index >= arr.length || comparePath(arr[index].treePath, change.treePath) !== 0) {
-          arr.splice(index, 0, change);
+    }
+    else if (eventPayload.responseType === 'CHANGES') {
+      console.log('Changes: ', JSON.stringify(eventPayload.payload));
+      const changes = eventPayload.payload.changes;
+      const isEndOfStream = eventPayload.payload.isEndOfStream;
+      const prev = shouldRender;
+      shouldRender |= isEndOfStream;
+      for (const change of changes) {
+        if (change.character) {
+          if (!charsMap[change.charId]) {
+            charsMap[change.charId] = change;
+            // Array sorted
+            if (prev) {
+              const index = binarySearch(change.charId);
+              if (index >= arr.length || comparePath(arr[index], change.charId) !== 0) {
+                arr.splice(index, 0, change.charId);
+              }
+            }
+            // Array not sorted yet.
+            else {
+              arr.splice(arr.length, 0, change.charId);
+            }
+          }
         }
+        charsMap[change.charId] = change;
       }
-
-    } else if (eventPayload.responseType === 'CHANGES') {
-      // console.log('Received change ', JSON.stringify(eventPayload.payload));
-      for (const change of eventPayload.payload) {
-        // console.log('Current arr = ', JSON.stringify(arr));
-        const index = binarySearch(change.treePath);
-        // console.log('Index for ', JSON.stringify(change.treePath), ' = ', index);
-        if (!change.character) {
-          if (index >= 0 && index < arr.length && comparePath(arr[index].treePath, change.treePath) === 0) {
-            arr.splice(index, 1);
-          }
-        } else {
-          if (index >= arr.length || comparePath(arr[index].treePath, change.treePath) !== 0) {
-            arr.splice(index, 0, change);
-          }
+      if (shouldRender) {
+        console.log('Rendering');
+        if (!prev) {
+          arr.sort((a, b) => comparePath(a, b));
         }
+        textArea.value = arr.map(v => charsMap[v].character).filter(s => s).join('');
       }
     } else if (eventPayload.responseType === 'PONG') {
       lastPong = new Date();
     }
-    textArea.value = arr.map(v => v.character).join('');
   };
   socket.onopen = () => {
     socket.send(msgpack.encode({
@@ -199,8 +245,8 @@
 
   setInterval(() => {
     if (changes.length > 0) {
-      // console.log('Sending changes');
-      // console.log(changes);
+      console.log('Sending changes');
+      console.log(changes);
       socket.send(msgpack.encode({
         type: 'CHANGES',
         payload: changes.slice(0, batchSize)
@@ -218,7 +264,7 @@
   }, 2000);
 
   textArea.addEventListener("change", event => {
-    const curr = arr.map(v => v.character).join('');
+    const curr = arr.map(v => charsMap[v].character).filter(s => s).join('');
     const updated = textArea.value;
     const diff = dmp.diff_main(curr, updated);
     let prevIndex = -1;
@@ -233,9 +279,11 @@
         prevIndex += str.length;
       } else if (v === -1) {
         for (let i = 0; i < str.length; i++) {
+          const charIdToDelete = arr[i + prevIndex + 1];
           changes.splice(changes.length, 0, {
-            treePath: arr[i + prevIndex + 1].treePath
+            charId: charIdToDelete
           });
+          charsMap[charIdToDelete].character = null;
         }
         prevIndex += str.length;
       } else {
@@ -243,10 +291,11 @@
         const next = extract(prevIndex + 1);
         for (let i = 0; i < str.length; i++) {
           const c = str.charAt(i);
-          let a = createPair(prev, next, c);
+          let a = createNewCharacter(prev, next, c);
+          charsMap[a.charId] = a;
           changes.splice(changes.length, 0, a);
-          newArr.splice(newArr.length, 0, a);
-          prev = a;
+          newArr.splice(newArr.length, 0, a.charId);
+          prev = a.charId;
         }
       }
     }
