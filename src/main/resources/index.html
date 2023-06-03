@@ -26,6 +26,7 @@
 <script>
   const dp = {};
   const charsMap = {};
+  const dependencyMap = {};
 
   const solve = charId => {
     // TODO: Use stack!
@@ -40,6 +41,16 @@
     const res = [ [...parentV[0], v.isRight], [...parentV[1], v.disambiguator]];
     dp[charId] = res;
     return res;
+  };
+
+  const getDependency = charId => {
+    if (!charId) {
+      return null;
+    }
+    if (!charsMap[charId]) {
+      return charId;
+    }
+    return getDependency(charsMap[charId].parentCharId);
   };
 
   const generateUniqueId = () => {
@@ -186,6 +197,31 @@
 
   let lastPong = new Date();
 
+  const dfs = charId => {
+    const dependencyId = getDependency(charId);
+    if (dependencyId) {
+      if (!dependencyMap[dependencyId]) {
+        dependencyMap[dependencyId] = [charId];
+      }
+      else {
+        dependencyMap[dependencyId].splice(0, 0, charId);
+      }
+    }
+    else {
+      if (charsMap[charId].character) {
+        const index = binarySearch(charId);
+        if (index >= arr.length || comparePath(arr[index], charId) !== 0) {
+          arr.splice(index, 0, charId);
+        }
+      }
+      if (dependencyMap[charId]) {
+        for (const d of dependencyMap[charId]) {
+          dfs(d);
+        }
+      }
+    }
+  };
+
   socket = new WebSocket("ws://localhost:8001/documents");
   socket.binaryType = "arraybuffer";
   let shouldRender = false;
@@ -196,35 +232,16 @@
       connectionId = eventPayload.payload.connectionId;
     }
     else if (eventPayload.responseType === 'CHANGES') {
-      console.log('Changes: ', JSON.stringify(eventPayload.payload));
+      // console.log('Changes: ', JSON.stringify(eventPayload.payload));
       const changes = eventPayload.payload.changes;
       const isEndOfStream = eventPayload.payload.isEndOfStream;
-      const prev = shouldRender;
       shouldRender |= isEndOfStream;
       for (const change of changes) {
-        if (change.character) {
-          if (!charsMap[change.charId]) {
-            charsMap[change.charId] = change;
-            // Array sorted
-            if (prev) {
-              const index = binarySearch(change.charId);
-              if (index >= arr.length || comparePath(arr[index], change.charId) !== 0) {
-                arr.splice(index, 0, change.charId);
-              }
-            }
-            // Array not sorted yet.
-            else {
-              arr.splice(arr.length, 0, change.charId);
-            }
-          }
-        }
         charsMap[change.charId] = change;
+        dfs(change.charId);
       }
       if (shouldRender) {
-        console.log('Rendering');
-        if (!prev) {
-          arr.sort((a, b) => comparePath(a, b));
-        }
+        // console.log('Rendering');
         textArea.value = arr.map(v => charsMap[v].character).filter(s => s).join('');
       }
     } else if (eventPayload.responseType === 'PONG') {
@@ -245,8 +262,8 @@
 
   setInterval(() => {
     if (changes.length > 0) {
-      console.log('Sending changes');
-      console.log(changes);
+      // console.log('Sending changes');
+      // console.log(changes);
       socket.send(msgpack.encode({
         type: 'CHANGES',
         payload: changes.slice(0, batchSize)

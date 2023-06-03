@@ -83,9 +83,54 @@ public class MongoDocumentsDAO implements DocumentsDAO {
     @Override
     public void applyChanges(ChangesRequest changesRequest) {
         var changesList = changesRequest.getChangesList();
-        var changesGroups = changesList.stream().collect(Collectors.partitioningBy(Change::hasCharacter));
-        applyIfNotEmpty(changesGroups.get(true), this::doInserts);
-        applyIfNotEmpty(changesGroups.get(false), this::doDeletes);
+        collection.bulkWrite(
+                changesList.stream()
+                        .map(c -> {
+                            if (c.hasCharacter()) {
+                                return new UpdateOneModel<Document>(
+                                        new Document()
+                                                .append(DOCUMENT_ID, c.getDocumentId())
+                                                .append(CHAR_ID, c.getCharId())
+                                                .append(PARENT_CHAR_ID, c.getParentCharId())
+                                                .append(IS_RIGHT, c.getIsRight())
+                                                .append(DISAMBIGUATOR, c.getDisambiguator()),
+                                        new Document().append("$setOnInsert", new Document().append(VALUE, c.getCharacter())),
+                                        new UpdateOptions().upsert(true)
+                                );
+                            }
+                            else {
+                                return new UpdateOneModel<Document>(
+                                        Filters.and(
+                                                Filters.eq(DOCUMENT_ID, c.getDocumentId()),
+                                                Filters.eq(CHAR_ID, c.getCharId())
+                                        ),
+                                        new Document().append("$set", new Document(VALUE, null))
+                                );
+                            }
+                        })
+                        .collect(Collectors.toList()),
+                new BulkWriteOptions().ordered(true)
+        ).subscribe(new Subscriber<>() {
+            @Override
+            public void onSubscribe(Subscription s) {
+                s.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(BulkWriteResult bulkWriteResult) {
+
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                LOGGER.error("Error", t);
+            }
+
+            @Override
+            public void onComplete() {
+                LOGGER.info("Inserts complete");
+            }
+        });
 
     }
 
@@ -138,85 +183,5 @@ public class MongoDocumentsDAO implements DocumentsDAO {
             return publisher.startAfter(startAfter);
         }
         return publisher;
-    }
-
-    private void doDeletes(List<Change> deletes) {
-        var filters = deletes.stream()
-                .map(delete -> Filters.and(
-                        Filters.eq(DOCUMENT_ID, delete.getDocumentId()),
-                        Filters.eq(CHAR_ID, delete.getCharId())
-                ))
-                .toList();
-        var filter = Filters.or(filters);
-        List<WriteModel<Document>> aggregationPipeline = List.of(
-                new UpdateManyModel<>(filter, new Document().append("$set", new Document(VALUE, null)))
-        );
-        var bulkWriteOptions = new BulkWriteOptions().ordered(true);
-        collection.bulkWrite(aggregationPipeline, bulkWriteOptions)
-                .subscribe(new Subscriber<>() {
-                    @Override
-                    public void onSubscribe(Subscription s) {
-                        s.request(Long.MAX_VALUE);
-                    }
-
-                    @Override
-                    public void onNext(BulkWriteResult bulkWriteResult) {
-
-                    }
-
-                    @Override
-                    public void onError(Throwable t) {
-                        LOGGER.warn("Error during delete " + t);
-                    }
-
-                    @Override
-                    public void onComplete() {
-                        LOGGER.debug("Delete completed");
-                    }
-                });
-    }
-
-    private void doInserts(List<Change> inserts) {
-        collection.bulkWrite(
-                inserts.stream()
-                        .map(c -> new UpdateOneModel<Document>(
-                                new Document()
-                                        .append(DOCUMENT_ID, c.getDocumentId())
-                                        .append(CHAR_ID, c.getCharId())
-                                        .append(PARENT_CHAR_ID, c.getParentCharId())
-                                        .append(IS_RIGHT, c.getIsRight())
-                                        .append(DISAMBIGUATOR, c.getDisambiguator()),
-                                new Document().append("$setOnInsert", new Document().append(VALUE, c.getCharacter())),
-                                new UpdateOptions().upsert(true)
-                        ))
-                        .collect(Collectors.toList())
-        ).subscribe(new Subscriber<>() {
-            @Override
-            public void onSubscribe(Subscription s) {
-                s.request(Long.MAX_VALUE);
-            }
-
-            @Override
-            public void onNext(BulkWriteResult bulkWriteResult) {
-
-            }
-
-            @Override
-            public void onError(Throwable t) {
-                LOGGER.error("Error", t);
-            }
-
-            @Override
-            public void onComplete() {
-                LOGGER.info("Inserts complete");
-            }
-        });
-    }
-
-    private <T> void applyIfNotEmpty(List<T> list, Consumer<List<T>> consumer) {
-        if (list.isEmpty()) {
-            return;
-        }
-        consumer.accept(list);
     }
 }
