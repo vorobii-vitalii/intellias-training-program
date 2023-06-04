@@ -56,7 +56,7 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 	public void handle(NetworkRequest<HTTPRequest> networkRequest) {
 		executorService.execute(() -> {
 			var httpRequest = networkRequest.request();
-			LOGGER.debug("Handling HTTP request {}", httpRequest);
+			LOGGER.debug("Handling HTTP clientRequest {}", httpRequest);
 			var requestSpan = httpRequestHandlerTracer.spanBuilder(httpRequest.getHttpRequestLine().toString())
 					.setAttribute(SemanticAttributes.HTTP_METHOD, httpRequest.getHttpRequestLine().httpMethod().toString())
 					.setSpanKind(SpanKind.SERVER)

@@ -224,7 +224,11 @@
 
   socket = new WebSocket("ws://localhost:8001/documents");
   socket.binaryType = "arraybuffer";
+
   let shouldRender = false;
+
+  const changesMap = {};
+
   socket.onmessage = function(event) {
     const data = pako.ungzip(event.data)
     const eventPayload = msgpack.decode(new Uint8Array(data));
@@ -247,6 +251,14 @@
     } else if (eventPayload.responseType === 'PONG') {
       lastPong = new Date();
     }
+    else if (eventPayload.responseType === 'NACK') {
+        console.log('Change ', eventPayload.payload, ' not saved, will retry operation');
+        changesMap[eventPayload.payload][1] = 0;
+    }
+    else if (eventPayload.responseType === 'ACK') {
+        console.log('Change ', eventPayload.payload, ' saved');
+        delete changesMap[eventPayload.payload]
+    }
   };
   socket.onopen = () => {
     socket.send(msgpack.encode({
@@ -258,22 +270,42 @@
       }));
     }, 2000);
   };
-  const batchSize = 100;
+  const batchSize = 500;
+
+  const getTimeStamp = () => new Date().getTime();
 
   setInterval(() => {
     if (changes.length > 0) {
       // console.log('Sending changes');
       // console.log(changes);
-      socket.send(msgpack.encode({
-        type: 'CHANGES',
-        payload: changes.slice(0, batchSize)
-      }));
+        const changeId = generateUniqueId();
+        const change = {
+            type: 'CHANGES',
+            payload: changes.slice(0, batchSize),
+            changeId: changeId
+        };
+        changesMap[changeId] = [change, getTimeStamp()];
+        socket.send(msgpack.encode(change));
       changes = changes.slice(batchSize, changes.length);
     }
-  }, 25);
+  }, 100);
+
+  const maxWaitTimeForChangeApply = 1000;
 
   setInterval(() => {
-    const d = new Date().getTime() - lastPong.getTime();
+      for (const [changeId, obj] of Object.entries(changesMap)) {
+          const currentTimestamp = getTimeStamp();
+          const waitTime = obj[1] - currentTimestamp;
+          console.log(`Going to retry to apply change ${changeId}`)
+          if (waitTime >= maxWaitTimeForChangeApply) {
+              obj[1] = currentTimestamp;
+              socket.send(msgpack.encode(obj[0]));
+          }
+      }
+  }, 1000);
+
+  setInterval(() => {
+    const d = getTimeStamp() - lastPong.getTime();
     // console.log('Ms since last PONG ', d);
     if (d >= 5000) {
       console.log("Disconnected");

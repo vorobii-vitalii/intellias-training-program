@@ -2,9 +2,10 @@ import ws from 'k6/ws';
 import {check} from 'k6';
 import {randomString, randomIntBetween} from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
 import msgpack from 'https://cdnjs.cloudflare.com/ajax/libs/msgpack-lite/0.1.26/msgpack.min.js';
+import pako from 'https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js';
 import {SharedArray} from 'k6/data';
 
-const VIRTUAL_USERS = 1000;
+const VIRTUAL_USERS = 100;
 const CHANGES_PER_USER = 0;
 
 export let options = {
@@ -74,6 +75,8 @@ export default function () {
         tags: {k6test: 'yes'},
     };
 
+    let wasLoaded = false;
+
     const res = ws.connect(url, params, function (socket) {
         socket.on('error', e => {
             console.log('Error ', e);
@@ -134,7 +137,10 @@ export default function () {
 
             socket.on('binaryMessage', function (message) {
                 // console.log('Received message ', message.byteLength);
-                // const eventPayload = msgpack.decode(new Uint8Array(message));
+                // const eventPayload = msgpack.decode(new Uint8Array(pako.ungzip(message)));
+                // if (eventPayload.responseType === 'CHANGES') {
+                //     wasLoaded |= eventPayload.payload.isEndOfStream;
+                // }
                 //
                 // if (eventPayload.responseType === 'ADD') {
                 //   const addedChange = eventPayload.payload;
@@ -156,9 +162,14 @@ export default function () {
                 //   'all changes received': c => c.length === data.length
                 // })
                 socket.close();
-            }, 20 * 1000);
+            }, 10 * 1000);
         });
     });
     // console.log(res)
-    check(res, {'status is 101': (r) => r && r.status === 101});
+    check(res, {
+        'status is 101': (r) => r && r.status === 101
+    });
+    // check(wasLoaded, {
+    //     'document was loaded': (r) => r
+    // });
 };

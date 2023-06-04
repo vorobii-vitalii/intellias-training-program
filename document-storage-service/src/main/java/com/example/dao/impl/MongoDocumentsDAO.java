@@ -1,18 +1,11 @@
 package com.example.dao.impl;
 
 import java.time.Duration;
-import java.util.Base64;
-import java.util.BitSet;
-import java.util.List;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.bson.BsonDocument;
 import org.bson.Document;
 import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,12 +19,9 @@ import com.example.document.storage.DocumentElements;
 import com.example.document.storage.SubscribeForDocumentChangesRequest;
 import com.mongodb.bulk.BulkWriteResult;
 import com.mongodb.client.model.BulkWriteOptions;
-import com.mongodb.client.model.DeleteManyModel;
 import com.mongodb.client.model.Filters;
-import com.mongodb.client.model.UpdateManyModel;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
-import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.model.changestream.ChangeStreamDocument;
 import com.mongodb.client.model.changestream.FullDocument;
 import com.mongodb.reactivestreams.client.MongoCollection;
@@ -81,9 +71,9 @@ public class MongoDocumentsDAO implements DocumentsDAO {
     }
 
     @Override
-    public void applyChanges(ChangesRequest changesRequest) {
+    public Publisher<BulkWriteResult> applyChanges(ChangesRequest changesRequest) {
         var changesList = changesRequest.getChangesList();
-        collection.bulkWrite(
+        return collection.bulkWrite(
                 changesList.stream()
                         .map(c -> {
                             if (c.hasCharacter()) {
@@ -97,8 +87,7 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                                         new Document().append("$setOnInsert", new Document().append(VALUE, c.getCharacter())),
                                         new UpdateOptions().upsert(true)
                                 );
-                            }
-                            else {
+                            } else {
                                 return new UpdateOneModel<Document>(
                                         Filters.and(
                                                 Filters.eq(DOCUMENT_ID, c.getDocumentId()),
@@ -110,28 +99,7 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                         })
                         .collect(Collectors.toList()),
                 new BulkWriteOptions().ordered(true)
-        ).subscribe(new Subscriber<>() {
-            @Override
-            public void onSubscribe(Subscription s) {
-                s.request(Long.MAX_VALUE);
-            }
-
-            @Override
-            public void onNext(BulkWriteResult bulkWriteResult) {
-
-            }
-
-            @Override
-            public void onError(Throwable t) {
-                LOGGER.error("Error", t);
-            }
-
-            @Override
-            public void onComplete() {
-                LOGGER.info("Inserts complete");
-            }
-        });
-
+        );
     }
 
     @Override

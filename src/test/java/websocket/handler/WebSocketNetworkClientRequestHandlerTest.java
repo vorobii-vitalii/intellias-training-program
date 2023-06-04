@@ -17,7 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class WebSocketNetworkRequestHandlerTest {
+class WebSocketNetworkClientRequestHandlerTest {
 
 	public static final String ENDPOINT = "/endpoint";
 	@Mock

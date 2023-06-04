@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.GZIPOutputStream;
 
+import document_editor.dto.ClientRequest;
 import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +47,6 @@ import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 
-import document_editor.dto.Request;
 import document_editor.dto.RequestType;
 import document_editor.event.DocumentsEvent;
 import document_editor.event.EditDocumentsEvent;
@@ -208,16 +208,14 @@ public class HttpServer {
 			if (timer == null) {
 				try {
 					requestHandler.handle(request);
-				}
-				catch (Exception error) {
+				} catch (Exception error) {
 					LOGGER.warn("Error occurred", error);
 				}
 			} else {
 				timer.record(() -> {
 					try {
 						requestHandler.handle(request);
-					}
-					catch (Exception error) {
+					} catch (Exception error) {
 						LOGGER.warn("Error occurred", error);
 					}
 				});
@@ -275,10 +273,11 @@ public class HttpServer {
 
 		var messageHandler = new OnMessageHandler<>(
 				new JacksonDeserializer(objectMapper),
-				Request.class,
+				ClientRequest.class,
 				new document_editor.DelegatingRequestHandler(Map.of(
 						RequestType.CONNECT, (r, c) -> eventsProducer.produce(new NewConnectionDocumentsEvent(c)),
-						RequestType.CHANGES, (r, c) -> eventsProducer.produce(new EditDocumentsEvent(r.payload())),
+						RequestType.CHANGES, (r, c) -> eventsProducer.produce(
+								new EditDocumentsEvent(r.payload(), r.changeId(), c)),
 						RequestType.PING, (r, c) -> eventsProducer.produce(new PingDocumentsEvent(c))
 				)),
 				error -> LOGGER.error("Error on deserialization", error));
@@ -295,8 +294,7 @@ public class HttpServer {
 							s.appendResponse(messageSerializer.serialize(webSocketMessage), c -> {
 								try {
 									c.close();
-								}
-								catch (IOException e) {
+								} catch (IOException e) {
 									LOGGER.warn("Unable to close connection", e);
 								}
 							});
@@ -367,7 +365,7 @@ public class HttpServer {
 		}
 		var httpRing = createDisruptor(httpRequestHandler, NetworkRequest::new, httpRequestProcessingTimer);
 		var wsRing = createDisruptor(new HashBasedLoadBalancer<>(
-				e -> e.socketConnection().hashCode(),
+						e -> e.socketConnection().hashCode(),
 						Arrays.stream(webSocketMessageQueues).map(QueueMessageProducer::new).toList()),
 				NetworkRequest::new,
 				null);
@@ -401,7 +399,7 @@ public class HttpServer {
 						new PingEventHandler(),
 						new PongEventHandler(serializer),
 						new EditEventHandler(documentStorageService, openTelemetry.getTracer("Edit event handler"),
-								contextPropagationServiceDecorator))
+								contextPropagationServiceDecorator, messageSerializer, serializer))
 				.map(handler -> new TimeMeasureEventHandler<>(
 						handler,
 						Timer.builder("operation.handle." + handler.getHandledEventType().name() + ".time")

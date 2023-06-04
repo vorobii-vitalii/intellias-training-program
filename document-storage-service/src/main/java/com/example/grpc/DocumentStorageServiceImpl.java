@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 import com.example.dao.DocumentsDAO;
 import com.example.document.storage.*;
 
+import com.mongodb.bulk.BulkWriteResult;
 import io.grpc.stub.StreamObserver;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.common.AttributeKey;
@@ -41,10 +42,33 @@ public class DocumentStorageServiceImpl extends DocumentStorageServiceGrpc.Docum
 				.setAttribute("changes.count", request.getChangesCount())
 				.setSpanKind(SpanKind.SERVER)
 				.startSpan();
-		documentsDAO.applyChanges(request);
-		serverSpan.end();
-		responseObserver.onNext(ChangesResponse.newBuilder().build());
-		responseObserver.onCompleted();
+
+		documentsDAO.applyChanges(request).subscribe(new ClosingTracingContextDecorator<>(new Subscriber<>() {
+			@Override
+			public void onSubscribe(Subscription s) {
+				s.request(Long.MAX_VALUE);
+			}
+
+			@Override
+			public void onNext(BulkWriteResult bulkWriteResult) {
+
+			}
+
+			@Override
+			public void onError(Throwable t) {
+				serverSpan.recordException(t);
+				responseObserver.onError(t);
+				responseObserver.onCompleted();
+				LOGGER.error("Error on apply changes", t);
+			}
+
+			@Override
+			public void onComplete() {
+				LOGGER.info("Inserts complete");
+				responseObserver.onNext(ChangesResponse.newBuilder().build());
+				responseObserver.onCompleted();
+			}
+		}, serverSpan, scope));
 	}
 
 	@Override

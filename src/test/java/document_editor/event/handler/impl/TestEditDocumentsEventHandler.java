@@ -14,6 +14,8 @@ import document_editor.event.DocumentsEventType;
 import document_editor.event.context.ClientConnectionsContext;
 import grpc.ServiceDecorator;
 import io.opentelemetry.api.trace.TracerProvider;
+import serialization.Serializer;
+import tcp.MessageSerializer;
 
 @ExtendWith(MockitoExtension.class)
 class TestEditDocumentsEventHandler {
@@ -24,11 +26,15 @@ class TestEditDocumentsEventHandler {
 	ServiceDecorator serviceDecorator;
 	@Mock
 	ClientConnectionsContext clientConnectionsContext;
+	@Mock
+	MessageSerializer messageSerializer;
+	@Mock
+	Serializer serializer;
 	EditEventHandler editEventHandler;
 
 	@BeforeEach
 	void setUp() {
-		editEventHandler = new EditEventHandler(documentStorageServiceStub, TracerProvider.noop().get("name"), serviceDecorator);
+		editEventHandler = new EditEventHandler(documentStorageServiceStub, TracerProvider.noop().get("name"), serviceDecorator, messageSerializer, serializer);
 	}
 
 	@Test

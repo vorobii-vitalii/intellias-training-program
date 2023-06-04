@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
-class HTTPRequestMessageReaderTest {
+class HTTPClientRequestMessageReaderTest {
 
 	HTTPRequestMessageReader httpRequestMessageReader =
 					new HTTPRequestMessageReader((name, val) -> Collections.singletonList(val.toString().trim()));

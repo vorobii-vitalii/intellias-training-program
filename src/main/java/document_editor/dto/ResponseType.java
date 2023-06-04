@@ -5,5 +5,7 @@ public enum ResponseType {
 	ADD,
 	CHANGES,
 	PONG,
-	DELETE
+	DELETE,
+	ACK,
+	NACK
 }
