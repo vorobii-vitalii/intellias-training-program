@@ -1,5 +1,6 @@
 package com.example.grpc;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import com.example.dao.DocumentsDAO;
@@ -110,6 +111,9 @@ public class DocumentStorageServiceImpl extends DocumentStorageServiceGrpc.Docum
 
 	@Override
 	public void fetchDocumentContent(FetchDocumentContentRequest request, StreamObserver<DocumentElements> responseObserver) {
+		ServerCallStreamObserver<DocumentElements> serverCallStreamObserver = (ServerCallStreamObserver<DocumentElements>) responseObserver;
+		serverCallStreamObserver.disableAutoRequest();
+
 		LOGGER.info("Received request to fetch document content {}", request);
 		var traceContext = contextProvider.get();
 		var scope = traceContext.makeCurrent();
@@ -118,37 +122,56 @@ public class DocumentStorageServiceImpl extends DocumentStorageServiceGrpc.Docum
 				.setSpanKind(SpanKind.SERVER)
 				.startSpan();
 
+		AtomicBoolean wasReady = new AtomicBoolean(false);
+
+		var subscriber = new Subscriber<DocumentElements>() {
+			private Subscription subscription;
+
+			public Subscription getSubscription() {
+				return subscription;
+			}
+
+			@Override
+			public void onSubscribe(Subscription s) {
+				LOGGER.info("Subscribed");
+				this.subscription = s;
+			}
+
+			@Override
+			public void onNext(DocumentElements documentElements) {
+				serverSpan.addEvent("Next batch",
+						Attributes.of(AttributeKey.longKey("count"), (long) documentElements.getDocumentElementsCount()));
+				responseObserver.onNext(documentElements);
+				if (serverCallStreamObserver.isReady()) {
+					serverCallStreamObserver.request(1);
+					this.getSubscription().request(1);
+				} else {
+					wasReady.set(false);
+				}
+			}
+
+			@Override
+			public void onError(Throwable t) {
+				LOGGER.info("Received error", t);
+				responseObserver.onError(t);
+			}
+
+			@Override
+			public void onComplete() {
+				LOGGER.info("Completed");
+				responseObserver.onCompleted();
+			}
+		};
 		documentsDAO.fetchDocumentElements(request.getDocumentId(), request.getBatchSize())
-				.subscribe(new ClosingTracingContextDecorator<>(new Subscriber<>() {
-					private Subscription subscription;
+				.subscribe(new ClosingTracingContextDecorator<>(subscriber, serverSpan, scope));
 
-					@Override
-					public void onSubscribe(Subscription s) {
-						LOGGER.info("Subscribed");
-						this.subscription = s;
-						subscription.request(1L);
-					}
-
-					@Override
-					public void onNext(DocumentElements documentElements) {
-						serverSpan.addEvent("Next batch",
-								Attributes.of(AttributeKey.longKey("count"), (long) documentElements.getDocumentElementsCount()));
-						responseObserver.onNext(documentElements);
-						subscription.request(1L);
-					}
-
-					@Override
-					public void onError(Throwable t) {
-						LOGGER.info("Received error", t);
-						responseObserver.onError(t);
-					}
-
-					@Override
-					public void onComplete() {
-						LOGGER.info("Completed");
-						responseObserver.onCompleted();
-					}
-				}, serverSpan, scope));
+		serverCallStreamObserver.setOnReadyHandler(() -> {
+			if (serverCallStreamObserver.isReady() && !wasReady.get()) {
+				wasReady.set(true);
+				subscriber.getSubscription().request(1);
+				serverCallStreamObserver.request(1);
+			}
+		});
 	}
 
 	private static class ClosingTracingContextDecorator<T> implements Subscriber<T> {
