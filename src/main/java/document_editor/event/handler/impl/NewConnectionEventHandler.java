@@ -24,6 +24,8 @@ import document_editor.event.NewConnectionDocumentsEvent;
 import document_editor.event.context.ClientConnectionsContext;
 import document_editor.event.handler.EventHandler;
 import grpc.ServiceDecorator;
+import io.grpc.stub.ClientCallStreamObserver;
+import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.StreamObserver;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
@@ -94,78 +96,96 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
                 .startSpan();
         var scope = getDocumentSpan.makeCurrent();
 
-        var fetchDocumentContentRequest = FetchDocumentContentRequest.newBuilder().setDocumentId(HttpServer.DOCUMENT_ID).build();
-        var streamObserver = new StreamObserver<DocumentElements>() {
+        var fetchDocumentContentRequest = FetchDocumentContentRequest.newBuilder()
+                .setDocumentId(HttpServer.DOCUMENT_ID)
+                .setBatchSize(event.batchSize())
+                .build();
 
-            @Override
-            public void onNext(DocumentElements documentElements) {
-                getDocumentSpan.addEvent("Batch received");
-                var message = new WebSocketMessage();
-                message.setFin(true);
-                try {
-                    message.setPayload(serializer.serialize(new Response(
-                            ResponseType.CHANGES,
-                            new Changes(computeChanges(documentElements), false)
-                    )));
-                }
-                catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                message.setOpCode(OpCode.BINARY);
-                getDocumentSpan.addEvent("Batch serialized");
-                var buffer = messageSerializer.serialize(message, e -> {
+        serviceDecorator.decorateService(service)
+                .fetchDocumentContent(fetchDocumentContentRequest, new ClientResponseObserver<FetchDocumentContentRequest, DocumentElements>() {
+
+                    private ClientCallStreamObserver<FetchDocumentContentRequest> requestStream;
+
+                    @Override
+                    public void onNext(DocumentElements documentElements) {
+                        getDocumentSpan.addEvent("Batch received");
+                        var message = new WebSocketMessage();
+                        message.setFin(true);
+                        try {
+                            message.setPayload(serializer.serialize(new Response(
+                                    ResponseType.CHANGES,
+                                    new Changes(computeChanges(documentElements), false)
+                            )));
+                        }
+                        catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                        message.setOpCode(OpCode.BINARY);
+                        getDocumentSpan.addEvent("Batch serialized");
+                        var buffer = messageSerializer.serialize(message, e -> {
+                        });
+                        connection.appendResponse(buffer, c -> requestStream.request(1));
+                        connection.changeOperation(OperationType.WRITE);
+                        getDocumentSpan.addEvent("Batch sent");
+                    }
+
+                    @Override
+                    public void onError(Throwable throwable) {
+                        getDocumentSpan.addEvent("Error occurred");
+                        getDocumentSpan.recordException(throwable);
+                        LOGGER.warn("Error when streaming document", throwable);
+                        // TODO: Send error to client
+                    }
+
+                    @Override
+                    public void onCompleted() {
+                        LOGGER.info("On complete streaming document");
+                        getDocumentSpan.addEvent("Batch received");
+                        var message = new WebSocketMessage();
+                        message.setFin(true);
+                        try {
+                            message.setPayload(serializer.serialize(new Response(
+                                    ResponseType.CHANGES,
+                                    new Changes(List.of(), true)
+                            )));
+                        }
+                        catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                        message.setOpCode(OpCode.BINARY);
+                        getDocumentSpan.addEvent("Batch serialized");
+                        var buffer = messageSerializer.serialize(message, e -> {
+                        });
+                        connection.appendResponse(buffer);
+                        getDocumentSpan.addEvent("Batch sent");
+                        getDocumentSpan.end();
+                        scope.close();
+                    }
+
+                    @Override
+                    public void beforeStart(ClientCallStreamObserver<FetchDocumentContentRequest> requestStream) {
+                        this.requestStream = requestStream;
+                        requestStream.disableAutoRequestWithInitial(1);
+                        requestStream.setOnReadyHandler(() -> {
+                            requestStream.onNext(fetchDocumentContentRequest);
+                            requestStream.onCompleted();
+                        });
+                    }
+
+                    private List<Change> computeChanges(DocumentElements documentElements) {
+                        return documentElements.getDocumentElementsList()
+                                .stream()
+                                .map(doc -> new Change(
+                                        doc.getCharId(),
+                                        doc.getParentCharId(),
+                                        doc.getIsRight(),
+                                        doc.getDisambiguator(),
+                                        doc.hasCharacter() ? ((char) doc.getCharacter()) : null
+                                ))
+                                .collect(Collectors.toList());
+                    }
+
                 });
-                connection.appendResponse(buffer);
-                getDocumentSpan.addEvent("Batch sent");
-            }
 
-            private List<Change> computeChanges(DocumentElements documentElements) {
-                return documentElements.getDocumentElementsList()
-                        .stream()
-                        .map(doc -> new Change(
-                                doc.getCharId(),
-                                doc.getParentCharId(),
-                                doc.getIsRight(),
-                                doc.getDisambiguator(),
-                                doc.hasCharacter() ? ((char) doc.getCharacter()) : null
-                        ))
-                        .collect(Collectors.toList());
-            }
-
-            @Override
-            public void onError(Throwable throwable) {
-                getDocumentSpan.addEvent("Error occurred");
-                getDocumentSpan.recordException(throwable);
-                LOGGER.warn("Error when streaming document", throwable);
-                // TODO: Send error to client
-            }
-
-            @Override
-            public void onCompleted() {
-                LOGGER.info("On complete streaming document");
-                getDocumentSpan.addEvent("Batch received");
-                var message = new WebSocketMessage();
-                message.setFin(true);
-                try {
-                    message.setPayload(serializer.serialize(new Response(
-                            ResponseType.CHANGES,
-                            new Changes(List.of(), true)
-                    )));
-                }
-                catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                message.setOpCode(OpCode.BINARY);
-                getDocumentSpan.addEvent("Batch serialized");
-                var buffer = messageSerializer.serialize(message, e -> {
-                });
-                connection.appendResponse(buffer);
-                getDocumentSpan.addEvent("Batch sent");
-                connection.changeOperation(OperationType.WRITE);
-                getDocumentSpan.end();
-                scope.close();
-            }
-        };
-        serviceDecorator.decorateService(service).fetchDocumentContent(fetchDocumentContentRequest, streamObserver);
     }
 }

@@ -262,7 +262,8 @@
   };
   socket.onopen = () => {
     socket.send(msgpack.encode({
-      type: 'CONNECT'
+      type: 'CONNECT',
+      batchSize: 1000
     }));
     setInterval(() => {
       socket.send(msgpack.encode({
@@ -273,6 +274,10 @@
   const batchSize = 500;
 
   const getTimeStamp = () => new Date().getTime();
+
+  /*
+
+   */
 
   setInterval(() => {
     if (changes.length > 0) {

@@ -6,6 +6,8 @@ import com.example.dao.DocumentsDAO;
 import com.example.document.storage.*;
 
 import com.mongodb.bulk.BulkWriteResult;
+
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.common.AttributeKey;
@@ -116,7 +118,7 @@ public class DocumentStorageServiceImpl extends DocumentStorageServiceGrpc.Docum
 				.setSpanKind(SpanKind.SERVER)
 				.startSpan();
 
-		documentsDAO.fetchDocumentElements(request.getDocumentId())
+		documentsDAO.fetchDocumentElements(request.getDocumentId(), request.getBatchSize())
 				.subscribe(new ClosingTracingContextDecorator<>(new Subscriber<>() {
 					private Subscription subscription;
 

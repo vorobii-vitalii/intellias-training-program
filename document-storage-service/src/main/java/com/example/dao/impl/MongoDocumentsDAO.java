@@ -35,7 +35,6 @@ public class MongoDocumentsDAO implements DocumentsDAO {
     public static final String IS_RIGHT = "isRight";
     public static final String DISAMBIGUATOR = "disambiguator";
     public static final String VALUE = "value";
-    public static final int BATCH_SIZE = 1000;
     private static final Logger LOGGER = LoggerFactory.getLogger(MongoDocumentsDAO.class);
     private final MongoCollection<Document> collection;
 
@@ -103,7 +102,7 @@ public class MongoDocumentsDAO implements DocumentsDAO {
     }
 
     @Override
-    public Publisher<DocumentElements> fetchDocumentElements(int documentId) {
+    public Publisher<DocumentElements> fetchDocumentElements(int documentId, int batchSize) {
         return Flux.from(collection
                         .find(Filters.and(
                                 Filters.eq(DOCUMENT_ID, documentId)
@@ -114,7 +113,7 @@ public class MongoDocumentsDAO implements DocumentsDAO {
                                 .append(IS_RIGHT, 1)
                                 .append(DISAMBIGUATOR, 1)
                                 .append(VALUE, 1)))
-                .buffer(BATCH_SIZE)
+                .buffer(batchSize)
                 .map(documents ->
                         DocumentElements.newBuilder()
                                 .addAllDocumentElements(documents.stream()

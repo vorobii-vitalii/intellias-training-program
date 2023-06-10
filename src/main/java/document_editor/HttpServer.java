@@ -275,7 +275,7 @@ public class HttpServer {
 				new JacksonDeserializer(objectMapper),
 				ClientRequest.class,
 				new document_editor.DelegatingRequestHandler(Map.of(
-						RequestType.CONNECT, (r, c) -> eventsProducer.produce(new NewConnectionDocumentsEvent(c)),
+						RequestType.CONNECT, (r, c) -> eventsProducer.produce(new NewConnectionDocumentsEvent(c, r.batchSize())),
 						RequestType.CHANGES, (r, c) -> eventsProducer.produce(
 								new EditDocumentsEvent(r.payload(), r.changeId(), c)),
 						RequestType.PING, (r, c) -> eventsProducer.produce(new PingDocumentsEvent(c))

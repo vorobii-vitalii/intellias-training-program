@@ -5,14 +5,21 @@ import msgpack from 'https://cdnjs.cloudflare.com/ajax/libs/msgpack-lite/0.1.26/
 import pako from 'https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js';
 import {SharedArray} from 'k6/data';
 
-const VIRTUAL_USERS = 100;
+const VIRTUAL_USERS = 1000;
 const CHANGES_PER_USER = 0;
 
-export let options = {
+// backpressure
+// 3. codecs
+// 2. SIP session initial protocol
+// 1. http 2 backpressure
+
+
+export const options = {
     iterations: VIRTUAL_USERS,
     vus: VIRTUAL_USERS,
     discardResponseBodies: true,
-}
+};
+
 const comparePath = (a, b) => {
     const aLength = a.directions.length;
     const bLength = b.directions.length;
@@ -84,7 +91,8 @@ export default function () {
         socket.on('open', () => {
 
             socket.sendBinary(msgpack.encode({
-                type: 'CONNECT'
+                type: 'CONNECT',
+                batchSize: 2000
             }).buffer);
             const connectionId = __VU;
             const changes = [];

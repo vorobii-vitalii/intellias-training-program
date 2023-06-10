@@ -33,7 +33,7 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 	private static final Logger LOGGER = LoggerFactory.getLogger(HTTPNetworkRequestHandler.class);
 	public static final Consumer<SocketConnection> NOOP = s -> {
 	};
-	private final ExecutorService executorService = Executors.newFixedThreadPool(8);
+	private final ExecutorService executorService = Executors.newFixedThreadPool(4);
 	private final List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies;
 	private final Collection<HTTPResponsePostProcessor> httpResponsePostProcessor;
 	private final Tracer httpRequestHandlerTracer;

@@ -2,5 +2,5 @@ package document_editor.dto;
 
 import java.util.List;
 
-public record ClientRequest(RequestType type, List<Change> payload, String changeId) {
+public record ClientRequest(RequestType type, List<Change> payload, String changeId, int batchSize) {
 }
