@@ -16,7 +16,6 @@ public class RefillProcess<T> implements Runnable {
 
 	@Override
 	public void run() {
-//		LOGGER.info("Refilling {} buckets", tokenBuckets.size());
 		tokenBuckets.forEach(tokenBucket -> tokenBucket.fill(tokenBucket.getMaxTokens()));
 	}
 }

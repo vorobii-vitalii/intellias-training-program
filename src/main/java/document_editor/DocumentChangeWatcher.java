@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.example.document.storage.DocumentChangedEvents;
-import com.example.document.storage.DocumentStorageServiceGrpc;
+import com.example.document.storage.RxDocumentStorageServiceGrpc;
 import com.example.document.storage.SubscribeForDocumentChangesRequest;
 
 import document_editor.dto.Change;
@@ -17,7 +17,7 @@ import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
 import document_editor.event.DocumentsEvent;
 import document_editor.event.MessageDistributeDocumentsEvent;
-import io.grpc.stub.StreamObserver;
+import io.reactivex.Single;
 import message_passing.MessageProducer;
 import serialization.Serializer;
 import websocket.domain.OpCode;
@@ -25,17 +25,18 @@ import websocket.domain.WebSocketMessage;
 
 // NGINX reconnect, Envoy proxy, EBPF
 public class DocumentChangeWatcher implements Runnable {
-	private static final int BATCH_SIZE = 100;
-	private static final int BATCH_TIMEOUT = 100;
+	protected static final int BATCH_SIZE = 100;
+	protected static final int BATCH_TIMEOUT = 100;
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentChangeWatcher.class);
+
 	private final MessageProducer<DocumentsEvent> eventProducer;
 	private final Serializer serializer;
-	private final DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService;
+	private final RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub documentStorageService;
 
 	public DocumentChangeWatcher(
 			MessageProducer<DocumentsEvent> eventProducer,
 			Serializer serializer,
-			DocumentStorageServiceGrpc.DocumentStorageServiceStub documentStorageService
+			RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub documentStorageService
 	) {
 		this.eventProducer = eventProducer;
 		this.serializer = serializer;
@@ -54,26 +55,20 @@ public class DocumentChangeWatcher implements Runnable {
 		if (resumeToken != null) {
 			builder.setResumeToken(resumeToken);
 		}
-		var streamCompleted = new StreamObserver<DocumentChangedEvents>() {
-			@Override
-			public void onNext(DocumentChangedEvents documentChangedEvents) {
-				LOGGER.info("Received event about updated documents");
-				distributeDocumentsChanges(documentChangedEvents);
-				lastToken.set(documentChangedEvents.getEvents(documentChangedEvents.getEventsCount() - 1).getResumeToken());
-			}
-
-			@Override
-			public void onError(Throwable throwable) {
-				LOGGER.warn("Error, reconnecting", throwable);
-			}
-
-			@Override
-			public void onCompleted() {
-				LOGGER.info("Stream completed");
-				subscribeForDocumentChanges(lastToken.get());
-			}
-		};
-		documentStorageService.subscribeForDocumentsChanges(builder.build(), streamCompleted);
+		Single.just(builder.build())
+				.flatMapPublisher(documentStorageService::subscribeForDocumentsChanges)
+				.doOnNext(documentChangedEvents -> {
+					var eventsCount = documentChangedEvents.getEventsCount();
+					LOGGER.info("Received event about updated documents - {} events", eventsCount);
+					distributeDocumentsChanges(documentChangedEvents);
+					lastToken.set(documentChangedEvents.getEvents(eventsCount - 1).getResumeToken());
+				})
+				.doOnError(error -> {
+					LOGGER.warn("Error, reconnecting", error);
+					subscribeForDocumentChanges(lastToken.get());
+				})
+				.doOnComplete(() -> LOGGER.info("Stream completed"))
+				.subscribe();
 	}
 
 	private void distributeDocumentsChanges(DocumentChangedEvents documentChangedEvents) {
@@ -85,7 +80,7 @@ public class DocumentChangeWatcher implements Runnable {
 			eventProducer.produce(new MessageDistributeDocumentsEvent(webSocketMessage));
 		}
 		catch (Throwable error) {
-			LOGGER.warn("Error", error);
+			LOGGER.warn("Serialization error", error);
 		}
 	}
 

@@ -65,6 +65,33 @@
             <version>3.4.4</version>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/com.salesforce.servicelibs/rxgrpc -->
+        <dependency>
+            <groupId>com.salesforce.servicelibs</groupId>
+            <artifactId>rxgrpc</artifactId>
+            <version>1.2.4</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/com.salesforce.servicelibs/reactive-grpc-common -->
+        <dependency>
+            <groupId>com.salesforce.servicelibs</groupId>
+            <artifactId>reactive-grpc-common</artifactId>
+            <version>1.2.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.salesforce.servicelibs</groupId>
+            <artifactId>rxgrpc-stub</artifactId>
+            <version>1.2.4</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/io.reactivex.rxjava2/rxjava -->
+        <dependency>
+            <groupId>io.reactivex.rxjava2</groupId>
+            <artifactId>rxjava</artifactId>
+            <version>2.2.21</version>
+        </dependency>
+
 
         <!-- gRPC -->
         <dependency>
@@ -244,6 +271,17 @@
                             <goal>test-compile</goal>
                             <goal>compile-custom</goal>
                         </goals>
+                        <configuration>
+                            <protocPlugins>
+                                <protocPlugin>
+                                    <id>rxgrpc</id>
+                                    <groupId>com.salesforce.servicelibs</groupId>
+                                    <artifactId>rxgrpc</artifactId>
+                                    <version>1.2.4</version>
+                                    <mainClass>com.salesforce.rxgrpc.RxGrpcGenerator</mainClass>
+                                </protocPlugin>
+                            </protocPlugins>
+                        </configuration>
                     </execution>
                 </executions>
                 <configuration>

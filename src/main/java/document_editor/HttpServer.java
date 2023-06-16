@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.example.document.storage.DocumentStorageServiceGrpc;
+import com.example.document.storage.RxDocumentStorageServiceGrpc;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.WaitStrategy;
@@ -344,6 +345,7 @@ public class HttpServer {
 		Selector[] httpSelectors = createSelectors(10);
 
 		var httpRequestHandler = new HTTPNetworkRequestHandler(
+				Executors.newFixedThreadPool(4),
 				List.of(
 						webSocketChangeProtocolHTTPHandlerStrategy,
 						new FileDownloadHTTPHandlerStrategy(p -> p.isEmpty() || p.equals("/"), "index.html", "text/html"),
@@ -380,7 +382,7 @@ public class HttpServer {
 						.maxInboundMessageSize(Integer.MAX_VALUE)
 						.build();
 
-		var documentStorageService = DocumentStorageServiceGrpc.newStub(documentStorageServiceChannel);
+		var documentStorageService = RxDocumentStorageServiceGrpc.newRxStub(documentStorageServiceChannel);
 
 		schedulePeriodically(1000, new MessagePublishProcess<>(new QueueMessageProducer<>(eventsQueue), new SendPongsDocumentsEvent()));
 

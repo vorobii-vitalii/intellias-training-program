@@ -4,6 +4,8 @@ import com.example.document.storage.Change;
 import com.example.document.storage.ChangesRequest;
 import com.example.document.storage.ChangesResponse;
 import com.example.document.storage.DocumentStorageServiceGrpc;
+import com.example.document.storage.RxDocumentStorageServiceGrpc;
+
 import document_editor.HttpServer;
 import document_editor.dto.ConnectDocumentReply;
 import document_editor.dto.Response;
@@ -19,6 +21,8 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.reactivex.Single;
 import serialization.Serializer;
 import tcp.MessageSerializer;
 import tcp.server.OperationType;
@@ -32,14 +36,14 @@ import java.util.stream.Collectors;
 public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(EditEventHandler.class);
 
-	private final DocumentStorageServiceGrpc.DocumentStorageServiceStub service;
+	private final RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub service;
 	private final Tracer tracer;
 	private final ServiceDecorator serviceDecorator;
 	private final MessageSerializer messageSerializer;
 	private final Serializer serializer;
 
 	public EditEventHandler(
-			DocumentStorageServiceGrpc.DocumentStorageServiceStub service,
+			RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub service,
 			Tracer tracer,
 			ServiceDecorator serviceDecorator,
 			MessageSerializer messageSerializer,
@@ -82,26 +86,22 @@ public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 				.startSpan();
 
 		var scope = applyChangesSpan.makeCurrent();
-		serviceDecorator.decorateService(service)
-				.applyChanges(ChangesRequest.newBuilder().addAllChanges(changes).build(), new StreamObserver<>() {
-					@Override
-					public void onNext(ChangesResponse changesResponse) {
-						sendAcknowledgement(event.socketConnection(), event.changeId(), ResponseType.ACK);
-					}
 
-					@Override
-					public void onError(Throwable throwable) {
-						sendAcknowledgement(event.socketConnection(), event.changeId(), ResponseType.NACK);
-						LOGGER.error("Error on inserts", throwable);
-					}
-
-					@Override
-					public void onCompleted() {
-						LOGGER.debug("Operation completed");
-						applyChangesSpan.end();
-						scope.close();
-					}
-				});
+		Single.just(ChangesRequest.newBuilder().addAllChanges(changes).build())
+				.compose(c -> serviceDecorator.decorateService(service).applyChanges(c))
+				.doOnSuccess(r -> {
+					sendAcknowledgement(event.socketConnection(), event.changeId(), ResponseType.ACK);
+				})
+				.doOnError(err -> {
+					LOGGER.error("Error on inserts", err);
+					sendAcknowledgement(event.socketConnection(), event.changeId(), ResponseType.NACK);
+				})
+				.doOnDispose(() -> {
+					LOGGER.debug("Operation completed");
+					applyChangesSpan.end();
+					scope.close();
+				})
+				.subscribe();
 	}
 
 	private void sendAcknowledgement(SocketConnection connection, String changeId, ResponseType responseType) {

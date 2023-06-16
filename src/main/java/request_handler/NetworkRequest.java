@@ -3,13 +3,11 @@ package request_handler;
 import java.util.Objects;
 
 import document_editor.utils.Copyable;
-import io.opentelemetry.api.trace.Span;
 import tcp.server.SocketConnection;
 
 public final class NetworkRequest<Request> implements Copyable<NetworkRequest<Request>> {
 	private Request request;
 	private SocketConnection socketConnection;
-	private Span span;
 
 	public void setRequest(Request request) {
 		this.request = request;
@@ -19,17 +17,12 @@ public final class NetworkRequest<Request> implements Copyable<NetworkRequest<Re
 		this.socketConnection = socketConnection;
 	}
 
-	public void setSpan(Span span) {
-		this.span = span;
-	}
-
 	public NetworkRequest() {
 	}
 
-	public NetworkRequest(Request request, SocketConnection socketConnection, Span span) {
+	public NetworkRequest(Request request, SocketConnection socketConnection) {
 		this.request = request;
 		this.socketConnection = socketConnection;
-		this.span = span;
 	}
 
 	public Request request() {
@@ -40,10 +33,7 @@ public final class NetworkRequest<Request> implements Copyable<NetworkRequest<Re
 		return socketConnection;
 	}
 
-	public Span span() {
-		return span;
-	}
-
+	@SuppressWarnings("unchecked")
 	@Override
 	public boolean equals(Object obj) {
 		if (obj == this) {
@@ -54,27 +44,24 @@ public final class NetworkRequest<Request> implements Copyable<NetworkRequest<Re
 		}
 		var that = (NetworkRequest<Request>) obj;
 		return Objects.equals(this.request, that.request) &&
-				Objects.equals(this.socketConnection, that.socketConnection) &&
-				Objects.equals(this.span, that.span);
+				Objects.equals(this.socketConnection, that.socketConnection);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(request, socketConnection, span);
+		return Objects.hash(request, socketConnection);
 	}
 
 	@Override
 	public String toString() {
 		return "NetworkRequest[" +
 				"request=" + request + ", " +
-				"socketConnection=" + socketConnection + ", " +
-				"span=" + span + ']';
+				"socketConnection=" + socketConnection + ']';
 	}
 
 	@Override
 	public void copy(NetworkRequest<Request> obj) {
 		this.setRequest(obj.request());
 		this.setSocketConnection(obj.socketConnection());
-		this.setSpan(obj.span());
 	}
 }

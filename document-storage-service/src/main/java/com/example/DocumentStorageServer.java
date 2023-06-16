@@ -1,5 +1,11 @@
 package com.example;
 
+import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Executors;
+
 import com.example.dao.impl.MongoDocumentsDAO;
 import com.example.grpc.DocumentStorageServiceImpl;
 import com.example.interceptor.ContextInterceptor;
@@ -10,6 +16,7 @@ import com.mongodb.MongoCompressor;
 import com.mongodb.ServerApi;
 import com.mongodb.ServerApiVersion;
 import com.mongodb.reactivestreams.client.MongoClients;
+
 import io.grpc.ServerBuilder;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
@@ -23,15 +30,6 @@ import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.semconv.resource.attributes.ResourceAttributes;
-
-import org.bson.Document;
-
-import java.io.IOException;
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.Executors;
 
 public class DocumentStorageServer {
 

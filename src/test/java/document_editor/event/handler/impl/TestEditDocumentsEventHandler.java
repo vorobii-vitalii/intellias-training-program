@@ -32,10 +32,10 @@ class TestEditDocumentsEventHandler {
 	Serializer serializer;
 	EditEventHandler editEventHandler;
 
-	@BeforeEach
-	void setUp() {
-		editEventHandler = new EditEventHandler(documentStorageServiceStub, TracerProvider.noop().get("name"), serviceDecorator, messageSerializer, serializer);
-	}
+//	@BeforeEach
+//	void setUp() {
+//		editEventHandler = new EditEventHandler(documentStorageServiceStub, TracerProvider.noop().get("name"), serviceDecorator, messageSerializer, serializer);
+//	}
 
 	@Test
 	void getHandledEventType() {

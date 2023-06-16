@@ -31,12 +31,10 @@ class TestMessageDistributeDocumentsEventHandler {
 
 	@Test
 	void handle() {
-		var serializable1 = mock(Serializable.class);
-		var serializable2 = mock(Serializable.class);
+		var serializable = mock(Serializable.class);
 
-		messageDistributeEventHandler.handle(new MessageDistributeDocumentsEvent(serializable1), clientConnectionsContext);
+		messageDistributeEventHandler.handle(new MessageDistributeDocumentsEvent(serializable), clientConnectionsContext);
 
-		verify(clientConnectionsContext).broadCastMessage(serializable1);
-		verify(clientConnectionsContext).broadCastMessage(serializable2);
+		verify(clientConnectionsContext).broadCastMessage(serializable);
 	}
 }

@@ -5,6 +5,7 @@ import util.Serializable;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Objects;
 
 public class WebSocketMessage implements Serializable {
 	public static final double TWO_POW_16 = Math.pow(2, 16);
@@ -95,6 +96,27 @@ public class WebSocketMessage implements Serializable {
 			}
 		}
 		dest.put(payload);
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
+		WebSocketMessage message = (WebSocketMessage) o;
+		return isFin == message.isFin && opCode == message.opCode && Arrays.equals(maskingKey, message.maskingKey)
+				&& Arrays.equals(payload, message.payload);
+	}
+
+	@Override
+	public int hashCode() {
+		int result = Objects.hash(isFin, opCode);
+		result = 31 * result + Arrays.hashCode(maskingKey);
+		result = 31 * result + Arrays.hashCode(payload);
+		return result;
 	}
 
 	private byte[] pad(byte[] arr, int k) {

@@ -5,12 +5,11 @@ import tcp.server.reader.exception.ParseException;
 import tcp.server.reader.MessageReader;
 import tcp.server.BufferContext;
 import util.Pair;
-import util.ByteUtils;
+import util.WebSocketUtils;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
 
 import java.math.BigInteger;
-import java.util.Arrays;
 import java.util.Map;
 
 import org.slf4j.LoggerFactory;
@@ -66,7 +65,7 @@ public class WebSocketMessageReader implements MessageReader<WebSocketMessage> {
 
 		var payload = extractBytes(bufferContext, payloadStart, payloadStart + payloadLength);
 		if (isMasked) {
-			ByteUtils.applyMaskingKey(payload, maskingKey);
+			WebSocketUtils.applyMaskingKey(payload, maskingKey);
 		}
 		var webSocketMessage = new WebSocketMessage();
 		webSocketMessage.setFin(isFin);

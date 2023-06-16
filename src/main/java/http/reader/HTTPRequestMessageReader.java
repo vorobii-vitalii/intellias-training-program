@@ -1,7 +1,5 @@
 package http.reader;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiFunction;
 
@@ -13,7 +11,6 @@ import tcp.server.BufferContext;
 import tcp.server.EventEmitter;
 import tcp.server.reader.MessageReader;
 import tcp.server.reader.exception.ParseException;
-import util.ByteUtils;
 import util.Constants;
 import util.Pair;
 

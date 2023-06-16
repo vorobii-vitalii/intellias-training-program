@@ -31,7 +31,7 @@ class SocketMessageReaderTest {
 	EventEmitter eventEmitter;
 
 	@InjectMocks
-	SocketMessageReader<Integer> socketMessageReader;
+	SocketMessageReaderImpl<Integer> socketMessageReader;
 
 	@Mock
 	BufferContext bufferContext;

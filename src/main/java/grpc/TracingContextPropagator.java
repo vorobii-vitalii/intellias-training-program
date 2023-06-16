@@ -23,15 +23,19 @@ public class TracingContextPropagator extends CallCredentials {
 
 	@Override
 	public void applyRequestMetadata(RequestInfo requestInfo, Executor appExecutor, MetadataApplier applier) {
-		AtomicReference<String> reference = new AtomicReference<>();
-		openTelemetry.getPropagators().getTextMapPropagator().inject(context, reference,
-				(atomicReference, ignoredKey, value) -> Objects.requireNonNull(atomicReference).set(value));
 		Metadata metadata = new Metadata();
-		metadata.put(Metadata.Key.of(Constants.Tracing.CONTEXT, ASCII_STRING_MARSHALLER), reference.get());
+		metadata.put(Metadata.Key.of(Constants.Tracing.CONTEXT, ASCII_STRING_MARSHALLER), getSerializedContext());
 		applier.apply(metadata);
 	}
 
 	@Override
 	public void thisUsesUnstableApi() {
+	}
+
+	private String getSerializedContext() {
+		var reference = new AtomicReference<String>();
+		openTelemetry.getPropagators().getTextMapPropagator().inject(context, reference,
+				(atomicReference, ignoredKey, value) -> Objects.requireNonNull(atomicReference).set(value));
+		return reference.get();
 	}
 }

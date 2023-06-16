@@ -2,7 +2,6 @@ package tcp.server.handler;
 
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
-import java.nio.channels.SocketChannel;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -55,7 +54,7 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 				return;
 			}
 			requestSpan.addEvent("Message read from socket");
-			messageProducer.produce(new NetworkRequest<>(request, serverAttachment.toSocketConnection(), requestSpan));
+			messageProducer.produce(new NetworkRequest<>(request, serverAttachment.toSocketConnection()));
 			requestSpan.end();
 		} catch (CancelledKeyException cancelledKeyException) {
 			// Ignore

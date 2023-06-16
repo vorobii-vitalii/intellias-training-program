@@ -59,7 +59,7 @@ class ProtocolChangerHTTPResponsePostProcessorTest {
 	void handleGivenNotUpgradeResponse() {
 		when(httpResponse.isUpgradeResponse()).thenReturn(false);
 		protocolChangerHTTPResponsePostProcessor
-						.handle(new NetworkRequest<>(httpRequest, socketConnection, null), httpResponse);
+						.handle(new NetworkRequest<>(httpRequest, socketConnection), httpResponse);
 		verify(protocolChanger1, never()).changeProtocol(any());
 		verify(protocolChanger2, never()).changeProtocol(any());
 	}
@@ -70,7 +70,7 @@ class ProtocolChangerHTTPResponsePostProcessorTest {
 		when(httpResponse.getUpgradeProtocol()).thenReturn("protocol-x");
 		assertThrows(IllegalArgumentException.class, () ->
 						protocolChangerHTTPResponsePostProcessor.handle(
-										new NetworkRequest<>(httpRequest, socketConnection, null), httpResponse));
+										new NetworkRequest<>(httpRequest, socketConnection), httpResponse));
 		verify(protocolChanger1, never()).changeProtocol(any());
 		verify(protocolChanger2, never()).changeProtocol(any());
 	}
@@ -80,7 +80,7 @@ class ProtocolChangerHTTPResponsePostProcessorTest {
 		when(httpResponse.isUpgradeResponse()).thenReturn(true);
 		when(httpResponse.getUpgradeProtocol()).thenReturn(PROTOCOL_1);
 		protocolChangerHTTPResponsePostProcessor
-						.handle(new NetworkRequest<>(httpRequest, socketConnection, null), httpResponse);
+						.handle(new NetworkRequest<>(httpRequest, socketConnection), httpResponse);
 		verify(protocolChanger1)
 						.changeProtocol(new ProtocolChangeContext(httpRequest, httpResponse, socketConnection));
 		verify(protocolChanger2, never()).changeProtocol(any());

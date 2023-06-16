@@ -6,7 +6,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -33,18 +32,20 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 	private static final Logger LOGGER = LoggerFactory.getLogger(HTTPNetworkRequestHandler.class);
 	public static final Consumer<SocketConnection> NOOP = s -> {
 	};
-	private final ExecutorService executorService = Executors.newFixedThreadPool(4);
+	private final ExecutorService executorService;
 	private final List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies;
 	private final Collection<HTTPResponsePostProcessor> httpResponsePostProcessor;
 	private final Tracer httpRequestHandlerTracer;
 	private final MessageSerializer messageSerializer;
 
 	public HTTPNetworkRequestHandler(
+			ExecutorService executorService,
 			List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies,
 			Collection<HTTPResponsePostProcessor> httpResponsePostProcessor,
 			MessageSerializer messageSerializer,
 			Tracer tracer
 	) {
+		this.executorService = executorService;
 		this.messageSerializer = messageSerializer;
 		this.httpResponsePostProcessor = httpResponsePostProcessor;
 		this.httpRequestHandlerStrategies = new ArrayList<>(httpRequestHandlerStrategies);
@@ -55,12 +56,13 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 	@Override
 	public void handle(NetworkRequest<HTTPRequest> networkRequest) {
 		executorService.execute(() -> {
+			var socketConnection = networkRequest.socketConnection();
 			var httpRequest = networkRequest.request();
 			LOGGER.debug("Handling HTTP clientRequest {}", httpRequest);
 			var requestSpan = httpRequestHandlerTracer.spanBuilder(httpRequest.getHttpRequestLine().toString())
 					.setAttribute(SemanticAttributes.HTTP_METHOD, httpRequest.getHttpRequestLine().httpMethod().toString())
 					.setSpanKind(SpanKind.SERVER)
-					.setParent(Context.current().with(networkRequest.span()))
+					.setParent(Context.current().with(socketConnection.getSpan()))
 					.startSpan();
 
 			httpRequest.getHeaders()
@@ -76,7 +78,6 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 				requestSpan.addEvent("Response created");
 				httpResponsePostProcessor.forEach(handlerStrategy -> handlerStrategy.handle(networkRequest, response));
 				requestSpan.addEvent("Postprocessors finished");
-				var socketConnection = networkRequest.socketConnection();
 				socketConnection.appendResponse(messageSerializer.serialize(response, requestSpan::addEvent), NOOP);
 				socketConnection.changeOperation(OperationType.WRITE);
 				requestSpan.addEvent("Response added to queue");
