@@ -353,7 +353,8 @@ public class HttpServer {
 				),
 				httpResponsePostProcessors,
 				messageSerializer,
-				openTelemetry.getTracer("HTTP Request Handler")
+				openTelemetry.getTracer("HTTP Request Handler"),
+				Context::current
 		);
 		var webSocketNetworkRequestHandler = new WebSocketNetworkRequestHandler(webSocketEndpointProvider);
 		var countWebSocketHandlers = 4;
