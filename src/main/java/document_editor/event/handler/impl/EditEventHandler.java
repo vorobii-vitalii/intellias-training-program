@@ -1,6 +1,7 @@
 package document_editor.event.handler.impl;
 
 import java.io.IOException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -37,19 +38,22 @@ public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 	private final ServiceDecorator serviceDecorator;
 	private final MessageSerializer messageSerializer;
 	private final Serializer serializer;
+	private final Supplier<Context> contextSupplier;
 
 	public EditEventHandler(
 			RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub service,
 			Tracer tracer,
 			ServiceDecorator serviceDecorator,
 			MessageSerializer messageSerializer,
-			Serializer serializer
+			Serializer serializer,
+			Supplier<Context> contextSupplier
 	) {
 		this.service = service;
 		this.tracer = tracer;
 		this.serviceDecorator = serviceDecorator;
 		this.messageSerializer = messageSerializer;
 		this.serializer = serializer;
+		this.contextSupplier = contextSupplier;
 	}
 
 	@Override
@@ -78,7 +82,7 @@ public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 		LOGGER.debug("Applying changes {}", changes);
 		var applyChangesSpan = tracer.spanBuilder("Apply documents changes")
 				.setSpanKind(SpanKind.CLIENT)
-				.setParent(Context.current().with(event.socketConnection().getSpan()))
+				.setParent(contextSupplier.get().with(event.socketConnection().getSpan()))
 				.startSpan();
 
 		var scope = applyChangesSpan.makeCurrent();

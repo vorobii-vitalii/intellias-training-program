@@ -401,7 +401,7 @@ public class HttpServer {
 						new PingEventHandler(),
 						new PongEventHandler(serializer),
 						new EditEventHandler(documentStorageService, openTelemetry.getTracer("Edit event handler"),
-								contextPropagationServiceDecorator, messageSerializer, serializer))
+								contextPropagationServiceDecorator, messageSerializer, serializer, Context::current))
 				.map(handler -> new TimeMeasureEventHandler<>(
 						handler,
 						Timer.builder("operation.handle." + handler.getHandledEventType().name() + ".time")
