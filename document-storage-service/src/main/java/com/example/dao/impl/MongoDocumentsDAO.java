@@ -72,6 +72,9 @@ public class MongoDocumentsDAO implements DocumentsDAO {
     @Override
     public Publisher<BulkWriteResult> applyChanges(ChangesRequest changesRequest) {
         var changesList = changesRequest.getChangesList();
+        if (changesList.isEmpty()) {
+            return Flux.empty();
+        }
         return collection.bulkWrite(
                 changesList.stream()
                         .map(c -> {

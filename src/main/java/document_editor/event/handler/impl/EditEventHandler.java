@@ -1,13 +1,16 @@
 package document_editor.event.handler.impl;
 
+import java.io.IOException;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.example.document.storage.Change;
 import com.example.document.storage.ChangesRequest;
-import com.example.document.storage.ChangesResponse;
-import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.example.document.storage.RxDocumentStorageServiceGrpc;
 
 import document_editor.HttpServer;
-import document_editor.dto.ConnectDocumentReply;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
 import document_editor.event.DocumentsEventType;
@@ -15,13 +18,9 @@ import document_editor.event.EditDocumentsEvent;
 import document_editor.event.context.ClientConnectionsContext;
 import document_editor.event.handler.EventHandler;
 import grpc.ServiceDecorator;
-import io.grpc.stub.StreamObserver;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.reactivex.Single;
 import serialization.Serializer;
 import tcp.MessageSerializer;
@@ -29,9 +28,6 @@ import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
-
-import java.io.IOException;
-import java.util.stream.Collectors;
 
 public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(EditEventHandler.class);

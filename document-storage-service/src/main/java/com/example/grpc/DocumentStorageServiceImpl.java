@@ -22,6 +22,9 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import io.reactivex.Flowable;
 import io.reactivex.Single;
+import io.reactivex.SingleObserver;
+import io.reactivex.SingleSource;
+import io.reactivex.annotations.NonNull;
 
 public class DocumentStorageServiceImpl extends RxDocumentStorageServiceGrpc.DocumentStorageServiceImplBase {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentStorageServiceImpl.class);
@@ -46,9 +49,13 @@ public class DocumentStorageServiceImpl extends RxDocumentStorageServiceGrpc.Doc
 					LOGGER.debug("Received request to apply changes");
 					return documentsDAO.applyChanges(request);
 				})
-				.lastOrError()
+				.lastElement()
 				.map(v -> ChangesResponse.newBuilder().build())
-				.doOnDispose(() -> {
+				.switchIfEmpty((SingleSource<ChangesResponse>) observer -> observer.onSuccess(ChangesResponse.newBuilder().build()))
+				.doOnError(err -> {
+					LOGGER.warn("Error", err);
+				})
+				.doOnTerminate(() -> {
 					serverSpan.end();
 					scope.close();
 				});
@@ -56,7 +63,10 @@ public class DocumentStorageServiceImpl extends RxDocumentStorageServiceGrpc.Doc
 
 	@Override
 	public Flowable<DocumentChangedEvents> subscribeForDocumentsChanges(SubscribeForDocumentChangesRequest request) {
-		return Flowable.fromPublisher(documentsDAO.subscribeToDocumentsChanges(request));
+		return Flowable.fromPublisher(documentsDAO.subscribeToDocumentsChanges(request))
+				.doOnError(err -> {
+					LOGGER.warn("Error", err);
+				});
 	}
 
 	@Override
@@ -75,6 +85,9 @@ public class DocumentStorageServiceImpl extends RxDocumentStorageServiceGrpc.Doc
 				.doOnTerminate(() -> {
 					serverSpan.end();
 					scope.close();
+				})
+				.doOnError(err -> {
+					LOGGER.warn("Error", err);
 				});
 	}
 }

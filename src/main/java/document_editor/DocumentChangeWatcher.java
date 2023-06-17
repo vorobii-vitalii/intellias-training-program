@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,6 +20,7 @@ import document_editor.event.DocumentsEvent;
 import document_editor.event.MessageDistributeDocumentsEvent;
 import io.reactivex.Single;
 import message_passing.MessageProducer;
+import reactor.core.CoreSubscriber;
 import serialization.Serializer;
 import websocket.domain.OpCode;
 import websocket.domain.WebSocketMessage;
@@ -57,18 +59,36 @@ public class DocumentChangeWatcher implements Runnable {
 		}
 		Single.just(builder.build())
 				.flatMapPublisher(documentStorageService::subscribeForDocumentsChanges)
-				.doOnNext(documentChangedEvents -> {
-					var eventsCount = documentChangedEvents.getEventsCount();
-					LOGGER.info("Received event about updated documents - {} events", eventsCount);
-					distributeDocumentsChanges(documentChangedEvents);
-					lastToken.set(documentChangedEvents.getEvents(eventsCount - 1).getResumeToken());
-				})
-				.doOnError(error -> {
-					LOGGER.warn("Error, reconnecting", error);
-					subscribeForDocumentChanges(lastToken.get());
-				})
-				.doOnComplete(() -> LOGGER.info("Stream completed"))
-				.subscribe();
+				.subscribe(new CoreSubscriber<>() {
+
+					private Subscription subscription;
+
+					@Override
+					public void onSubscribe(Subscription subscription) {
+						this.subscription = subscription;
+						subscription.request(1);
+					}
+
+					@Override
+					public void onNext(DocumentChangedEvents documentChangedEvents) {
+						var eventsCount = documentChangedEvents.getEventsCount();
+						LOGGER.info("Received event about updated documents - {} events", eventsCount);
+						distributeDocumentsChanges(documentChangedEvents);
+						lastToken.set(documentChangedEvents.getEvents(eventsCount - 1).getResumeToken());
+						subscription.request(1);
+					}
+
+					@Override
+					public void onError(Throwable error) {
+						LOGGER.warn("Error, reconnecting", error);
+						subscribeForDocumentChanges(lastToken.get());
+					}
+
+					@Override
+					public void onComplete() {
+						LOGGER.info("Stream completed");
+					}
+				});
 	}
 
 	private void distributeDocumentsChanges(DocumentChangedEvents documentChangedEvents) {
