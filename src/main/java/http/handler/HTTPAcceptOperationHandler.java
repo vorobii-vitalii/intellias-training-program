@@ -19,7 +19,7 @@ import tcp.server.ServerAttachmentImpl;
 import util.Constants;
 
 public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
-	public static final int NOOPS = 0;
+	public static final int NO_OPS = 0;
 	private static final Logger LOGGER = LoggerFactory.getLogger(HTTPAcceptOperationHandler.class);
 	private final Function<SelectionKey, Selector> selectorSupplier;
 	private final ByteBufferPool networkByteBufferPool;
@@ -59,7 +59,7 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 					null
 			);
 			var newSelector = selectorSupplier.apply(selectionKey);
-			var registered = socketChannel.register(newSelector, NOOPS, serverAttachment);
+			var registered = socketChannel.register(newSelector, NO_OPS, serverAttachment);
 			serverAttachment.setSelectionKey(registered);
 			registered.interestOps(SelectionKey.OP_READ);
 			newSelector.wakeup();
