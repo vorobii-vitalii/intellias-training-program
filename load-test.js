@@ -8,12 +8,6 @@ import {SharedArray} from 'k6/data';
 const VIRTUAL_USERS = 1000;
 const CHANGES_PER_USER = 0;
 
-// backpressure
-// 3. codecs
-// 2. SIP session initial protocol
-// 1. http 2 backpressure
-
-
 export const options = {
     iterations: VIRTUAL_USERS,
     vus: VIRTUAL_USERS,
@@ -75,14 +69,10 @@ let data = new SharedArray('arr', generateData);
 export default function () {
     const url = 'ws://127.0.0.1:10000/documents';
 
-    let receivedChanges = [];
-
     const params = {
         headers: {'X-Request-Time': new Date(Date.now()).getTime()},
         tags: {k6test: 'yes'},
     };
-
-    let wasLoaded = false;
 
     const res = ws.connect(url, params, function (socket) {
         socket.on('error', e => {
@@ -116,68 +106,15 @@ export default function () {
                 }).buffer);
             }, 2000);
 
-
-            const binarySearch = (path) => {
-                for (const d of data) {
-                    if (comparePath(path, d.a) === 0) {
-                        return true;
-                    }
-                }
-                return false;
-                // let low = 0;
-                // let high = data.length - 1;
-                // while (low <= high) {
-                //   let mid = parseInt(low + (high - low) / 2);
-                //   // console.log(data[mid]);
-                //   const c = comparePath(path, data[mid].a);
-                //   if (c === 0) {
-                //     return true;
-                //   }
-                //   if (c < 0) {
-                //     high = mid - 1;
-                //   }
-                //   else {
-                //     low = mid + 1;
-                //   }
-                // }
-                // return false;
-            };
-
             socket.on('binaryMessage', function (message) {
-                // console.log('Received message ', message.byteLength);
-                // const eventPayload = msgpack.decode(new Uint8Array(pako.ungzip(message)));
-                // if (eventPayload.responseType === 'CHANGES') {
-                //     wasLoaded |= eventPayload.payload.isEndOfStream;
-                // }
-                //
-                // if (eventPayload.responseType === 'ADD') {
-                //   const addedChange = eventPayload.payload;
-                //   // console.log(JSON.stringify(addedChange));
-                //   if (binarySearch(addedChange.a)) {
-                //     receivedChanges = receivedChanges.filter(d => comparePath(d.a, addedChange.a) !== 0);
-                //     console.log('Detected');
-                //     receivedChanges.splice(receivedChanges.length, 0, addedChange);
-                //   }
-                // }
             });
 
             socket.setTimeout(() => {
-                receivedChanges.sort((a, b) => {
-                    return comparePath(a.treePath, b.treePath);
-                });
-                // console.log(`${__VU} received ${receivedChanges.length} changes`);
-                // check(receivedChanges, {
-                //   'all changes received': c => c.length === data.length
-                // })
                 socket.close();
             }, 10 * 1000);
         });
     });
-    // console.log(res)
     check(res, {
         'status is 101': (r) => r && r.status === 101
     });
-    // check(wasLoaded, {
-    //     'document was loaded': (r) => r
-    // });
 };
