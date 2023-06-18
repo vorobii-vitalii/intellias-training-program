@@ -1,47 +1,40 @@
 version: '3.7'
 services:
 
-### NGINX reverse proxy
-  web:
-    image: nginx
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./localhost.crt:/etc/nginx/certs/localhost.crt
-      - ./localhost-privateKey.key:/etc/nginx/certs/localhost-privateKey.key
-      - ./index.html:/www/data/index.html
+# Envoy proxy
+  envoy:
+    image: envoyproxy/envoy:dev-37f764e056505632ae12a22d215fa46305be4053
     networks:
-      - net
-#    network_mode: host
-    depends_on:
-      - http-server
+      net:
     ports:
-      - "8000:80"
-      - "443:443"
-    environment:
-      - NGINX_HOST=foobar.com
-      - NGINX_PORT=80
+      - "10000:10000"
+    entrypoint: "/usr/local/bin/envoy"
+    command:
+      - "--config-path /etc/envoy/envoy.yaml"
+      - "--mode serve"
+      - "--log-level info"
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml
+      - ./index.html:/static/index.html
 
 # MongoDB replica set
   mongo1:
     image: mongo:latest
     container_name: mongo1
-#    network_mode: host
     networks:
       net:
     command: ["--replSet", "my-replica-set", "--bind_ip_all", "--port", "30001"]
     volumes:
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     ports:
-      - 30001:30001
+      - "30001:30001"
     healthcheck:
-#      test: test $$(echo "rs.initiate({_id:'my-replica-set',members:[{_id:0,host:\"mongo1:30001\"},{_id:1,host:\"mongo2:30002\"},{_id:2,host:\"mongo3:30003\"}]}).ok || rs.status().ok" | mongo --port 30001 --quiet) -eq 1
       test: test $$(echo "rs.initiate({_id:'my-replica-set',members:[{_id:0,host:\"mongo1:30001\"}]}).ok || rs.status().ok" | mongo --port 30001 --quiet) -eq 1
       interval: 10s
 
   jaeger:
     image: jaegertracing/all-in-one:1.39
     container_name: jaeger
-#    network_mode: host
     networks:
       - net
     ports:
@@ -54,7 +47,6 @@ services:
       - "14268:14268"
       - "14269:14269"
       - "4317:4317"
-#      - "4318:4318"
       - "9411:9411"
     environment:
       - "COLLECTOR_ZIPKIN_HTTP_PORT=9411"
@@ -77,7 +69,6 @@ services:
       - mongo1
       - document-storage-service
       - jaeger
-#    network_mode: host
     networks:
       - net
     environment:
@@ -162,14 +153,8 @@ services:
     environment:
       node.name: elasticsearch
       ES_JAVA_OPTS: -Xms1024m -Xmx1024m
-      # Bootstrap password.
-      # Used to initialize the keystore during the initial startup of
-      # Elasticsearch. Ignored on subsequent runs.
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
-      # Use single node discovery in order to disable production mode and avoid bootstrap checks.
-      # see: https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
       discovery.type: single-node
-#    network_mode: host
     networks:
       - net
     restart: unless-stopped
@@ -183,15 +168,14 @@ services:
       - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
       - ./logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
     ports:
-      - 5044:5044
-      - 50000:50000/tcp
-      - 50000:50000/udp
-      - 12201:12201/udp
-      - 9600:9600
+      - "5044:5044"
+      - "50000:50000/tcp"
+      - "50000:50000/udp"
+      - "12201:12201/udp"
+      - "9600:9600"
     environment:
       LS_JAVA_OPTS: -Xms256m -Xmx256m
       LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
-#    network_mode: host
     networks:
       - net
     depends_on:
@@ -209,7 +193,6 @@ services:
       - "5601:5601"
     environment:
       KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
-#    network_mode: host
     networks:
       - net
     depends_on:
@@ -218,7 +201,6 @@ services:
 
   db:
     image: timescaledev/timescaledb-ha:pg12.14-ts2.10.3
-#    network_mode: host
     networks:
       - net
     ports:
@@ -230,11 +212,10 @@ services:
   promscale:
     image: timescale/promscale:latest
     ports:
-      - 9201:9201/tcp
+      - "9201:9201/tcp"
     restart: on-failure
     command:
       - '-startup.upgrade-prerelease-extensions=true'
-#    network_mode: host
     networks:
       - net
     depends_on:
@@ -257,7 +238,6 @@ services:
     ports:
       - "9090:9090"
     restart: unless-stopped
-#    network_mode: host
     networks:
       - net
     volumes:
@@ -271,7 +251,6 @@ services:
     ports:
       - "3000:3000"
     restart: unless-stopped
-#    network_mode: host
     networks:
       - net
     environment:

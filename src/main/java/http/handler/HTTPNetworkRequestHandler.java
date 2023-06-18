@@ -69,7 +69,7 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 					.startSpan();
 
 			httpRequest.getHeaders()
-					.getHeaderValue("X-Request-Time")
+					.getHeaderValue("x-request-time")
 					.ifPresent(s -> requestSpan.addEvent("Took " + (System.currentTimeMillis() - Long.parseLong(s.trim()))));
 			try {
 				var response = httpRequestHandlerStrategies

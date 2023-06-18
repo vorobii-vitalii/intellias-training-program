@@ -42,7 +42,7 @@ class HTTPResponseTest {
 		assertThat(buffer.array())
 				.isEqualTo(
 						merge(
-								"HTTP/1.1 200 OK\r\nContent-Length:%d\r\nContent-Type:application/json\r\n\r\n"
+								"HTTP/1.1 200 OK\r\ncontent-length:%d\r\ncontent-type:application/json\r\n\r\n"
 										.formatted(body.length)
 										.getBytes(StandardCharsets.UTF_8),
 								body

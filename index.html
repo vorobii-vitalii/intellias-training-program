@@ -4,272 +4,353 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Editor</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.4.1/tinymce.min.js"></script>
-<!--    <script src="https://cdnjs.cloudflare.com/ajax/libs/diff-match-patch/1.0.5/index.min.js"></script>-->
+    <!--[if lte IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/es5-shim/4.1.10/es5-shim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/json3/3.3.2/json3.min.js"></script>
+    <![endif]-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/msgpack-lite/0.1.26/msgpack.min.js"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js"></script>
 </head>
 
 <body>
 
 <h1>Text editor</h1>
-<div id="event-container"></div>
 
-<textarea id="editor">
+<textarea id="editor" rows="40" cols="140">
 </textarea>
 
 </body>
 
 <script>
+  const dp = {};
+  const charsMap = {};
+  const dependencyMap = {};
 
-    const socket = new WebSocket("wss://localhost/documents");
+  const solve = charId => {
+    // TODO: Use stack!
+    if (!charId) {
+      return [[], []];
+    }
+    if (dp[charId]) {
+      return dp[charId];
+    }
+    const v = charsMap[charId];
+    const parentV = solve(v.parentCharId);
+    const res = [ [...parentV[0], v.isRight], [...parentV[1], v.disambiguator]];
+    dp[charId] = res;
+    return res;
+  };
 
-    let connectionId;
-    let arr = [];
-    const comparePath = (a, b) => {
-        const m = Math.min(a.length, b.length);
-        // console.log("Comparing path  of " + JSON.stringify(a) + " and " + JSON.stringify(b) + " min = " + m);
-        for (let i = 0; i < m; i++) {
-            if (a[i].b && b[i].b) {
-                if (a[i].a !== b[i].a) {
-                    return a[i].a ? 1 : -1;
-                }
-                if (a[i].b !== b[i].b) {
-                    return a[i].b < b[i].b ? -1 : 1;
-                }
-            }
-            else if (!a[i].b && !b[i].b) {
-                if (a[i].a !== b[i].a) {
-                    return a[i].a ? 1 : -1;
-                }
-            }
-            else if (a[i].b) {
-                return b[i].a ? -1 : 1;
-            }
-            else {
-                return a[i].a ? 1 : -1;
-            }
-        }
-        if (a.length === b.length) {
-            return 0;
-        }
-        if (a.length === m) {
-            return b[m].a ? -1 : 1;
-        }
-        return a[m].a ? 1 : -1;
+  const getDependency = charId => {
+    if (!charId) {
+      return null;
+    }
+    if (!charsMap[charId]) {
+      return charId;
+    }
+    return getDependency(charsMap[charId].parentCharId);
+  };
+
+  const generateUniqueId = () => {
+    return crypto.randomUUID();
+  }
+
+  const comparePath = (a, b) => {
+    const r1 = solve(a);
+    const r2 = solve(b);
+
+    const directionsA = r1[0];
+    const directionsB = r2[0];
+
+    const disambiguatorsB = r2[1];
+    const disambiguatorsA = r1[1];
+
+    const aLength = directionsA.length;
+    const bLength = directionsB.length;
+
+    const m = Math.min(aLength, bLength);
+
+    for (let i = 0; i < m; i++) {
+      if (directionsA[i] !== directionsB[i]) {
+        return directionsA[i] ? 1 : -1;
+      }
+      if (disambiguatorsA[i]  !== disambiguatorsB[i] ) {
+        return disambiguatorsA[i] < disambiguatorsB[i] ? -1 : 1;
+      }
+    }
+    if (aLength === bLength) {
+      return 0;
+    }
+    if (aLength === m) {
+      return directionsB[m] ? -1 : 1;
+    }
+    return directionsA[m] ? 1 : -1;
+  };
+
+  const createNewCharacter = (left, right, c) => {
+    if (!left && !right) {
+      return {
+        isRight: true,
+        disambiguator: connectionId,
+        charId: generateUniqueId(),
+        character: c
+      };
+    }
+    if (!left) {
+      return {
+        isRight: false,
+        disambiguator: connectionId,
+        parentCharId: right,
+        charId: generateUniqueId(),
+        character: c
+      };
+    } else if (!right) {
+      return {
+        isRight: true,
+        disambiguator: connectionId,
+        parentCharId: left,
+        charId: generateUniqueId(),
+        character: c
+      };
+    }
+    if (isAncestor(left, right)) {
+      return {
+        isRight: false,
+        disambiguator: connectionId,
+        parentCharId: right,
+        charId: generateUniqueId(),
+        character: c
+      };
+    }
+    return {
+      isRight: true,
+      disambiguator: connectionId,
+      parentCharId: left,
+      charId: generateUniqueId(),
+      character: c
     };
-    const textArea = document.getElementById("editor");
+  };
 
-    socket.onmessage = function(event) {
-        const eventPayload = JSON.parse(event.data);
-        // console.log('Websocket event');
-        // console.log(eventPayload);
-        // console.log(arr);
+  const isAncestor = (a, b) => {
+    const r1 = solve(a);
+    const r2 = solve(b);
 
-        if (eventPayload.responseType === 'ON_CONNECT') {
-            // console.log('Setting value');
-            // console.log(eventPayload.payload.currentState.map(v => v.character))
-            // arr = eventPayload.payload.currentState;
-            connectionId = eventPayload.payload.connectionId;
-        }
-        else if (eventPayload.responseType === 'ADD') {
-            // console.log('ADD Event');
-              arr = arr.filter(a => {
-                let c = comparePath(a.a, eventPayload.payload.a);
-                return c !== 0;
-              });
-            arr.splice(arr.length, 0, eventPayload.payload);
-            // if (arr.filter(v => comparePath(v.treePath, eventPayload.payload) === 0) > 0) {
-            //   return;
-            // }
-            arr = arr.sort((a, b) => {
-                return comparePath(a.a, b.a);
-            });
-        }
-        else if (eventPayload.responseType === 'DELETE') {
-            // console.log('DELETE Event');
-            arr = arr.filter(a => {
-                let c = comparePath(a.a, eventPayload.payload);
-                return c !== 0;
-            });
-        }
-      textArea.value = arr.map(v => v.b).join('');
-    };
-    socket.onopen = () => {
-        socket.send(JSON.stringify({
-            type: 'CONNECT'
-        }));
-    };
+    const directionsA = r1[0];
+    const directionsB = r2[0];
 
-    const createPair = (left, right, c) => {
-        if (!left && !right) {
-            return {a: [{a: false, b: connectionId}], b: c};
-        }
-        if (!left) {
-            return {a: [...right.a, {a: false, b: connectionId}], b: c};
-        }
-        else if (!right) {
-            return {a: [...left.a, {a: true, b: connectionId}], b: c};
-        }
-        if (isAncestor(left.a, right.a)) {
-            return {a: [...right.a, {a: false, b: connectionId}], b: c};
-        }
-        return {a: [...left.a, {a: true, b: connectionId}], b: c};
-    };
+    const disambiguatorsA = r1[1];
+    const disambiguatorsB = r2[1];
 
-    const isAncestor = (a, b) => {
-        if (b.length < a.length) {
-            return false;
-        }
-        for (let i = 0; i < a.length; i++) {
-            if (a[i].a !== b[i].a || a[i].b !== b[i].b) {
-                return false;
-            }
-        }
-        return true;
-    };
+    const aLength = directionsA.length;
+    const bLength = directionsB.length;
+    if (bLength < aLength) {
+      return false;
+    }
+    for (let i = 0; i < aLength; i++) {
+      if (directionsA[i] !== directionsB[i] || disambiguatorsA[i] !== disambiguatorsB[i]) {
+        return false;
+      }
+    }
+    return true;
+  };
 
-    const extract = index => {
-        if (index < 0 || index >= arr.length) {
-            return null;
-        }
-        return arr[index];
-    };
+  const extract = index => {
+    if (index < 0 || index >= arr.length) {
+      return null;
+    }
+    return arr[index];
+  };
 
-    const dmp = new diff_match_patch();
+  let changes = [];
+  const dmp = new diff_match_patch();
+  let socket;
 
-    textArea.addEventListener("change", event => {
-        console.log("Change");
-        console.log(event);
-        const curr = arr.map(v => v.b).join('');
-        const updated = textArea.value;
-        const diff = dmp.diff_main(curr, updated);
-        let prevIndex = -1;
-        let newArr = [];
-        for (const component of diff) {
-            const v = component[0];
-            const str = component[1];
-            if (v === 0) {
-                for (let i = 0; i < str.length; i++) {
-                    newArr.splice(newArr.length, 0, arr[i + prevIndex + 1]);
-                }
-                prevIndex += str.length;
-            }
-            else if (v === -1) {
-                for (let i = 0; i < str.length; i++) {
-                  changes.splice(changes.length, 0, {
-                    type: 'DELETE',
-                    payload: arr[i + prevIndex + 1].a
-                  });
-                    // socket.send(JSON.stringify({
-                    //     type: 'DELETE',
-                    //     payload: arr[i + prevIndex + 1].treePath
-                    // }));
-                }
-                prevIndex += str.length;
-            }
-            else {
-                let prev = extract(prevIndex);
-                const next = extract(prevIndex + 1);
-                for (let i = 0; i < str.length; i++) {
-                    const c = str.charAt(i);
-                    let a = createPair(prev, next, c)
+  let connectionId;
+  let arr = [];
 
-                    // while (
-                    //     arr.filter(v => {
-                    //         let c = comparePath(treePath.treePath, v.treePath);
-                    //         return c === 0;
-                    //     }).length > 0
-                    // ) {
-                    //     treePath = {treePath: [...treePath.treePath, {treePath: false, character: connectionId}], character: c}
-                    // }
-                    console.log('New ' + JSON.stringify(a) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
-                      changes.splice(changes.length, 0, {
-                        type: 'ADD',
-                        payload: a
-                      });
-                    newArr.splice(newArr.length, 0, a);
-                    prev = a;
-                }
-            }
-        }
-        arr = newArr;
-    });
+  const textArea = document.getElementById("editor");
 
-    let changes = [];
+  const binarySearch = (path) => {
+    if (arr.length > 0 && comparePath(path, arr[arr.length - 1]) > 0) {
+      return arr.length;
+    }
+    let low = 0;
+    let high = arr.length - 1;
+    let res = 0;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const c = comparePath(path, arr[mid]);
+      if (c === 0) {
+        return mid;
+      }
+      if (c > 0) {
+        low = mid + 1;
+      } else {
+        res = mid;
+        high = mid - 1;
+      }
+    }
+    return res;
+  };
 
-    const onDocumentChange = instance => {
-      console.log("Document changed...");
-      const updated = instance.getBody().innerHTML;
-      const curr = arr.map(v => v.b).join('');
-      const diff = dmp.diff_main(curr, updated);
-      let prevIndex = -1;
-      let newArr = [];
-      for (const component of diff) {
-        const v = component[0];
-        const str = component[1];
-        if (v === 0) {
-          for (let i = 0; i < str.length; i++) {
-            newArr.splice(newArr.length, 0, arr[i + prevIndex + 1]);
-          }
-          prevIndex += str.length;
-        }
-        else if (v === -1) {
-          for (let i = 0; i < str.length; i++) {
-            changes.splice(changes.length, 0, {
-              type: 'DELETE',
-              payload: arr[i + prevIndex + 1].a
-            });
-            // socket.send(JSON.stringify({
-            //   type: 'DELETE',
-            //   payload: arr[i + prevIndex + 1].treePath
-            // }));
-          }
-          prevIndex += str.length;
-        }
-        else {
-          let prev = extract(prevIndex);
-          const next = extract(prevIndex + 1);
-          for (let i = 0; i < str.length; i++) {
-            const c = str.charAt(i);
-            let a = createPair(prev, next, c)
-            // console.log('New ' + JSON.stringify(treePath) + " Prev " + JSON.stringify(prev) + " Next = " + JSON.stringify(next));
-            // socket.send(JSON.stringify({
-            //   type: 'ADD',
-            //   payload: treePath
-            // }));
-            changes.splice(changes.length, 0, {
-              type: 'ADD',
-              payload: a
-            });
-            newArr.splice(newArr.length, 0, a);
-            prev = a;
-          }
+  let lastPong = new Date();
+
+  const dfs = charId => {
+    const dependencyId = getDependency(charId);
+    if (dependencyId) {
+      if (!dependencyMap[dependencyId]) {
+        dependencyMap[dependencyId] = [charId];
+      }
+      else {
+        dependencyMap[dependencyId].splice(0, 0, charId);
+      }
+    }
+    else {
+      if (charsMap[charId].character) {
+        const index = binarySearch(charId);
+        if (index >= arr.length || comparePath(arr[index], charId) !== 0) {
+          arr.splice(index, 0, charId);
         }
       }
-      arr = newArr;
+      if (dependencyMap[charId]) {
+        for (const d of dependencyMap[charId]) {
+          dfs(d);
+        }
+      }
+    }
+  };
 
-    };
+  socket = new WebSocket("ws://localhost:10000/documents");
+  socket.binaryType = "arraybuffer";
 
-    // tinyMCE.init({
-    //   selector: 'textarea#editor',
-    //   mode : "textareas",
-    //   setup: function (instance) {
-    //     instance.on("change", function () {
-    //       onDocumentChange(instance);
-    //     })
-    //   }
-    // });
+  let shouldRender = false;
 
+  const changesMap = {};
+
+  socket.onmessage = function(event) {
+    const data = pako.ungzip(event.data)
+    const eventPayload = msgpack.decode(new Uint8Array(data));
+    if (eventPayload.responseType === 'ON_CONNECT') {
+      connectionId = eventPayload.payload.connectionId;
+    }
+    else if (eventPayload.responseType === 'CHANGES') {
+      // console.log('Changes: ', JSON.stringify(eventPayload.payload));
+      const changes = eventPayload.payload.changes;
+      const isEndOfStream = eventPayload.payload.isEndOfStream;
+      shouldRender |= isEndOfStream;
+      for (const change of changes) {
+        charsMap[change.charId] = change;
+        dfs(change.charId);
+      }
+      if (shouldRender) {
+        textArea.value = arr.map(v => charsMap[v].character).filter(s => s).join('');
+      }
+    } else if (eventPayload.responseType === 'PONG') {
+      lastPong = new Date();
+    }
+    else if (eventPayload.responseType === 'NACK') {
+      console.log('Change ', eventPayload.payload, ' not saved, will retry operation');
+      changesMap[eventPayload.payload][1] = 0;
+    }
+    else if (eventPayload.responseType === 'ACK') {
+      console.log('Change ', eventPayload.payload, ' saved');
+      delete changesMap[eventPayload.payload]
+    }
+  };
+  socket.onopen = () => {
+    socket.send(msgpack.encode({
+      type: 'CONNECT',
+      batchSize: 1000
+    }));
     setInterval(() => {
-      if (changes.length > 0) {
-        socket.send(JSON.stringify({
-          type: 'CHANGES',
-          payload: changes
-        }));
-        changes = [];
+      socket.send(msgpack.encode({
+        type: 'PING',
+      }));
+    }, 2000);
+  };
+  const batchSize = 500;
+
+  const getTimeStamp = () => new Date().getTime();
+
+  setInterval(() => {
+    if (changes.length > 0) {
+      // console.log('Sending changes');
+      // console.log(changes);
+      const changeId = generateUniqueId();
+      const change = {
+        type: 'CHANGES',
+        payload: changes.slice(0, batchSize),
+        changeId: changeId
+      };
+      changesMap[changeId] = [change, getTimeStamp()];
+      socket.send(msgpack.encode(change));
+      changes = changes.slice(batchSize, changes.length);
+    }
+  }, 100);
+
+  const maxWaitTimeForChangeApply = 1000;
+
+  setInterval(() => {
+    for (const [changeId, obj] of Object.entries(changesMap)) {
+      const currentTimestamp = getTimeStamp();
+      const waitTime = obj[1] - currentTimestamp;
+      console.log(`Going to retry to apply change ${changeId}`)
+      if (waitTime >= maxWaitTimeForChangeApply) {
+        obj[1] = currentTimestamp;
+        socket.send(msgpack.encode(obj[0]));
       }
-    }, 500);
+    }
+  }, 1000);
+
+  setInterval(() => {
+    const d = getTimeStamp() - lastPong.getTime();
+    // console.log('Ms since last PONG ', d);
+    if (d >= 5000) {
+      console.log("Disconnected");
+    }
+  }, 2000);
+
+  textArea.addEventListener("change", event => {
+    const curr = arr.map(v => charsMap[v].character).filter(s => s).join('');
+    const updated = textArea.value;
+    const diff = dmp.diff_main(curr, updated);
+    let prevIndex = -1;
+    let newArr = [];
+    for (const component of diff) {
+      const v = component[0];
+      const str = component[1];
+      if (v === 0) {
+        for (let i = 0; i < str.length; i++) {
+          newArr.splice(newArr.length, 0, arr[i + prevIndex + 1]);
+        }
+        prevIndex += str.length;
+      } else if (v === -1) {
+        for (let i = 0; i < str.length; i++) {
+          const charIdToDelete = arr[i + prevIndex + 1];
+          changes.splice(changes.length, 0, {
+            charId: charIdToDelete
+          });
+          charsMap[charIdToDelete].character = null;
+        }
+        prevIndex += str.length;
+      } else {
+        let prev = extract(prevIndex);
+        const next = extract(prevIndex + 1);
+        for (let i = 0; i < str.length; i++) {
+          const c = str.charAt(i);
+          let a = createNewCharacter(prev, next, c);
+          charsMap[a.charId] = a;
+          changes.splice(changes.length, 0, a);
+          newArr.splice(newArr.length, 0, a.charId);
+          prev = a.charId;
+        }
+      }
+    }
+    arr = newArr;
+  });
+
 
 </script>
 

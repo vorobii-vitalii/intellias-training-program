@@ -20,7 +20,8 @@ public class TimerSocketMessageReader<Message> implements SocketMessageReader<Me
 		var startTime = System.nanoTime();
 		try {
 			return messageReader.readMessage(bufferContext, channel, eventEmitter);
-		} finally {
+		}
+		finally {
 			messageReadTimer.record(System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
 		}
 	}

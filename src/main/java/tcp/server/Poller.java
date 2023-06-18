@@ -43,11 +43,6 @@ public class Poller implements Runnable {
 							return;
 						}
 						var readyOps = selectionKey.readyOps();
-//						operationHandlerByType.forEach((ops, callback) -> {
-//							if ((readyOps & ops) != 0) {
-//								callback.accept(selectionKey);
-//							}
-//						});
 						var operationHandler = operationHandlerByType.get(readyOps);
 						if (operationHandler != null) {
 							operationHandler.accept(selectionKey);

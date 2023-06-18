@@ -1,6 +1,22 @@
 version: '3.7'
 services:
 
+  # Envoy proxy
+  envoy:
+    image: envoyproxy/envoy:dev-37f764e056505632ae12a22d215fa46305be4053
+    networks:
+      net:
+    ports:
+      - "10000:10000"
+    entrypoint: "/usr/local/bin/envoy"
+    command:
+      - "--config-path /etc/envoy/envoy.yaml"
+      - "--mode serve"
+      - "--log-level info"
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml
+      - ./index.html:/static/index.html
+
   # MongoDB replica set
   mongo1:
     image: mongo:latest

@@ -38,7 +38,6 @@ import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.example.document.storage.DocumentStorageServiceGrpc;
 import com.example.document.storage.RxDocumentStorageServiceGrpc;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lmax.disruptor.RingBuffer;
@@ -104,7 +103,7 @@ import request_handler.RequestProcessor;
 import request_handler.RequestHandler;
 import serialization.JacksonDeserializer;
 import serialization.Serializer;
-import tcp.MessagePublishProcess;
+import message_passing.MessagePublishProcess;
 import tcp.MessageSerializer;
 import tcp.server.BufferCopier;
 import tcp.server.ByteBufferPool;
@@ -133,8 +132,6 @@ import websocket.reader.WebSocketMessageReader;
 
 public class HttpServer {
 	public static final String PROMETHEUS_ENDPOINT = "/prometheus";
-	public static final int MAX_TOKENS_WRITE = 1000;
-	public static final int MAX_TOKENS_READ = 10;
 	public static final int SELECTION_TIMEOUT = 1;
 	public static final int DOCUMENT_ID = 13;
 	public static final int MAX_WAIT_FOR_PING_MS = 15_000;
@@ -302,7 +299,7 @@ public class HttpServer {
 							s.changeOperation(OperationType.WRITE);
 						}
 				), s -> {
-					//					LOGGER.info("Connected {}", s)
+					LOGGER.info("Connected {}", s);
 				})
 		));
 
@@ -348,7 +345,6 @@ public class HttpServer {
 				Executors.newFixedThreadPool(4),
 				List.of(
 						webSocketChangeProtocolHTTPHandlerStrategy,
-						new FileDownloadHTTPHandlerStrategy(p -> p.isEmpty() || p.equals("/"), "index.html", "text/html"),
 						new PrometheusMetricsHTTPRequestHandler(prometheusRegistry, PROMETHEUS_ENDPOINT)
 				),
 				httpResponsePostProcessors,

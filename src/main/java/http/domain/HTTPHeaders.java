@@ -39,7 +39,7 @@ public class HTTPHeaders implements Serializable {
 	private final Map<String, String> headers = new HashMap<>();
 
 	public HTTPHeaders addSingleHeader(String key, String value) {
-		headers.put(key, value.trim());
+		headers.put(key.toLowerCase(), value.trim());
 		return this;
 	}
 

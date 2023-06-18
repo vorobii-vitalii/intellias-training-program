@@ -15,14 +15,14 @@ public interface Constants {
 	}
 
 	interface HTTPHeaders {
-		String UPGRADE = "Upgrade";
-		String HOST = "Host";
-		String CONNECTION = "Connection";
-		String WEBSOCKET_KEY = "Sec-WebSocket-Key";
-		String WEBSOCKET_VERSION = "Sec-WebSocket-Version";
-		String WEBSOCKET_ACCEPT = "Sec-WebSocket-Accept";
-		String CONTENT_TYPE = "Content-Type";
-		String CONTENT_LENGTH = "Content-Length";
+		String UPGRADE = "Upgrade".toLowerCase();
+		String HOST = "Host".toLowerCase();
+		String CONNECTION = "Connection".toLowerCase();
+		String WEBSOCKET_KEY = "Sec-WebSocket-Key".toLowerCase();
+		String WEBSOCKET_VERSION = "Sec-WebSocket-Version".toLowerCase();
+		String WEBSOCKET_ACCEPT = "Sec-WebSocket-Accept".toLowerCase();
+		String CONTENT_TYPE = "Content-Type".toLowerCase();
+		String CONTENT_LENGTH = "Content-Length".toLowerCase();
 	}
 
 	interface WebSocketMetadata {
