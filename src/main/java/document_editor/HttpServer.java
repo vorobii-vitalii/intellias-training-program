@@ -227,7 +227,9 @@ public class HttpServer {
 	public static void main(String[] args) throws IOException {
 
 
-		var byteBufferPool = new ByteBufferPool(ByteBuffer::allocateDirect);
+		var byteBufferPool = new ByteBufferPool(ByteBuffer::allocateDirect, 10_000);
+
+		schedulePeriodically(5000, byteBufferPool::performGarbageCollection);
 
 		var messageSerializer = new MessageSerializer(byteBufferPool);
 
@@ -342,7 +344,7 @@ public class HttpServer {
 		Selector[] httpSelectors = createSelectors(10);
 
 		var httpRequestHandler = new HTTPNetworkRequestHandler(
-				Executors.newFixedThreadPool(4),
+				Executors.newFixedThreadPool(8),
 				List.of(
 						webSocketChangeProtocolHTTPHandlerStrategy,
 						new PrometheusMetricsHTTPRequestHandler(prometheusRegistry, PROMETHEUS_ENDPOINT)

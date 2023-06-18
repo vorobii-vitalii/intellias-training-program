@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import net.jcip.annotations.ThreadSafe;
@@ -14,9 +13,12 @@ import net.jcip.annotations.ThreadSafe;
 public class ByteBufferPool {
 	private final ConcurrentSkipListMap<Integer, ConcurrentLinkedDeque<ByteBuffer>> byteBuffersBySize = new ConcurrentSkipListMap<>();
 	private final Function<Integer, ByteBuffer> allocator;
+	private final Map<Integer, Long> lastUsedMap = new ConcurrentHashMap<>();
+	private final int bufferExpirationTimeMillis;
 
-	public ByteBufferPool(Function<Integer, ByteBuffer> allocator) {
+	public ByteBufferPool(Function<Integer, ByteBuffer> allocator, int bufferExpirationTimeMillis) {
 		this.allocator = allocator;
+		this.bufferExpirationTimeMillis = bufferExpirationTimeMillis;
 	}
 
 	public ByteBuffer allocate(int size) {
@@ -36,6 +38,7 @@ public class ByteBufferPool {
 			} else {
 				var buffer = queue.poll();
 				if (buffer != null) {
+					lastUsedMap.put(entry.getKey(), getTimestamp());
 					return buffer;
 				}
 			}
@@ -45,6 +48,18 @@ public class ByteBufferPool {
 
 	private boolean isEmpty(ConcurrentLinkedDeque<?> deque) {
 		return deque == null || deque.isEmpty();
+	}
+
+	public void performGarbageCollection() {
+		var currentTimestamp = getTimestamp();
+		for (var entry : byteBuffersBySize.entrySet()) {
+			var bufferSize = entry.getKey();
+			var lastUsedTimestamp = lastUsedMap.getOrDefault(bufferSize, 0L);
+			if ((currentTimestamp - lastUsedTimestamp) >= bufferExpirationTimeMillis) {
+				entry.getValue().clear();
+				lastUsedMap.remove(bufferSize);
+			}
+		}
 	}
 
 	public void save(ByteBuffer buffer) {
@@ -59,6 +74,10 @@ public class ByteBufferPool {
 			dequeue.add(buffer);
 			return dequeue;
 		});
+	}
+
+	private long getTimestamp() {
+		return System.currentTimeMillis();
 	}
 
 }
