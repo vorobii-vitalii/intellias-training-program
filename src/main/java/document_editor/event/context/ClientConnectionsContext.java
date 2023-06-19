@@ -49,7 +49,7 @@ public class ClientConnectionsContext {
 	public void broadCastMessage(Serializable message) {
 		var buffer = messageSerializer.serialize(message);
 		doForConnectedClients(connection -> {
-			connection.appendResponse(bufferCopier.copy(buffer), r -> {});
+			connection.appendResponse(bufferCopier.copy(buffer));
 			connection.changeOperation(OperationType.WRITE);
 		});
 	}
