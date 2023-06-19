@@ -1,0 +1,20 @@
+version: "3.3"
+services:
+  echo-client:
+    image: my-repo/echo-client:1.0-SNAPSHOT
+    networks:
+      - net
+    environment:
+      - "SERVER_HOST=echo-server"
+      - "SERVER_PORT=8000"
+
+  echo-server:
+    image: my-repo/echo-server:1.0-SNAPSHOT
+    networks:
+      - net
+    environment:
+      - "SERVER_HOST=0.0.0.0"
+      - "SERVER_PORT=8000"
+
+networks:
+  net:

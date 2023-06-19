@@ -1,0 +1,14 @@
+FROM openjdk:19-alpine
+
+ARG JAR_FILE
+
+ADD target/$JAR_FILE ./app.jar
+
+ENTRYPOINT java -Dcom.sun.management.jmxremote \
+  -Dcom.sun.management.jmxremote.port=9010 \
+  -Dcom.sun.management.jmxremote.authenticate=false \
+  -Dcom.sun.management.jmxremote.ssl=false \
+  -Dcom.sun.management.jmxremote.local.only=false \
+  -XX:+UseG1GC \
+  -XX:+TieredCompilation \
+  -agentlib:jdwp=transport=dt_socket,address=*:8005,server=y,suspend=n -cp app.jar document_editor.HttpServer

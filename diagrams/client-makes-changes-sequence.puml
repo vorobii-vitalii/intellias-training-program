@@ -1,0 +1,38 @@
+@startuml
+
+actor Client
+participant DocumentsWebApplication
+participant DocumentsApp
+participant DocumentsStorageService
+database Mongo
+
+Client -> DocumentsWebApplication : Opens app
+DocumentsWebApplication -> DocumentsApp : HTTP/1.1 /documents
+DocumentsApp -> DocumentsWebApplication : HTTP/1.1 101 Change protocol to WS
+
+DocumentsWebApplication -> DocumentsApp : WebSocket message {type: CONNECT, documentId: X}
+DocumentsApp -> DocumentsWebApplication : WebSocket message {type: CONNECTED, connectionId: Y}
+
+DocumentsApp -> DocumentsStorageService : gRPC call: Fetch document X
+DocumentsStorageService -> Mongo: Retrieve content of document X
+Mongo -> DocumentsStorageService : Streams document in batches
+DocumentsStorageService -> DocumentsApp : Streams document in batches
+DocumentsApp -> DocumentsWebApplication : Streams document in batches
+DocumentsWebApplication -> Client : Updates textarea
+
+Client -> DocumentsWebApplication : Updates the textarea
+DocumentsWebApplication -> DocumentsApp : Calculate diff, calculate changes: \n\
+For deleted characters -> create {treePath: path of the character} \n\
+For inserted characters -> create {treePath: createPath, character: X} \n\
+Where createPath - function that calculates tree path between 2 other paths with given connectionId \n\
+Add the objects to changes array \n\
+Send WebSocket message {type: CHANGES, payload: $changes} \n\
+
+DocumentsApp -> DocumentsStorageService: gRPC call: Apply the changes
+DocumentsStorageService -> Mongo: For removed characters -> Update corresponding documents: set deleting = true and after that actually  \n\
+removed documents, for inserted -> just insert new documents with given treePath and character fields  \n\
+
+DocumentsStorageService -> DocumentsApp : Insert completed
+DocumentsApp -> DocumentsWebApplication : TODO: Send acknowledgement
+
+@enduml

@@ -1,0 +1,83 @@
+package tcp.server;
+
+import java.nio.ByteBuffer;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Function;
+
+import net.jcip.annotations.ThreadSafe;
+
+@ThreadSafe
+public class ByteBufferPool {
+	private final ConcurrentSkipListMap<Integer, ConcurrentLinkedDeque<ByteBuffer>> byteBuffersBySize = new ConcurrentSkipListMap<>();
+	private final Function<Integer, ByteBuffer> allocator;
+	private final Map<Integer, Long> lastUsedMap = new ConcurrentHashMap<>();
+	private final int bufferExpirationTimeMillis;
+
+	public ByteBufferPool(Function<Integer, ByteBuffer> allocator, int bufferExpirationTimeMillis) {
+		this.allocator = allocator;
+		this.bufferExpirationTimeMillis = bufferExpirationTimeMillis;
+	}
+
+	public ByteBuffer allocate(int size) {
+		while (true) {
+			var entry = byteBuffersBySize.ceilingEntry(size);
+			if (entry == null) {
+				break;
+			}
+			var queue = entry.getValue();
+			if (isEmpty(queue)) {
+				byteBuffersBySize.compute(entry.getKey(), (k, v) -> {
+					if (isEmpty(v)) {
+						return null;
+					}
+					return v;
+				});
+			} else {
+				var buffer = queue.poll();
+				if (buffer != null) {
+					lastUsedMap.put(entry.getKey(), getTimestamp());
+					return buffer;
+				}
+			}
+		}
+		return allocator.apply(size);
+	}
+
+	private boolean isEmpty(ConcurrentLinkedDeque<?> deque) {
+		return deque == null || deque.isEmpty();
+	}
+
+	public void performGarbageCollection() {
+		var currentTimestamp = getTimestamp();
+		for (var entry : byteBuffersBySize.entrySet()) {
+			var bufferSize = entry.getKey();
+			var lastUsedTimestamp = lastUsedMap.getOrDefault(bufferSize, 0L);
+			if ((currentTimestamp - lastUsedTimestamp) >= bufferExpirationTimeMillis) {
+				entry.getValue().clear();
+				lastUsedMap.remove(bufferSize);
+			}
+		}
+	}
+
+	public void save(ByteBuffer buffer) {
+		var size = buffer.capacity();
+		buffer.clear();
+		byteBuffersBySize.compute(size, (s, arr) -> {
+			if (arr != null) {
+				arr.add(buffer);
+				return arr;
+			}
+			var dequeue = new ConcurrentLinkedDeque<ByteBuffer>();
+			dequeue.add(buffer);
+			return dequeue;
+		});
+	}
+
+	private long getTimestamp() {
+		return System.currentTimeMillis();
+	}
+
+}
