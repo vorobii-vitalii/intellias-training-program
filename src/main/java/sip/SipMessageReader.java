@@ -1,21 +1,20 @@
 package sip;
 
-import javax.annotation.Nullable;
-
 import tcp.CharSequenceImpl;
 import tcp.server.BufferContext;
 import tcp.server.EventEmitter;
 import tcp.server.reader.MessageReader;
 import tcp.server.reader.exception.ParseException;
-import util.Constants;
 import util.Pair;
+
+import javax.annotation.Nullable;
 
 public class SipMessageReader implements MessageReader<SipRequest> {
 	private static final byte CARRIAGE_RETURN = '\r';
 	private static final byte LINE_FEED = '\n';
 	private static final char HEADER_DELIMITER = ':';
 	private static final int NOT_FOUND = -1;
-	public static final int CLRF_LENGTH = 2;
+	private static final int CLRF_LENGTH = 2;
 
 	@Nullable
 	@Override
@@ -33,7 +32,6 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 				if (prevCLRFIndex + 2 == i) {
 					break;
 				}
-
 				var line = new CharSequenceImpl(bufferContext, prevCLRFIndex + CLRF_LENGTH, i);
 				eventEmitter.emit("Extracted line");
 				if (requestLine == null) {
@@ -41,10 +39,10 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 					eventEmitter.emit("Parsed request line");
 				}
 				else {
-					var headerDelimiterIndex = find(line, HEADER_DELIMITER);
+					var headerDelimiterIndex = ParseUtils.findFromFromBegging(line, HEADER_DELIMITER);
 					eventEmitter.emit("Found delimiter");
 					if (headerDelimiterIndex == NOT_FOUND) {
-						throw new ParseException("HTTP header key-value pair should be delimiter-ed by : character " + line);
+						throw new ParseException("SIP header key-value pair should be delimiter-ed by : character " + line);
 					}
 					var headerName = line.subSequence(0, headerDelimiterIndex).toString().trim();
 					eventEmitter.emit("Extracted header name");
@@ -57,10 +55,7 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 				i++;
 			}
 		}
-		int payloadSize = sipHeaders
-				.getSingleHeaderValue(Constants.HTTPHeaders.CONTENT_LENGTH)
-				.map(Integer::parseInt)
-				.orElse(0);
+		int payloadSize = sipHeaders.getContentLength();
 
 		int bodyStartIndex = i + CLRF_LENGTH;
 		int readPayloadBytes = bufferContext.size() - bodyStartIndex;
@@ -69,16 +64,6 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 		}
 		var body = payloadSize == 0 ? new byte[0] : bufferContext.extract(bodyStartIndex, bodyStartIndex + payloadSize);
 		return new Pair<>(new SipRequest(requestLine, sipHeaders, body), bodyStartIndex + payloadSize);
-	}
-
-	private int find(CharSequence charSequence, char b) {
-		var n = charSequence.length();
-		for (int i = 0; i < n; i++) {
-			if (charSequence.charAt(i) == b) {
-				return i;
-			}
-		}
-		return -1;
 	}
 
 }
