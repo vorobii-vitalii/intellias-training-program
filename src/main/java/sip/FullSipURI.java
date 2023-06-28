@@ -1,15 +1,11 @@
 package sip;
 
-import static sip.SipParseUtils.parseParameters;
-
-import java.nio.ByteBuffer;
+import javax.annotation.Nonnull;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-import javax.annotation.Nonnull;
-
-import util.Serializable;
+import static sip.SipParseUtils.parseParameters;
 
 /*
 SIP-URI          =  "sip:" [ userinfo ] hostport
@@ -73,18 +69,7 @@ public record FullSipURI(
 		@Nonnull Address address,
 		@Nonnull Map<String, String> uriParameters,
 		@Nonnull Map<String, String> queryParameters
-) implements Serializable, SipURI {
-
-	@Override
-	public void serialize(ByteBuffer dest) {
-
-	}
-
-	@Override
-	public int getSize() {
-		return 0;
-	}
-
+) implements SipURI {
 
 	/*
 		The default port value is transport and scheme dependent.

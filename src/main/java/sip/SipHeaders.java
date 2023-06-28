@@ -29,16 +29,20 @@ public class SipHeaders {
 	private AddressOfRecord to;
 	private AddressOfRecord referTo;
 	private CommandSequence commandSequence;
+	private Integer maxForwards;
 	private int contentLength = 0;
 	private final List<Via> viaList = new ArrayList<>();
+	private ContactList contactList;
 
 	private final Map<String, Consumer<String>> headerSetterByHeaderName = Map.of(
-			"from", v -> this.from = AddressOfRecord.parse(v),
-			"to", v -> this.to = AddressOfRecord.parse(v),
-			"refer-to", v -> this.referTo = AddressOfRecord.parse(v),
-			"cseq", v -> this.commandSequence = CommandSequence.parse(v),
-			"via", v -> viaList.addAll(Via.parseMultiple(v)),
-			"content-length", v -> contentLength = Integer.parseInt(v.trim())
+					"from", v -> this.from = AddressOfRecord.parse(v),
+					"to", v -> this.to = AddressOfRecord.parse(v),
+					"refer-to", v -> this.referTo = AddressOfRecord.parse(v),
+					"cseq", v -> this.commandSequence = CommandSequence.parse(v),
+					"via", v -> viaList.addAll(Via.parseMultiple(v)),
+					"content-length", v -> contentLength = Integer.parseInt(v.trim()),
+					"max-forwards", v -> maxForwards = Integer.parseInt(v.trim()),
+					"contact", v -> contactList = ContactList.parse(v)
 	);
 
 	public void addSingleHeader(String headerName, String value) {
@@ -85,6 +89,10 @@ public class SipHeaders {
 		return commandSequence;
 	}
 
+	public ContactList getContactList() {
+		return contactList;
+	}
+
 	@Nonnull
 	public List<Via> getViaList() {
 		return viaList;
@@ -92,5 +100,9 @@ public class SipHeaders {
 
 	public int getContentLength() {
 		return contentLength;
+	}
+
+	public Integer getMaxForwards() {
+		return maxForwards;
 	}
 }
