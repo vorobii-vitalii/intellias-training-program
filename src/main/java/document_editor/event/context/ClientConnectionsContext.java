@@ -60,6 +60,7 @@ public class ClientConnectionsContext {
 			try {
 				c.close();
 			}
+			// SIP, Codecs, Metrics in logs
 			catch (IOException e) {
 				LOGGER.warn("Error when closing connection");
 			}

@@ -1,5 +1,5 @@
 package sip;
 
-public record SIPAbsoluteURI(CharSequence uri) implements SIPRequestURI {
+public record SIPAbsoluteURI(CharSequence uri) implements SipURI {
 
 }

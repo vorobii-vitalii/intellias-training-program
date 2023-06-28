@@ -7,13 +7,13 @@ import java.util.Map;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-class TestSipURI {
+class TestFullSipURI {
 
 	public static Object[][] testParameters() {
 		return new Object[][] {
 				{
 						"sip:alice@example.com:5060;transport=tcp;user=phone?subject=hello&foo=bar",
-						new SipURI(
+						new FullSipURI(
 								"sip",
 								new Credentials("alice", null),
 								new Address("example.com", 5060),
@@ -23,7 +23,7 @@ class TestSipURI {
 				},
 				{
 						"sip:alice@example.com:5060;transport=tcp;user=phone",
-						new SipURI(
+						new FullSipURI(
 								"sip",
 								new Credentials("alice", null),
 								new Address("example.com", 5060),
@@ -33,7 +33,7 @@ class TestSipURI {
 				},
 				{
 						"sip:alice@example.com;transport=tcp;user=phone",
-						new SipURI(
+						new FullSipURI(
 								"sip",
 								new Credentials("alice", null),
 								new Address("example.com", 5060),
@@ -43,7 +43,7 @@ class TestSipURI {
 				},
 				{
 						"sip:alice:password@example.com;transport=tcp;user=phone",
-						new SipURI(
+						new FullSipURI(
 								"sip",
 								new Credentials("alice", "password"),
 								new Address("example.com", 5060),
@@ -56,7 +56,7 @@ class TestSipURI {
 
 	@ParameterizedTest
 	@MethodSource("testParameters")
-	void parse(String url, SipURI expected) {
-		assertThat(SipURI.parse(url)).isEqualTo(expected);
+	void parse(String url, FullSipURI expected) {
+		assertThat(FullSipURI.parse(url)).isEqualTo(expected);
 	}
 }

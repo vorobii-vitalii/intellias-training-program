@@ -1,13 +1,7 @@
 package sip;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-
 import javax.annotation.Nullable;
 
-import http.domain.HTTPHeaders;
-import http.domain.HTTPRequest;
-import http.domain.HTTPRequestLine;
 import tcp.CharSequenceImpl;
 import tcp.server.BufferContext;
 import tcp.server.EventEmitter;
@@ -43,7 +37,7 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 				var line = new CharSequenceImpl(bufferContext, prevCLRFIndex + CLRF_LENGTH, i);
 				eventEmitter.emit("Extracted line");
 				if (requestLine == null) {
-					requestLine = SipRequestLine.parse(line);
+					requestLine = SipRequestLine.parse(line.toString());
 					eventEmitter.emit("Parsed request line");
 				}
 				else {
@@ -64,7 +58,7 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 			}
 		}
 		int payloadSize = sipHeaders
-				.getHeaderValue(Constants.HTTPHeaders.CONTENT_LENGTH)
+				.getSingleHeaderValue(Constants.HTTPHeaders.CONTENT_LENGTH)
 				.map(Integer::parseInt)
 				.orElse(0);
 

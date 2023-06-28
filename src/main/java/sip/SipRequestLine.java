@@ -2,39 +2,18 @@ package sip;
 
 import tcp.server.reader.exception.ParseException;
 
-public record SipRequestLine(String method, SIPRequestURI requestURI, SipVersion version) {
-	private static final byte SPACE = ' ';
+public record SipRequestLine(String method, SipURI requestURI, SipVersion version) {
+	private static final String LWS = "\\s+";
 
-	public static SipRequestLine parse(CharSequence charSequence) {
-		var n = charSequence.length();
-		var leftSpace = -1;
-		for (var i = 0; i < n; i++) {
-			if (charSequence.charAt(i) == SPACE) {
-				leftSpace = i;
-				break;
-			}
+	public static SipRequestLine parse(String str) {
+		var arr = str.trim().split(LWS);
+		if (arr.length != 3) {
+			throw new ParseException("request-line   = method LWS request-target LWS SIP-version CRLF " + str);
 		}
-		int rightSpace = -1;
-		for (int i = n - 1; i >= 0; i--) {
-			if (charSequence.charAt(i) == SPACE) {
-				rightSpace = i;
-				break;
-			}
-		}
-		if (leftSpace == -1 || rightSpace == -1 || leftSpace == rightSpace) {
-			throw new ParseException("request-line   = method SP request-target SP HTTP-version CRLF " + charSequence);
-		}
-		var method = charSequence.subSequence(0, leftSpace).toString();
-		var httpVersion = SipVersion.parse(charSequence.subSequence(rightSpace + 1, n));
-		var requestURI = calcSIPREquestURI(charSequence.subSequence(leftSpace + 1, rightSpace).toString());
+		var method = arr[0];
+		var httpVersion = SipVersion.parse(arr[1]);
+		var requestURI = SipURI.parse(arr[2]);
 		return new SipRequestLine(method, requestURI, httpVersion);
-	}
-
-	private static SIPRequestURI calcSIPREquestURI(String str) {
-		if (SipURI.isSipURI(str)) {
-			return SipURI.parse(str);
-		}
-		return new SIPAbsoluteURI(str);
 	}
 
 }
