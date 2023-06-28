@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import javax.annotation.Nonnull;
+
 public class SipHeaders {
 	private static final Map<String, String> COMPACT_HEADERS_MAP = Map.of(
 			"i", "call-id",
@@ -27,12 +29,16 @@ public class SipHeaders {
 	private AddressOfRecord to;
 	private AddressOfRecord referTo;
 	private CommandSequence commandSequence;
+	private int contentLength = 0;
+	private final List<Via> viaList = new ArrayList<>();
 
 	private final Map<String, Consumer<String>> headerSetterByHeaderName = Map.of(
 			"from", v -> this.from = AddressOfRecord.parse(v),
 			"to", v -> this.to = AddressOfRecord.parse(v),
 			"refer-to", v -> this.referTo = AddressOfRecord.parse(v),
-			"cseq", v -> this.commandSequence = CommandSequence.parse(v)
+			"cseq", v -> this.commandSequence = CommandSequence.parse(v),
+			"via", v -> viaList.addAll(Via.parseMultiple(v)),
+			"content-length", v -> contentLength = Integer.parseInt(v.trim())
 	);
 
 	public void addSingleHeader(String headerName, String value) {
@@ -79,4 +85,12 @@ public class SipHeaders {
 		return commandSequence;
 	}
 
+	@Nonnull
+	public List<Via> getViaList() {
+		return viaList;
+	}
+
+	public int getContentLength() {
+		return contentLength;
+	}
 }
