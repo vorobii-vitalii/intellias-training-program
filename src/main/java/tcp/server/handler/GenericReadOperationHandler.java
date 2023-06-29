@@ -6,6 +6,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import message_passing.MessageProducer;
@@ -14,6 +18,7 @@ import tcp.server.ServerAttachment;
 import tcp.server.SocketMessageReader;
 
 public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
+	private static final Logger LOGGER = LoggerFactory.getLogger(GenericReadOperationHandler.class);
 	private final SocketMessageReader<T> socketMessageReader;
 	private final MessageProducer<NetworkRequest<T>> messageProducer;
 	private final BiConsumer<SelectionKey, Throwable> onError;
@@ -41,10 +46,7 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 			if (!serverAttachment.isReadable()) {
 				return;
 			}
-			var requestSpan = tracer
-					.spanBuilder("Socket message")
-					.setParent(contextSupplier.get().with(serverAttachment.getRequestSpan()))
-					.startSpan();
+			var requestSpan = createRequestSpan(serverAttachment);
 			var request = socketMessageReader.readMessage(
 					serverAttachment.bufferContext(),
 					serverAttachment.getChannel(),
@@ -61,5 +63,13 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 		} catch (Throwable e) {
 			onError.accept(selectionKey, e);
 		}
+	}
+
+	private Span createRequestSpan(ServerAttachment serverAttachment) {
+		var requestSpan = serverAttachment.getRequestSpan();
+		return tracer
+				.spanBuilder("Socket message")
+				.setParent(requestSpan == null ? contextSupplier.get() : contextSupplier.get().with(requestSpan))
+				.startSpan();
 	}
 }

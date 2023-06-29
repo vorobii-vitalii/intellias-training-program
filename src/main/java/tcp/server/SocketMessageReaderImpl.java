@@ -10,6 +10,7 @@ import tcp.server.reader.MessageReader;
 import tcp.server.reader.exception.ParseException;
 
 public class SocketMessageReaderImpl<Message> implements SocketMessageReader<Message> {
+	private static final Logger LOGGER = LoggerFactory.getLogger(SocketMessageReaderImpl.class);
 	private final MessageReader<Message> messageReader;
 
 	public SocketMessageReaderImpl(MessageReader<Message> messageReader) {
@@ -29,6 +30,8 @@ public class SocketMessageReaderImpl<Message> implements SocketMessageReader<Mes
 		var res = messageReader.read(bufferContext, eventEmitter);
 		eventEmitter.emit("Read from context end");
 		if (res != null) {
+//			LOGGER.info("Context size = {}", bufferContext.size());
+//			LOGGER.info("Freeing {} bytes", res.second());
 			bufferContext.free(res.second());
 			eventEmitter.emit("Buffer context clear");
 			return res.first();

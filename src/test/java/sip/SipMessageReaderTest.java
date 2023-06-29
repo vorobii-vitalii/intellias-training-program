@@ -6,6 +6,7 @@ import utils.BufferTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,7 +42,7 @@ class SipMessageReaderTest {
 						new FullSipURI(
 										"sip",
 										new Credentials("alice", null),
-										new Address("atlanta.com", null),
+										new Address("atlanta.com", 5060),
 										Map.of(),
 										Map.of()
 						),
@@ -52,7 +53,7 @@ class SipMessageReaderTest {
 						new FullSipURI(
 										"sip",
 										new Credentials("bob", null),
-										new Address("biloxi.com", null),
+										new Address("biloxi.com", 5060),
 										Map.of(),
 										Map.of()
 						),
@@ -60,18 +61,31 @@ class SipMessageReaderTest {
 		));
 		sipHeaders.addSingleHeader("Call-ID", "a84b4c76e66710@pc33.atlanta.com");
 		sipHeaders.setFrom(new AddressOfRecord(
-						"Anonymous",
+						"Alice",
 						new FullSipURI(
 										"sip",
 										new Credentials("alice", null),
-										new Address("atlanta.com", null),
+										new Address("atlanta.com", 5060),
 										Map.of(),
 										Map.of()
 						),
-						Map.of()
+				Map.of("tag", "1928301774")
 		));
 		sipHeaders.setContentType(new SipMediaType("application", "sdp", Map.of()));
 		sipHeaders.setCommandSequence(new CommandSequence(314159, "INVITE"));
+		sipHeaders.setContactList(new ContactSet(Set.of(
+				new AddressOfRecord(
+						"Anonymous",
+						new FullSipURI(
+								"sip",
+								new Credentials("alice", null),
+								new Address("pc33.atlanta.com", 5060),
+								Map.of(),
+								Map.of()
+						),
+						Map.of()
+				)
+		)));
 
 		assertThat(readResult.first()).isEqualTo(
 						new SipRequest(
@@ -80,7 +94,7 @@ class SipMessageReaderTest {
 														new FullSipURI(
 																		"sip",
 																		new Credentials("bob", null),
-																		new Address("biloxi.com", 8050),
+																		new Address("biloxi.com", 5060),
 																		Map.of(),
 																		Map.of()
 														),
@@ -89,5 +103,7 @@ class SipMessageReaderTest {
 										sipHeaders,
 										new byte[]{}
 						));
+
+		assertThat(readResult.second()).isEqualTo(bytes.length);
 	}
 }

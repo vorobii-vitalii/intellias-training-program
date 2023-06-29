@@ -31,6 +31,7 @@ public interface Constants {
 
 	interface Protocol {
 		String HTTP = "HTTP";
+		String SIP = "SIP";
 		String WEB_SOCKET = "WebSocket";
 	}
 

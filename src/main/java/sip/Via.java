@@ -36,7 +36,7 @@ public record Via(SipSentProtocol sipSentProtocol, Address sentBy, Map<String, S
 	}
 
 	public static Via parseSingle(String str) {
-		var sentProtocolAndSentParameters = str.split("\\s+", 2);
+		var sentProtocolAndSentParameters = str.trim().split("\\s+", 2);
 		if (sentProtocolAndSentParameters.length < 2) {
 			throw new IllegalArgumentException("Invalid Via value, expected via-params =  via-ttl / via-maddr");
 		}

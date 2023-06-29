@@ -27,7 +27,8 @@ public record SipMediaType(String mediaType, String mediaSubType, Map<String, St
 		}
 		var mediaType = mediaTypeComponents[0].trim();
 		var mediaSubType = mediaTypeComponents[1].trim();
-		return new SipMediaType(mediaType, mediaSubType, SipParseUtils.parseParameters(arr[1], SEMI_COLON));
+		Map<String, String> parameters = arr.length > 1 ? SipParseUtils.parseParameters(arr[1], SEMI_COLON) : Map.of();
+		return new SipMediaType(mediaType, mediaSubType, parameters);
 	}
 
 }

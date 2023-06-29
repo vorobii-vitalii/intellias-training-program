@@ -52,7 +52,7 @@ public class SipHeaders {
 				if (strings == null) {
 					strings = new ArrayList<>();
 				}
-				strings.add(value);
+				strings.add(value.trim());
 				return strings;
 			});
 		}
@@ -146,11 +146,28 @@ public class SipHeaders {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 		SipHeaders that = (SipHeaders) o;
-		return contentLength == that.contentLength && Objects.equals(headerMap, that.headerMap) && Objects.equals(from, that.from) && Objects.equals(to, that.to) && Objects.equals(referTo, that.referTo) && Objects.equals(commandSequence, that.commandSequence) && Objects.equals(maxForwards, that.maxForwards) && Objects.equals(viaList, that.viaList) && Objects.equals(contactList, that.contactList) && Objects.equals(contentType, that.contentType) && Objects.equals(headerSetterByHeaderName, that.headerSetterByHeaderName);
+		return contentLength == that.contentLength && Objects.equals(headerMap, that.headerMap) && Objects.equals(from, that.from) && Objects.equals(to, that.to) && Objects.equals(referTo, that.referTo) && Objects.equals(commandSequence, that.commandSequence) && Objects.equals(maxForwards, that.maxForwards) && Objects.equals(viaList, that.viaList) && Objects.equals(contactList, that.contactList) && Objects.equals(contentType, that.contentType);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(headerMap, from, to, referTo, commandSequence, maxForwards, contentLength, viaList, contactList, contentType, headerSetterByHeaderName);
+		return Objects.hash(headerMap, from, to, referTo, commandSequence, maxForwards, contentLength, viaList, contactList, contentType);
 	}
+
+	@Override
+	public String toString() {
+		return "SipHeaders{" +
+				"headerMap=" + headerMap +
+				", viaList=" + viaList +
+				", from=" + from +
+				", to=" + to +
+				", referTo=" + referTo +
+				", commandSequence=" + commandSequence +
+				", maxForwards=" + maxForwards +
+				", contentLength=" + contentLength +
+				", contactList=" + contactList +
+				", contentType=" + contentType +
+				'}';
+	}
+
 }

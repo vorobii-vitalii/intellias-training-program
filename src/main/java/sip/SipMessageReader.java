@@ -2,6 +2,7 @@ package sip;
 
 import tcp.CharSequenceImpl;
 import tcp.server.BufferContext;
+import tcp.server.BufferCopier;
 import tcp.server.EventEmitter;
 import tcp.server.reader.MessageReader;
 import tcp.server.reader.exception.ParseException;
@@ -19,6 +20,13 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 	@Nullable
 	@Override
 	public Pair<SipRequest, Integer> read(BufferContext bufferContext, EventEmitter eventEmitter) throws ParseException {
+		if (!isProbableRequest(bufferContext)) {
+			return null;
+		}
+		// Trailing CRLF
+		if (startsWithCRLF(bufferContext)) {
+			return new Pair<>(null, 4);
+		}
 		int prevCLRFIndex = -CLRF_LENGTH;
 		var n = bufferContext.size();
 		var i = 0;
@@ -64,6 +72,29 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 		}
 		var body = payloadSize == 0 ? new byte[0] : bufferContext.extract(bodyStartIndex, bodyStartIndex + payloadSize);
 		return new Pair<>(new SipRequest(requestLine, sipHeaders, body), bodyStartIndex + payloadSize);
+	}
+
+	private boolean startsWithCRLF(BufferContext bufferContext) {
+		if (bufferContext.size() < 4) {
+			return false;
+		}
+		return bufferContext.get(0) == CARRIAGE_RETURN
+				&& bufferContext.get(1) == LINE_FEED
+				&& bufferContext.get(2) == CARRIAGE_RETURN
+				&& bufferContext.get(3) == LINE_FEED;
+	}
+
+	private boolean isProbableRequest(BufferContext bufferContext) {
+		int n = bufferContext.size();
+		for (int i = 0; i < n - 3; i++) {
+			if (bufferContext.get(i) == CARRIAGE_RETURN
+					&& bufferContext.get(i + 1) == LINE_FEED
+					&& bufferContext.get(i + 2) == CARRIAGE_RETURN
+					&& bufferContext.get(i + 3) == LINE_FEED) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 }
