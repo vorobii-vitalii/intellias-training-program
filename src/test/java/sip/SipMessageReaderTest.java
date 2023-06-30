@@ -30,50 +30,41 @@ class SipMessageReaderTest {
 
 		var readResult = sipMessageReader.read(BufferTestUtils.createBufferContext(bytes), e -> {});
 		assertThat(readResult).isNotNull();
-		SipHeaders sipHeaders = new SipHeaders();
-		sipHeaders.addVia(new Via(
+		SipRequestHeaders sipRequestHeaders = new SipRequestHeaders();
+		sipRequestHeaders.addVia(new Via(
 						new SipSentProtocol("SIP", "2.0", "UDP"),
 						new Address("pc33.atlanta.com", null),
 						Map.of("branch", "z9hG4bK776asdhds")
 		));
-		sipHeaders.setMaxForwards(70);
-		sipHeaders.setFrom(new AddressOfRecord(
+		sipRequestHeaders.setMaxForwards(70);
+		sipRequestHeaders.setFrom(new AddressOfRecord(
 						"Alice",
 						new FullSipURI(
 										"sip",
 										new Credentials("alice", null),
 										new Address("atlanta.com", 5060),
 										Map.of(),
-										Map.of()
+										Map.of(),
+								"sip:alice@atlanta.com"
 						),
 						Map.of("tag", "1928301774")
 		));
-		sipHeaders.setTo(new AddressOfRecord(
+		sipRequestHeaders.setTo(new AddressOfRecord(
 						"Bob",
 						new FullSipURI(
 										"sip",
 										new Credentials("bob", null),
 										new Address("biloxi.com", 5060),
 										Map.of(),
-										Map.of()
+										Map.of(),
+								"sip:bob@biloxi.com"
 						),
 						Map.of()
 		));
-		sipHeaders.addSingleHeader("Call-ID", "a84b4c76e66710@pc33.atlanta.com");
-		sipHeaders.setFrom(new AddressOfRecord(
-						"Alice",
-						new FullSipURI(
-										"sip",
-										new Credentials("alice", null),
-										new Address("atlanta.com", 5060),
-										Map.of(),
-										Map.of()
-						),
-				Map.of("tag", "1928301774")
-		));
-		sipHeaders.setContentType(new SipMediaType("application", "sdp", Map.of()));
-		sipHeaders.setCommandSequence(new CommandSequence(314159, "INVITE"));
-		sipHeaders.setContactList(new ContactSet(Set.of(
+		sipRequestHeaders.addSingleHeader("Call-ID", "a84b4c76e66710@pc33.atlanta.com");
+		sipRequestHeaders.setContentType(new SipMediaType("application", "sdp", Map.of()));
+		sipRequestHeaders.setCommandSequence(new CommandSequence(314159, "INVITE"));
+		sipRequestHeaders.setContactList(new ContactSet(Set.of(
 				new AddressOfRecord(
 						"Anonymous",
 						new FullSipURI(
@@ -81,7 +72,8 @@ class SipMessageReaderTest {
 								new Credentials("alice", null),
 								new Address("pc33.atlanta.com", 5060),
 								Map.of(),
-								Map.of()
+								Map.of(),
+								"sip:alice@pc33.atlanta.com"
 						),
 						Map.of()
 				)
@@ -96,11 +88,12 @@ class SipMessageReaderTest {
 																		new Credentials("bob", null),
 																		new Address("biloxi.com", 5060),
 																		Map.of(),
-																		Map.of()
+																		Map.of(),
+																"sip:bob@biloxi.com"
 														),
 														new SipVersion(2, 0)
 										),
-										sipHeaders,
+								sipRequestHeaders,
 										new byte[]{}
 						));
 

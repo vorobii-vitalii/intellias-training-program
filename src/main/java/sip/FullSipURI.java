@@ -1,11 +1,15 @@
 package sip;
 
 import javax.annotation.Nonnull;
+
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
 import static sip.SipParseUtils.parseParameters;
+
+import util.Serializable;
 
 /*
 SIP-URI          =  "sip:" [ userinfo ] hostport
@@ -68,7 +72,8 @@ public record FullSipURI(
 		@Nonnull Credentials credentials,
 		@Nonnull Address address,
 		@Nonnull Map<String, String> uriParameters,
-		@Nonnull Map<String, String> queryParameters
+		@Nonnull Map<String, String> queryParameters,
+		@Nonnull String originalURI
 ) implements SipURI {
 
 	/*
@@ -95,7 +100,12 @@ public record FullSipURI(
 		return SIP_URL_PATTERN.matcher(charSequence).matches();
 	}
 
-	public static FullSipURI parse(CharSequence charSequence) {
+	@Override
+	public String getURIAsString() {
+		return originalURI;
+	}
+
+	public static FullSipURI parse(String charSequence) {
 		var matcher = SIP_URL_PATTERN.matcher(charSequence);
 		if (!matcher.matches()) {
 			throw new IllegalArgumentException(charSequence + " is not valid SIP URL!");
@@ -109,8 +119,6 @@ public record FullSipURI(
 		var uriParameters = parseParameters(matcher.group(SIP_URI_PARAMETERS_INDEX), URI_PARAMETERS_DELIMITER);
 		var queryParameters = parseParameters(matcher.group(SIP_QUERY_PARAMETERS_INDEX), QUERY_PARAMETERS_DELIMITER);
 
-		return new FullSipURI(protocol, credentials, new Address(host, port), uriParameters, queryParameters);
+		return new FullSipURI(protocol, credentials, new Address(host, port), uriParameters, queryParameters, charSequence);
 	}
-
-
 }

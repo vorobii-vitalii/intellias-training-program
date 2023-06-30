@@ -3,7 +3,7 @@ package sip;
 import java.util.Arrays;
 import java.util.Objects;
 
-public record SipRequest(SipRequestLine requestLine, SipHeaders headers, byte[] payload) {
+public record SipRequest(SipRequestLine requestLine, SipRequestHeaders headers, byte[] payload) {
 
 	@Override
 	public boolean equals(Object o) {

@@ -31,7 +31,12 @@ public record SipResponseLine(SipVersion version, SipStatusCode sipStatusCode, S
 
 	@Override
 	public int getSize() {
-		return version.getSize() + SPACE_LENGTH + sipStatusCode.getSize() + SPACE_LENGTH + reasonPhrase.length() + CRLF_LENGTH;
+		return version.getSize()
+				+ SPACE_LENGTH
+				+ sipStatusCode.getSize()
+				+ SPACE_LENGTH
+				+ reasonPhrase.length()
+				+ CRLF_LENGTH;
 	}
 
 }

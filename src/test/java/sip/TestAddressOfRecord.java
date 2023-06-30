@@ -24,7 +24,8 @@ class TestAddressOfRecord {
 										new Credentials("c8oqz84zk7z", null),
 										new Address("privacy.org", 5060),
 										Map.of(),
-										Map.of()),
+										Map.of(),
+										"sip:c8oqz84zk7z@privacy.org>;tag=hyh8"),
 								Map.of("tag", "hyh8")
 						)
 				},
@@ -37,7 +38,8 @@ class TestAddressOfRecord {
 										new Credentials("c8oqz84zk7z", null),
 										new Address("privacy.org", 5060),
 										Map.of("param", "val"),
-										Map.of("querParam", "val")),
+										Map.of("querParam", "val"),
+										"sip:c8oqz84zk7z@privacy.org;param=val?querParam=val"),
 								Map.of("tag", "hyh8")
 						)
 				},
@@ -50,7 +52,9 @@ class TestAddressOfRecord {
 										new Credentials("c8oqz84zk7z", null),
 										new Address("privacy.org", 5060),
 										Map.of("param", "val"),
-										Map.of("queryParam", "val")),
+										Map.of("queryParam", "val"),
+										"sip:c8oqz84zk7z@privacy.org;param=val?queryParam=val"
+								),
 								Map.of("tag", "hyh8")
 						)
 				},

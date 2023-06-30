@@ -2,6 +2,7 @@ package sip;
 
 import static java.nio.channels.SelectionKey.OP_ACCEPT;
 import static java.nio.channels.SelectionKey.OP_READ;
+import static java.nio.channels.SelectionKey.OP_WRITE;
 
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
@@ -13,11 +14,9 @@ import java.util.concurrent.ArrayBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import http.handler.HTTPAcceptOperationHandler;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.api.trace.TracerProvider;
 import io.opentelemetry.context.Context;
 import message_passing.BlockingQueueMessageProducer;
@@ -29,6 +28,7 @@ import tcp.server.SocketMessageReaderImpl;
 import tcp.server.TCPServer;
 import tcp.server.TCPServerConfig;
 import tcp.server.handler.GenericReadOperationHandler;
+import tcp.server.handler.WriteOperationHandler;
 
 public class SipServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SipServer.class);
@@ -82,6 +82,7 @@ public class SipServer {
 				Map.of(
 						OP_ACCEPT, new SipAcceptOperationHandler(bufferPool),
 						OP_READ, sipReadHandler
+//						OP_WRITE, new WriteOperationHandler()
 				));
 		server.start();
 	}

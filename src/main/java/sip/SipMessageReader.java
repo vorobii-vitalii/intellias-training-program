@@ -2,7 +2,6 @@ package sip;
 
 import tcp.CharSequenceImpl;
 import tcp.server.BufferContext;
-import tcp.server.BufferCopier;
 import tcp.server.EventEmitter;
 import tcp.server.reader.MessageReader;
 import tcp.server.reader.exception.ParseException;
@@ -31,7 +30,7 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 		var n = bufferContext.size();
 		var i = 0;
 		SipRequestLine requestLine = null;
-		var sipHeaders = new SipHeaders();
+		var sipHeaders = new SipRequestHeaders();
 		for (; i < n - 1; i++) {
 			// Detect CLRF
 			var b = bufferContext.get(i);

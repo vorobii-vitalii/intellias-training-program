@@ -3,6 +3,8 @@ package sip;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
+import util.Serializable;
+
 //Contact        =  ("Contact" / "m" ) HCOLON
 //( STAR / (contact-param *(COMMA contact-param)))
 //contact-param  =  (name-addr / addr-spec) *(SEMI contact-params)
@@ -16,7 +18,7 @@ import java.util.stream.Collectors;
 //c-p-expires        =  "expires" EQUAL delta-seconds
 //contact-extension  =  generic-param
 //delta-seconds      =  1*DIGIT
-public sealed interface ContactList permits ContactAny, ContactSet {
+public interface ContactList extends Serializable {
 	String STAR = "*";
 	String COMMA = ",";
 

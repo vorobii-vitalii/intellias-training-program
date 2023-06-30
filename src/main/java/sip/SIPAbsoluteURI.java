@@ -1,5 +1,8 @@
 package sip;
 
-public record SIPAbsoluteURI(CharSequence uri) implements SipURI {
-
+public record SIPAbsoluteURI(String uri) implements SipURI {
+	@Override
+	public String getURIAsString() {
+		return uri;
+	}
 }
