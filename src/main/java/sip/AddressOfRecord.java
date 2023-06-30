@@ -7,6 +7,7 @@ import static sip.SipParseUtils.parseParameters;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -31,6 +32,12 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 	public static final byte SPACE = (byte) ' ';
 	public static final byte PARAMETERS_DELIMITER_CHAR = (byte) ';';
 	public static final char PARAMETER_DELIMITER = '=';
+
+	public AddressOfRecord addParam(String param, String value) {
+		var newParameters = new HashMap<>(parameters);
+		newParameters.put(param, value);
+		return new AddressOfRecord(name, sipURI, newParameters);
+	}
 
 	public static AddressOfRecord parse(String charSequence) {
 		var laquotIndex = findFromFromBegging(charSequence, LAQUOT);

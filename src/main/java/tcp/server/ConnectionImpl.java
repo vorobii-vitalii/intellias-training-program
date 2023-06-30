@@ -2,6 +2,7 @@ package tcp.server;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -65,6 +66,11 @@ public class ConnectionImpl implements SocketConnection {
 	@Override
 	public Span getSpan() {
 		return serverAttachment.getRequestSpan();
+	}
+
+	@Override
+	public SocketAddress getAddress() {
+		return serverAttachment.getChannel().getLocalAddress();
 	}
 
 	@Override

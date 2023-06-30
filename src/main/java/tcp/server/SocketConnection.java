@@ -1,6 +1,7 @@
 package tcp.server;
 
 import java.io.Closeable;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
@@ -21,4 +22,6 @@ public interface SocketConnection extends BytesStorage, Metadata, Closeable {
 	void appendResponse(ByteBuffer buffer, Consumer<SocketConnection> onWriteCallback);
 	void appendResponse(ByteBuffer buffer);
 	Span getSpan();
+
+	SocketAddress getAddress();
 }

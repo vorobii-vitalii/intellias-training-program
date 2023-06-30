@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 
 import javax.annotation.Nonnull;
 
@@ -18,11 +19,12 @@ public class SipResponseHeaders implements Serializable {
 	private static final String TO = "to";
 	private static final String REFER_TO = "refer-to";
 	private static final String COMMAND_SEQUENCE = "cseq";
-	private static final String VIA = "via";
+	private static final String VIA = "Via";
 	private static final String CONTENT_LENGTH = "content-length";
 	private static final String MAX_FORWARDS = "max-forwards";
 	private static final String CONTACT = "contact";
 	private static final String CONTENT_TYPE = "content-type";
+	private static final String CALL_ID = "call-id";
 	public static final int CRLF_LENGTH = 2;
 	public static final int COLON_LENGTH = 1;
 	public static final char COLON = ':';
@@ -39,6 +41,89 @@ public class SipResponseHeaders implements Serializable {
 	private int contentLength = 0;
 	private ContactList contactList;
 	private SipMediaType contentType;
+	private String callId;
+
+	@Override
+	public void serialize(ByteBuffer dest) {
+		serializeIfNeeded(FROM, from, dest);
+		serializeIfNeeded(TO, to, dest);
+		serializeIfNeeded(REFER_TO, referTo, dest);
+		serializeIfNeeded(COMMAND_SEQUENCE, commandSequence, dest);
+		serializeIfNeeded(CONTACT, contactList, dest);
+		serializeIfNeeded(CONTENT_TYPE, contentType, dest);
+		serializeIfNeeded(MAX_FORWARDS, maxForwards, dest, v -> String.valueOf(v).getBytes(StandardCharsets.UTF_8));
+		serializeIfNeeded(CONTENT_LENGTH, contentLength, dest, v -> String.valueOf(v).getBytes(StandardCharsets.UTF_8));
+		serializeIfNeeded(CALL_ID, callId, dest, v -> v.getBytes(StandardCharsets.UTF_8));
+		for (var via : viaList) {
+			serializeIfNeeded(VIA, via, dest);
+		}
+		for (var entry : extensionHeaderMap.entrySet()){
+			for (var value : entry.getValue()) {
+				serializeIfNeeded(entry.getKey(), value, dest, v -> v.getBytes(StandardCharsets.UTF_8));
+			}
+		}
+		dest.put((byte) CARRET);
+		dest.put((byte) NEW_LINE);
+	}
+
+	@Override
+	public int getSize() {
+		int total = CRLF_LENGTH;
+		total += calculateHeaderFieldSize(FROM, from);
+		total += calculateHeaderFieldSize(TO, to);
+		total += calculateHeaderFieldSize(REFER_TO, commandSequence);
+		total += calculateHeaderFieldSize(COMMAND_SEQUENCE, commandSequence);
+		total += calculateHeaderFieldSize(CONTACT, contactList);
+		total += calculateHeaderFieldSize(CONTENT_TYPE, contentType);
+		total += calculateHeaderFieldSize(MAX_FORWARDS, maxForwards, v -> String.valueOf(v).length());
+		total += calculateHeaderFieldSize(CONTENT_LENGTH, contentLength, v -> String.valueOf(v).length());
+		total += calculateHeaderFieldSize(CALL_ID, callId, String::length);
+		for (var via : viaList) {
+			total += calculateHeaderFieldSize(VIA, via);
+		}
+		for (var entry : extensionHeaderMap.entrySet()){
+			for (var value : entry.getValue()) {
+				total += calculateHeaderFieldSize(entry.getKey(), value, String::length);
+			}
+		}
+		return total;
+	}
+
+	private int calculateHeaderFieldSize(String headerName, Serializable value) {
+		if (value == null) {
+			return 0;
+		}
+		return headerName.length() + COLON_LENGTH + value.getSize() + CRLF_LENGTH;
+	}
+
+	private void serializeIfNeeded(String headerName, Serializable serializable, ByteBuffer byteBuffer) {
+		if (serializable == null) {
+			return;
+		}
+		byteBuffer.put(headerName.getBytes(StandardCharsets.UTF_8));
+		byteBuffer.put((byte) COLON);
+		serializable.serialize(byteBuffer);
+		byteBuffer.put((byte) CARRET);
+		byteBuffer.put((byte) NEW_LINE);
+	}
+
+	private <T> int calculateHeaderFieldSize(String headerName, T obj, Function<T, Integer> sizeExtractor) {
+		if (obj == null) {
+			return 0;
+		}
+		return headerName.length() + COLON_LENGTH + sizeExtractor.apply(obj) + CRLF_LENGTH;
+	}
+
+	private <T> void serializeIfNeeded(String headerName, T obj, ByteBuffer byteBuffer, Function<T, byte[]> bytesExtractor) {
+		if (obj == null) {
+			return;
+		}
+		byteBuffer.put(headerName.getBytes(StandardCharsets.UTF_8));
+		byteBuffer.put((byte) COLON);
+		byteBuffer.put(bytesExtractor.apply(obj));
+		byteBuffer.put((byte) CARRET);
+		byteBuffer.put((byte) NEW_LINE);
+	}
 
 	public void addExtensionHeader(String headerName, String value) {
 		var lowerCasedHeader = headerName.trim().toLowerCase();
@@ -128,6 +213,14 @@ public class SipResponseHeaders implements Serializable {
 		viaList.add(via);
 	}
 
+	public void setCallId(String callId) {
+		this.callId = callId;
+	}
+
+	public String getCallId() {
+		return callId;
+	}
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) {
@@ -140,7 +233,7 @@ public class SipResponseHeaders implements Serializable {
 		return contentLength == that.contentLength && Objects.equals(extensionHeaderMap, that.extensionHeaderMap) && Objects.equals(from, that.from)
 				&& Objects.equals(to, that.to) && Objects.equals(referTo, that.referTo) && Objects.equals(commandSequence, that.commandSequence)
 				&& Objects.equals(maxForwards, that.maxForwards) && Objects.equals(viaList, that.viaList) && Objects.equals(contactList,
-				that.contactList) && Objects.equals(contentType, that.contentType);
+				that.contactList) && Objects.equals(contentType, that.contentType) && Objects.equals(callId, that.callId);
 	}
 
 	@Override
@@ -163,45 +256,5 @@ public class SipResponseHeaders implements Serializable {
 				", contentType=" + contentType +
 				'}';
 	}
-
-	@Override
-	public void serialize(ByteBuffer dest) {
-		serializeIfNeeded(FROM, from, dest);
-		serializeIfNeeded(TO, to, dest);
-		serializeIfNeeded(REFER_TO, referTo, dest);
-		serializeIfNeeded(COMMAND_SEQUENCE, commandSequence, dest);
-		serializeIfNeeded(CONTACT, contactList, dest);
-	}
-
-	@Override
-	public int getSize() {
-		int total = CRLF_LENGTH;
-		total += calculateHeaderFieldSize(FROM, from);
-		total += calculateHeaderFieldSize(TO, to);
-		total += calculateHeaderFieldSize(REFER_TO, commandSequence);
-		total += calculateHeaderFieldSize(COMMAND_SEQUENCE, commandSequence);
-		total += calculateHeaderFieldSize(CONTACT, contactList);
-		return total;
-	}
-
-	private int calculateHeaderFieldSize(String headerName, Serializable value) {
-		if (value == null) {
-			return 0;
-		}
-		return headerName.length() + COLON_LENGTH + value.getSize() + CRLF_LENGTH;
-	}
-
-	private void serializeIfNeeded(String headerName, Serializable serializable, ByteBuffer byteBuffer) {
-		if (serializable == null) {
-			return;
-		}
-		byteBuffer.put(headerName.getBytes(StandardCharsets.UTF_8));
-		byteBuffer.put((byte) COLON);
-		serializable.serialize(byteBuffer);
-		byteBuffer.put((byte) CARRET);
-		byteBuffer.put((byte) NEW_LINE);
-	}
-
-
 
 }

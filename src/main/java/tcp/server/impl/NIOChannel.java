@@ -1,6 +1,8 @@
 package tcp.server.impl;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
@@ -31,5 +33,15 @@ public class NIOChannel implements Channel {
 	@Override
 	public void close() throws IOException {
 		socketChannel.close();
+	}
+
+	@Override
+	public SocketAddress getLocalAddress() {
+		try {
+			return socketChannel.getLocalAddress();
+		}
+		catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
 	}
 }

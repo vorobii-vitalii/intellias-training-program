@@ -22,6 +22,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
+import java.nio.file.LinkOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -61,7 +62,9 @@ public class WriteOperationHandler implements Consumer<SelectionKey> {
 				return;
 			}
 			try {
-				var context = Context.current().with(attachmentObject.getRequestSpan());
+				var context = attachmentObject.getRequestSpan() == null
+						? Context.current()
+						: Context.current().with(attachmentObject.getRequestSpan());
 				var span = writeHandlerTracer.spanBuilder("Write message").setParent(context).startSpan();
 				ByteBuffer[] buffers = new ByteBuffer[MAX_MSGS_WRITE];
 				List<Consumer<SocketConnection>> callbacks = new ArrayList<>(MAX_MSGS_WRITE);
@@ -87,6 +90,7 @@ public class WriteOperationHandler implements Consumer<SelectionKey> {
 						responses.addFirst(new MessageWriteRequest(buffers[i], callback));
 					}
 					else {
+						System.out.println("Response written");
 						byteBufferPool.save(buffers[i]);
 						messagesWrittenCounter.increment();
 						if (callback != null) {

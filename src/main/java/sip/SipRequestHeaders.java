@@ -68,6 +68,7 @@ public class SipRequestHeaders {
 	private int contentLength = 0;
 	private ContactList contactList;
 	private SipMediaType contentType;
+	private String callId;
 
 	private final Map<String, Consumer<String>> headerSetterByHeaderName = Map.of(
 			"from", v -> this.from = AddressOfRecord.parse(v),
@@ -78,7 +79,8 @@ public class SipRequestHeaders {
 			"content-length", v -> contentLength = Integer.parseInt(v.trim()),
 			"max-forwards", v -> maxForwards = Integer.parseInt(v.trim()),
 			"contact", v -> contactList = ContactList.parse(v),
-			"content-type", v -> contentType = SipMediaType.parse(v)
+			"content-type", v -> contentType = SipMediaType.parse(v),
+			"call-id", v -> callId = v.trim()
 	);
 
 	public void addSingleHeader(String headerName, String value) {
@@ -175,6 +177,14 @@ public class SipRequestHeaders {
 		viaList.add(via);
 	}
 
+	public String getCallId() {
+		return callId;
+	}
+
+	public void setCallId(String callId) {
+		this.callId = callId;
+	}
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) {
@@ -187,7 +197,7 @@ public class SipRequestHeaders {
 		return contentLength == that.contentLength && Objects.equals(extensionHeaderMap, that.extensionHeaderMap) && Objects.equals(from, that.from)
 				&& Objects.equals(to, that.to) && Objects.equals(referTo, that.referTo) && Objects.equals(commandSequence, that.commandSequence)
 				&& Objects.equals(maxForwards, that.maxForwards) && Objects.equals(viaList, that.viaList) && Objects.equals(contactList,
-				that.contactList) && Objects.equals(contentType, that.contentType);
+				that.contactList) && Objects.equals(contentType, that.contentType) && Objects.equals(callId, that.callId);
 	}
 
 	@Override
@@ -208,6 +218,7 @@ public class SipRequestHeaders {
 				", contentLength=" + contentLength +
 				", contactList=" + contactList +
 				", contentType=" + contentType +
+				", callId=" + callId +
 				'}';
 	}
 

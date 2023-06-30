@@ -10,7 +10,7 @@ public record SipRequestLine(String method, SipURI requestURI, SipVersion versio
 		if (arr.length != 3) {
 			throw new ParseException("request-line   = method LWS request-target LWS SIP-version CRLF " + str);
 		}
-		var method = arr[0];
+		var method = arr[0].toUpperCase();
 		var requestURI = SipURI.parse(arr[1]);
 		var httpVersion = SipVersion.parse(arr[2]);
 		return new SipRequestLine(method, requestURI, httpVersion);

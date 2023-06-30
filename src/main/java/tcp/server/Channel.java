@@ -1,6 +1,7 @@
 package tcp.server;
 
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 
 public interface Channel {
@@ -8,4 +9,5 @@ public interface Channel {
 	int write(ByteBuffer buffer) throws IOException;
 	boolean isOpen();
 	void close() throws IOException;
+	SocketAddress getLocalAddress();
 }

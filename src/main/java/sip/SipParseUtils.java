@@ -2,6 +2,7 @@ package sip;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class SipParseUtils {
@@ -15,7 +16,7 @@ public final class SipParseUtils {
 			return Collections.emptyMap();
 		}
 		var parametersArr = str.split(delimiter);
-		var parameters = new HashMap<String, String>();
+		var parameters = new LinkedHashMap<String, String>();
 		for (var param : parametersArr) {
 			if (param.isEmpty()) {
 				continue;

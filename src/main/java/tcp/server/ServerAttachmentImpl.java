@@ -3,6 +3,7 @@ package tcp.server;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
@@ -43,7 +44,6 @@ public class ServerAttachmentImpl implements ServerAttachment {
 		this.requestSpan = requestSpan;
 		this.selectionKey = selectionKey;
 	}
-
 	@Override
 	public Channel getChannel() {
 		return new NIOChannel((SocketChannel) selectionKey.channel());
