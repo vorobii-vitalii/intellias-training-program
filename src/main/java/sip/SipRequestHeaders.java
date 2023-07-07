@@ -2,9 +2,13 @@ package sip;
 
 import javax.annotation.Nonnull;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
+import util.Serializable;
 
 //8.1.1.9 Supported and Require
 //
@@ -44,7 +48,23 @@ import java.util.function.Consumer;
 //		in standards-track RFCs.
 
 
-public class SipRequestHeaders {
+public class SipRequestHeaders implements Serializable {
+	public static final char COLON = ':';
+	public static final char CARRET = '\r';
+	public static final char NEW_LINE = '\n';
+	public static final int CRLF_LENGTH = 2;
+	public static final int COLON_LENGTH = 1;
+	private static final String FROM = "from";
+	private static final String TO = "to";
+	private static final String REFER_TO = "refer-to";
+	private static final String COMMAND_SEQUENCE = "cseq";
+	private static final String VIA = "Via";
+	private static final String CONTENT_LENGTH = "content-length";
+	private static final String MAX_FORWARDS = "max-forwards";
+	private static final String CONTACT = "contact";
+	private static final String CONTENT_TYPE = "content-type";
+	private static final String CALL_ID = "call-id";
+
 	private static final Map<String, String> COMPACT_HEADERS_MAP = Map.of(
 			"i", "call-id",
 			"m", "contact",
@@ -220,6 +240,88 @@ public class SipRequestHeaders {
 				", contentType=" + contentType +
 				", callId=" + callId +
 				'}';
+	}
+
+	@Override
+	public void serialize(ByteBuffer dest) {
+		serializeIfNeeded(FROM, from, dest);
+		serializeIfNeeded(TO, to, dest);
+		serializeIfNeeded(REFER_TO, referTo, dest);
+		serializeIfNeeded(COMMAND_SEQUENCE, commandSequence, dest);
+		serializeIfNeeded(CONTACT, contactList, dest);
+		serializeIfNeeded(CONTENT_TYPE, contentType, dest);
+		serializeIfNeeded(MAX_FORWARDS, maxForwards, dest, v -> String.valueOf(v).getBytes(StandardCharsets.UTF_8));
+		serializeIfNeeded(CONTENT_LENGTH, contentLength, dest, v -> String.valueOf(v).getBytes(StandardCharsets.UTF_8));
+		serializeIfNeeded(CALL_ID, callId, dest, v -> v.getBytes(StandardCharsets.UTF_8));
+		for (var via : viaList) {
+			serializeIfNeeded(VIA, via, dest);
+		}
+		for (var entry : extensionHeaderMap.entrySet()){
+			for (var value : entry.getValue()) {
+				serializeIfNeeded(entry.getKey(), value, dest, v -> v.getBytes(StandardCharsets.UTF_8));
+			}
+		}
+		dest.put((byte) CARRET);
+		dest.put((byte) NEW_LINE);
+	}
+
+	@Override
+	public int getSize() {
+		int total = CRLF_LENGTH;
+		total += calculateHeaderFieldSize(FROM, from);
+		total += calculateHeaderFieldSize(TO, to);
+		total += calculateHeaderFieldSize(REFER_TO, commandSequence);
+		total += calculateHeaderFieldSize(COMMAND_SEQUENCE, commandSequence);
+		total += calculateHeaderFieldSize(CONTACT, contactList);
+		total += calculateHeaderFieldSize(CONTENT_TYPE, contentType);
+		total += calculateHeaderFieldSize(MAX_FORWARDS, maxForwards, v -> String.valueOf(v).length());
+		total += calculateHeaderFieldSize(CONTENT_LENGTH, contentLength, v -> String.valueOf(v).length());
+		total += calculateHeaderFieldSize(CALL_ID, callId, String::length);
+		for (var via : viaList) {
+			total += calculateHeaderFieldSize(VIA, via);
+		}
+		for (var entry : extensionHeaderMap.entrySet()){
+			for (var value : entry.getValue()) {
+				total += calculateHeaderFieldSize(entry.getKey(), value, String::length);
+			}
+		}
+		return total;
+	}
+
+	private int calculateHeaderFieldSize(String headerName, Serializable value) {
+		if (value == null) {
+			return 0;
+		}
+		return headerName.length() + COLON_LENGTH + value.getSize() + CRLF_LENGTH;
+	}
+
+	private void serializeIfNeeded(String headerName, Serializable serializable, ByteBuffer byteBuffer) {
+		if (serializable == null) {
+			return;
+		}
+		byteBuffer.put(headerName.getBytes(StandardCharsets.UTF_8));
+		byteBuffer.put((byte) COLON);
+		serializable.serialize(byteBuffer);
+		byteBuffer.put((byte) CARRET);
+		byteBuffer.put((byte) NEW_LINE);
+	}
+
+	private <T> int calculateHeaderFieldSize(String headerName, T obj, Function<T, Integer> sizeExtractor) {
+		if (obj == null) {
+			return 0;
+		}
+		return headerName.length() + COLON_LENGTH + sizeExtractor.apply(obj) + CRLF_LENGTH;
+	}
+
+	private <T> void serializeIfNeeded(String headerName, T obj, ByteBuffer byteBuffer, Function<T, byte[]> bytesExtractor) {
+		if (obj == null) {
+			return;
+		}
+		byteBuffer.put(headerName.getBytes(StandardCharsets.UTF_8));
+		byteBuffer.put((byte) COLON);
+		byteBuffer.put(bytesExtractor.apply(obj));
+		byteBuffer.put((byte) CARRET);
+		byteBuffer.put((byte) NEW_LINE);
 	}
 
 }

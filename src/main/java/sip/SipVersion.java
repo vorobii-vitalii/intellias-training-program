@@ -13,6 +13,10 @@ public record SipVersion(int majorVersion, int minorVersion) implements Serializ
 	private static final byte[] SIP_VERSION_PREFIX = "SIP/".getBytes(StandardCharsets.UTF_8);
 	private static final byte DOT = (byte) '.';
 
+	public static boolean matches(CharSequence charSequence) {
+		return SIP_VERSION_PATTERN.matcher(charSequence).matches();
+	}
+
 	public static SipVersion parse(CharSequence charSequence) {
 		var matcher = SIP_VERSION_PATTERN.matcher(charSequence);
 		if (!matcher.matches()) {

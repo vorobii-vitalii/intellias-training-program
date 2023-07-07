@@ -1,9 +1,12 @@
 package sip;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 
-public record SipRequest(SipRequestLine requestLine, SipRequestHeaders headers, byte[] payload) {
+import util.Serializable;
+
+public record SipRequest(SipRequestLine requestLine, SipRequestHeaders headers, byte[] payload) implements Serializable, SipMessage {
 
 	@Override
 	public boolean equals(Object o) {
@@ -32,5 +35,17 @@ public record SipRequest(SipRequestLine requestLine, SipRequestHeaders headers, 
 				", headers=" + headers +
 				", payload=" + Arrays.toString(payload) +
 				'}';
+	}
+
+	@Override
+	public void serialize(ByteBuffer dest) {
+		requestLine.serialize(dest);
+		headers.serialize(dest);
+		dest.put(payload);
+	}
+
+	@Override
+	public int getSize() {
+		return requestLine().getSize() + headers.getSize() + payload.length;
 	}
 }

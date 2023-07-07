@@ -27,4 +27,8 @@ public record Address(String host, Integer port) implements Serializable {
 	public int getSize() {
 		return host.length() + (port == null ? 0 : String.valueOf(port).length() + 1);
 	}
+
+	public String asString() {
+		return host + (port == null ? "" : (":" + port));
+	}
 }

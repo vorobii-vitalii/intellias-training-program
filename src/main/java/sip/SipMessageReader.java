@@ -9,7 +9,7 @@ import util.Pair;
 
 import javax.annotation.Nullable;
 
-public class SipMessageReader implements MessageReader<SipRequest> {
+public class SipMessageReader implements MessageReader<SipMessage> {
 	private static final byte CARRIAGE_RETURN = '\r';
 	private static final byte LINE_FEED = '\n';
 	private static final char HEADER_DELIMITER = ':';
@@ -18,7 +18,7 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 
 	@Nullable
 	@Override
-	public Pair<SipRequest, Integer> read(BufferContext bufferContext, EventEmitter eventEmitter) throws ParseException {
+	public Pair<SipMessage, Integer> read(BufferContext bufferContext, EventEmitter eventEmitter) throws ParseException {
 		if (!isProbableRequest(bufferContext)) {
 			return null;
 		}
@@ -26,11 +26,10 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 		if (startsWithCRLF(bufferContext)) {
 			return new Pair<>(null, 4);
 		}
+		SipMessageBuilder sipMessageBuilder = null;
 		int prevCLRFIndex = -CLRF_LENGTH;
 		var n = bufferContext.size();
 		var i = 0;
-		SipRequestLine requestLine = null;
-		var sipHeaders = new SipRequestHeaders();
 		for (; i < n - 1; i++) {
 			// Detect CLRF
 			var b = bufferContext.get(i);
@@ -41,8 +40,13 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 				}
 				var line = new CharSequenceImpl(bufferContext, prevCLRFIndex + CLRF_LENGTH, i);
 				eventEmitter.emit("Extracted line");
-				if (requestLine == null) {
-					requestLine = SipRequestLine.parse(line.toString());
+				if (sipMessageBuilder == null) {
+					final String lineStr = line.toString();
+					if (SipResponseLine.isSipResponseLine(lineStr)) {
+						sipMessageBuilder = new SipResponseBuilder(SipResponseLine.parse(lineStr));
+					} else {
+						sipMessageBuilder = new SipRequestBuilder(SipRequestLine.parse(lineStr));
+					}
 					eventEmitter.emit("Parsed request line");
 				}
 				else {
@@ -55,14 +59,17 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 					eventEmitter.emit("Extracted header name");
 					var headerValue = line.subSequence(headerDelimiterIndex + 1, line.length());
 					eventEmitter.emit("Extracted value");
-					sipHeaders.addSingleHeader(headerName, headerValue.toString());
+					sipMessageBuilder.setHeader(headerName, headerValue.toString());
 					eventEmitter.emit("Parsed header");
 				}
 				prevCLRFIndex = i;
 				i++;
 			}
 		}
-		int payloadSize = sipHeaders.getContentLength();
+		if (sipMessageBuilder == null) {
+			throw new IllegalStateException("Not possible");
+		}
+		int payloadSize = sipMessageBuilder.getContentLength();
 
 		int bodyStartIndex = i + CLRF_LENGTH;
 		int readPayloadBytes = bufferContext.size() - bodyStartIndex;
@@ -70,7 +77,8 @@ public class SipMessageReader implements MessageReader<SipRequest> {
 			return null;
 		}
 		var body = payloadSize == 0 ? new byte[0] : bufferContext.extract(bodyStartIndex, bodyStartIndex + payloadSize);
-		return new Pair<>(new SipRequest(requestLine, sipHeaders, body), bodyStartIndex + payloadSize);
+		sipMessageBuilder.setBody(body);
+		return new Pair<>(sipMessageBuilder.build(), bodyStartIndex + payloadSize);
 	}
 
 	private boolean startsWithCRLF(BufferContext bufferContext) {

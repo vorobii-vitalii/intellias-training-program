@@ -10,12 +10,14 @@ import java.nio.channels.spi.SelectorProvider;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.neo4j.driver.Session;
 import org.slf4j.Logger;
@@ -59,11 +61,12 @@ public class SipServer {
 
 	private static final ByteBufferPool BUFFER_POOL = new ByteBufferPool(ByteBuffer::allocate, BUFFER_EXPIRATION_TIME_MILLIS);
 	private static final MessageSerializer MESSAGE_SERIALIZER = new MessageSerializer(BUFFER_POOL);
+	private static final AtomicInteger counter = new AtomicInteger();
 
 	private static final ScheduledExecutorService EXECUTOR_SERVICE = Executors.newScheduledThreadPool(4);
 
 	public static void main(String[] args) {
-		var requestQueue = new ArrayBlockingQueue<NetworkRequest<SipRequest>>(REQUEST_QUEUE_CAPACITY);
+		var requestQueue = new ArrayBlockingQueue<NetworkRequest<SipMessage>>(REQUEST_QUEUE_CAPACITY);
 
 		var messageSerializer = new MessageSerializer(BUFFER_POOL);
 
@@ -73,53 +76,63 @@ public class SipServer {
 		var sipRequestCount = Counter.builder("sip.request.count").register(meterRegistry);
 		var sipWriteCount = Counter.builder("sip.response.write.count").register(meterRegistry);
 
-		RequestHandler<NetworkRequest<SipRequest>> sipRequestHandler = request -> {
-			var sipRequest = request.request();
-			LOGGER.info("Received request {} from {}", sipRequest, request.socketConnection());
-			switch (sipRequest.requestLine().method()) {
-				case "REGISTER" -> {
-					LOGGER.info("Client registered");
-//					SIP/2.0 200 OK
-//					Via: SIP/2.0/UDP bobspc.biloxi.com:5060;branch=z9hG4bKnashds7
-//					;received=192.0.2.4
-//					To: Bob <sip:bob@biloxi.com>;tag=2493k59kd
-//					From: Bob <sip:bob@biloxi.com>;tag=456248
-//					Call-ID: 843817637684230@998sdasdh09
-//					CSeq: 1826 REGISTER
-//					Contact: <sip:bob@192.0.2.4>
-//							Expires: 7200
-//					Content-Length: 0
-					sendOK(sipRequest, request.socketConnection());
-				}
-				case "INVITE" -> {
-					LOGGER.info("Client calling");
-					var sipResponseHeaders = new SipResponseHeaders();
-					for (Via via : sipRequest.headers().getViaList()) {
-						sipResponseHeaders.addVia(via.normalize());
-					}
-					sipResponseHeaders.addVia(CURRENT_VIA);
-					sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
-					sipResponseHeaders.setTo(sipRequest.headers().getTo()
-							.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
-					);
-					sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
-					sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
-					sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
-					var response = new SipResponse(
-							new SipResponseLine(new SipVersion(2, 0), new SipStatusCode(180), "Ringing"),
-							sipResponseHeaders,
-							new byte[] {}
-					);
-					request.socketConnection().appendResponse(messageSerializer.serialize(response));
-					request.socketConnection().changeOperation(OperationType.WRITE);
-					EXECUTOR_SERVICE.schedule(() -> {
+		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = request -> {
+			var sipMessage = request.request();
+			LOGGER.info("Received SIP message {} from {}", sipMessage, request.socketConnection());
+			if (sipMessage instanceof SipRequest sipRequest) {
+				switch (sipRequest.requestLine().method()) {
+					case "REGISTER" -> {
+						LOGGER.info("Client registered");
+						EXECUTOR_SERVICE.schedule(() -> {
+							sendInvite(sipRequest, request.socketConnection());
+						}, 5000, TimeUnit.MILLISECONDS);
+						//					SIP/2.0 200 OK
+						//					Via: SIP/2.0/UDP bobspc.biloxi.com:5060;branch=z9hG4bKnashds7
+						//					;received=192.0.2.4
+						//					To: Bob <sip:bob@biloxi.com>;tag=2493k59kd
+						//					From: Bob <sip:bob@biloxi.com>;tag=456248
+						//					Call-ID: 843817637684230@998sdasdh09
+						//					CSeq: 1826 REGISTER
+						//					Contact: <sip:bob@192.0.2.4>
+						//							Expires: 7200
+						//					Content-Length: 0
 						sendOK(sipRequest, request.socketConnection());
-					}, 3000, TimeUnit.MILLISECONDS);
+					}
+					case "INVITE" -> {
+						LOGGER.info("Client calling");
+						var sipResponseHeaders = new SipResponseHeaders();
+						for (Via via : sipRequest.headers().getViaList()) {
+							sipResponseHeaders.addVia(via.normalize());
+						}
+						sipResponseHeaders.addVia(CURRENT_VIA);
+						sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
+						sipResponseHeaders.setTo(sipRequest.headers().getTo()
+								.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
+						);
+						sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
+						sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
+						sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
+						var response = new SipResponse(
+								new SipResponseLine(new SipVersion(2, 0), new SipStatusCode(180), "Ringing"),
+								sipResponseHeaders,
+								new byte[] {}
+						);
+						request.socketConnection().appendResponse(messageSerializer.serialize(response));
+						request.socketConnection().changeOperation(OperationType.WRITE);
+						EXECUTOR_SERVICE.schedule(() -> {
+							if (counter.getAndIncrement() % 2 == 0) {
+								sendOK(sipRequest, request.socketConnection());
+							} else {
+								sendBusy(sipRequest, request.socketConnection());
+							}
+						}, 3000, TimeUnit.MILLISECONDS);
+					}
 				}
 			}
+
 		};
 
-		RequestProcessor<NetworkRequest<SipRequest>> requestProcessor =
+		RequestProcessor<NetworkRequest<SipMessage>> requestProcessor =
 				new RequestProcessor<>(requestQueue, sipRequestHandler, sipRequestHandleTimer, sipRequestCount);
 
 		startProcess(requestProcessor, "SIP request processor");
@@ -161,14 +174,25 @@ public class SipServer {
 		server.start();
 	}
 
+
 	private static ContactSet calculateContactSet(SipRequest sipRequest) {
 		final AddressOfRecord to = sipRequest.headers().getTo();
 		//
 		return new ContactSet(Set.of(new AddressOfRecord(
 				to.name(),
-				sipRequest.requestLine().requestURI(),
+				getCurrentSipURI(),
 				Map.of()
 		)));
+	}
+
+	private static FullSipURI getCurrentSipURI() {
+		return new FullSipURI(
+				"sip",
+				new Credentials(null, null),
+				new Address(getHost(), getPort()),
+				Map.of("transport", "tcp"),
+				Map.of()
+		);
 	}
 
 	//	INVITE sip:bob@biloxi.com SIP/2.0
@@ -221,6 +245,78 @@ public class SipServer {
 //	CSeq: 314159 INVITE
 //	Content-Length: 0
 
+	private static void sendBusy(SipRequest sipRequest, SocketConnection socketConnection) {
+		var sipResponseHeaders = new SipResponseHeaders();
+		for (Via via : sipRequest.headers().getViaList()) {
+			sipResponseHeaders.addVia(via.normalize());
+		}
+		sipResponseHeaders.addVia(CURRENT_VIA);
+		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
+		sipResponseHeaders.setTo(sipRequest.headers().getTo()
+				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
+		);
+		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
+		sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
+		sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
+		sipResponseHeaders.setContentType(new SipMediaType("application", "sdp", Map.of()));
+		var response = new SipResponse(
+				new SipResponseLine(new SipVersion(2, 0), new SipStatusCode(486), "Busy here"),
+				sipResponseHeaders,
+				new byte[] {}
+		);
+		socketConnection.appendResponse(MESSAGE_SERIALIZER.serialize(response));
+		socketConnection.changeOperation(OperationType.WRITE);
+	}
+
+	private static void sendInvite(SipRequest registrationRequest, SocketConnection socketConnection) {
+		final byte[] sdpResponse = (
+				"""
+				v=0\r
+				o=- 1234567890 1 IN IP4 0.0.0.0\r
+				s=Talk\r
+				c=IN IP4 0.0.0.0\r
+				t=0 0\r
+				m=audio 49237 RTP/AVP 96\r
+				a=rtpmap:96 opus/48000/2\r
+				a=fmtp:96 useinbandfec=1\r
+				a=rtcp:40134\r
+				\r"""
+
+				).getBytes(StandardCharsets.UTF_8);
+
+		var headers = new SipRequestHeaders();
+		headers.addVia(CURRENT_VIA);
+		headers.setMaxForwards(70);
+		headers.setFrom(createFrom());
+		// addParam("tag", UUID.nameUUIDFromBytes(registrationRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
+		headers.setTo(new AddressOfRecord(
+				registrationRequest.headers().getFrom().name(),
+				registrationRequest.headers().getFrom().sipURI(),
+				Map.of()
+		));
+		headers.setContactList(calculateContactSet(registrationRequest));
+		headers.setCallId(String.valueOf(new Random().nextInt()));
+		headers.setCommandSequence(new CommandSequence(1, "INVITE"));
+		headers.setContentType(new SipMediaType("application", "sdp", Map.of()));
+		headers.setContentLength(sdpResponse.length);
+
+		var sipRequest = new SipRequest(
+				new SipRequestLine("INVITE", registrationRequest.headers().getFrom().sipURI(), new SipVersion(2, 0)),
+				headers,
+				sdpResponse
+		);
+		socketConnection.appendResponse(MESSAGE_SERIALIZER.serialize(sipRequest));
+		socketConnection.changeOperation(OperationType.WRITE);
+	}
+
+	private static AddressOfRecord createFrom() {
+		return new AddressOfRecord(
+				"George " + new Random().nextInt(),
+				getCurrentSipURI(),
+				Map.of("tag", UUID.nameUUIDFromBytes(getCurrentSipURI().getURIAsString().getBytes()).toString())
+		);
+	}
+
 	private static void sendOK(SipRequest sipRequest, SocketConnection socketConnection) {
 		var sipResponseHeaders = new SipResponseHeaders();
 		for (Via via : sipRequest.headers().getViaList()) {
@@ -238,29 +334,17 @@ public class SipServer {
 		sipResponseHeaders.setContentType(new SipMediaType("application", "sdp", Map.of()));
 		final byte[] sdpResponse = (
 				"""
-						v=0\r
-						o=John 3331 3895 IN IP4 127.0.0.1\r
-						s=Talk\r
-						c=IN IP4 127.0.0.1\r
-						t=0 0\r
-						a=rtcp-xr:rcvr-rtt=all:10000 stat-summary=loss,dup,jitt,TTL voip-metrics\r
-						a=record:off
-						m=audio 49237 RTP/AVP 96 97 98 0 8 18 101 99 100\r
-						a=rtpmap:96 opus/48000/2\r
-						a=fmtp:96 useinbandfec=1\r
-						a=rtpmap:97 speex/16000\r
-						a=fmtp:97 vbr=on\r
-						a=rtpmap:98 speex/8000\r
-						a=fmtp:98 vbr=on\r
-						a=fmtp:18 annexb=yes\r
-						a=rtpmap:101 telephone-event/48000\r
-						a=rtpmap:99 telephone-event/16000\r
-						a=rtpmap:100 telephone-event/8000\r
-						a=rtcp:40134\r
-						a=rtcp-fb:* trr-int 1000\r
-						a=rtcp-fb:* ccm tmmbr\r
-						\r
-						""").getBytes(StandardCharsets.UTF_8);
+				v=0\r
+				o=- 1234567890 1 IN IP4 0.0.0.0\r
+				s=Talk\r
+				c=IN IP4 0.0.0.0\r
+				t=0 0\r
+				m=audio 49237 RTP/AVP 96\r
+				a=rtpmap:96 opus/48000/2\r
+				a=fmtp:96 useinbandfec=1\r
+				a=rtcp:40134\r
+				\r"""
+		).getBytes(StandardCharsets.UTF_8);
 
 		sipResponseHeaders.setContentLength(sdpResponse.length);
 		var response = new SipResponse(

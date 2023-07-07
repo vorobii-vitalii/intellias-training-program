@@ -18,8 +18,7 @@ class TestFullSipURI {
 								new Credentials("alice", null),
 								new Address("example.com", 5060),
 								Map.of("transport", "tcp", "user", "phone"),
-								Map.of("subject", "hello", "foo", "bar"),
-								"sip:alice@example.com:5060;transport=tcp;user=phone?subject=hello&foo=bar"
+								Map.of("subject", "hello", "foo", "bar")
 						)
 				},
 				{
@@ -29,8 +28,7 @@ class TestFullSipURI {
 								new Credentials("alice", null),
 								new Address("example.com", 5060),
 								Map.of("transport", "tcp", "user", "phone"),
-								Map.of(),
-								"sip:alice@example.com:5060;transport=tcp;user=phone"
+								Map.of()
 						)
 				},
 				{
@@ -40,8 +38,7 @@ class TestFullSipURI {
 								new Credentials("alice", null),
 								new Address("example.com", 5060),
 								Map.of("transport", "tcp", "user", "phone"),
-								Map.of(),
-								"sip:alice@example.com;transport=tcp;user=phone"
+								Map.of()
 						)
 				},
 				{
@@ -51,8 +48,7 @@ class TestFullSipURI {
 								new Credentials("alice", "password"),
 								new Address("example.com", 5060),
 								Map.of("transport", "tcp", "user", "phone"),
-								Map.of(),
-								"sip:alice:password@example.com;transport=tcp;user=phone"
+								Map.of()
 						)
 				}
 		};

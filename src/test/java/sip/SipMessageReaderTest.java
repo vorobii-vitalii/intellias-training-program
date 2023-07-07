@@ -16,16 +16,19 @@ class SipMessageReaderTest {
 
 	@Test
 	void readHappyPath() throws ParseException {
-		var bytes = ("INVITE sip:bob@biloxi.com SIP/2.0\r\n" +
-						"      Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds\r\n" +
-						"      Max-Forwards: 70\r\n" +
-						"      To: Bob <sip:bob@biloxi.com>\r\n" +
-						"      From: Alice <sip:alice@atlanta.com>;tag=1928301774\r\n" +
-						"      Call-ID: a84b4c76e66710@pc33.atlanta.com\r\n" +
-						"      CSeq: 314159 INVITE\r\n" +
-						"      Contact: <sip:alice@pc33.atlanta.com>\r\n" +
-						"      Content-Type: application/sdp\r\n" +
-						"      Content-Length: 0\r\n\r\n"
+		var bytes = ("""
+					INVITE sip:bob@biloxi.com SIP/2.0\r
+					Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds\r
+					Max-Forwards: 70\r
+					To: Bob <sip:bob@biloxi.com>\r
+					From: Alice <sip:alice@atlanta.com>;tag=1928301774\r
+					Call-ID: a84b4c76e66710@pc33.atlanta.com\r
+					CSeq: 314159 INVITE\r
+					Contact: <sip:alice@pc33.atlanta.com>\r
+					Content-Type: application/sdp\r
+					Content-Length: 0\r
+				\r
+				"""
 		).getBytes(StandardCharsets.UTF_8);
 
 		var readResult = sipMessageReader.read(BufferTestUtils.createBufferContext(bytes), e -> {});
@@ -44,8 +47,7 @@ class SipMessageReaderTest {
 										new Credentials("alice", null),
 										new Address("atlanta.com", 5060),
 										Map.of(),
-										Map.of(),
-								"sip:alice@atlanta.com"
+										Map.of()
 						),
 						Map.of("tag", "1928301774")
 		));
@@ -56,8 +58,7 @@ class SipMessageReaderTest {
 										new Credentials("bob", null),
 										new Address("biloxi.com", 5060),
 										Map.of(),
-										Map.of(),
-								"sip:bob@biloxi.com"
+										Map.of()
 						),
 						Map.of()
 		));
@@ -72,8 +73,7 @@ class SipMessageReaderTest {
 								new Credentials("alice", null),
 								new Address("pc33.atlanta.com", 5060),
 								Map.of(),
-								Map.of(),
-								"sip:alice@pc33.atlanta.com"
+								Map.of()
 						),
 						Map.of()
 				)
@@ -88,8 +88,7 @@ class SipMessageReaderTest {
 																		new Credentials("bob", null),
 																		new Address("biloxi.com", 5060),
 																		Map.of(),
-																		Map.of(),
-																"sip:bob@biloxi.com"
+																		Map.of()
 														),
 														new SipVersion(2, 0)
 										),

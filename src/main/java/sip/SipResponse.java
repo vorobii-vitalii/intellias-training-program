@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 
 import util.Serializable;
 
-public record SipResponse(SipResponseLine responseLine, SipResponseHeaders headers, byte[] body) implements Serializable {
+public record SipResponse(SipResponseLine responseLine, SipResponseHeaders headers, byte[] body) implements Serializable, SipMessage {
 	@Override
 	public void serialize(ByteBuffer dest) {
 		responseLine.serialize(dest);

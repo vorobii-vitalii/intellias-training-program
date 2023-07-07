@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static sip.SipParseUtils.parseParameters;
 
@@ -73,8 +74,7 @@ public record FullSipURI(
 		@Nonnull Credentials credentials,
 		@Nonnull Address address,
 		@Nonnull Map<String, String> uriParameters,
-		@Nonnull Map<String, String> queryParameters,
-		@Nonnull String originalURI
+		@Nonnull Map<String, String> queryParameters
 ) implements SipURI {
 
 	/*
@@ -103,7 +103,30 @@ public record FullSipURI(
 
 	@Override
 	public String getURIAsString() {
-		return originalURI;
+		return protocol + ":" + serializeCredentials() + serializeAddress() + serializeURIParameters() + serializeQueryParameters();
+	}
+
+	private String serializeAddress() {
+		return address.asString();
+	}
+
+	private String serializeURIParameters() {
+		return uriParameters.entrySet().stream()
+				.map(e -> ";" + e.getKey() + "=" + e.getValue())
+				.collect(Collectors.joining(""));
+	}
+
+	private String serializeQueryParameters() {
+		if (queryParameters.isEmpty()) {
+			return "";
+		}
+		return queryParameters.entrySet().stream()
+				.map(e -> e.getKey() + "=" + e.getValue())
+				.collect(Collectors.joining("&", "?", ""));
+	}
+
+	private String serializeCredentials() {
+		return credentials.asString();
 	}
 
 	public static FullSipURI parse(String charSequence) {
@@ -120,6 +143,6 @@ public record FullSipURI(
 		var uriParameters = parseParameters(matcher.group(SIP_URI_PARAMETERS_INDEX), URI_PARAMETERS_DELIMITER);
 		var queryParameters = parseParameters(matcher.group(SIP_QUERY_PARAMETERS_INDEX), QUERY_PARAMETERS_DELIMITER);
 
-		return new FullSipURI(protocol, credentials, new Address(host, port), uriParameters, queryParameters, charSequence);
+		return new FullSipURI(protocol, credentials, new Address(host, port), uriParameters, queryParameters);
 	}
 }
