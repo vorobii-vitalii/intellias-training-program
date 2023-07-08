@@ -2,6 +2,7 @@ package sip;
 
 import tcp.CharSequenceImpl;
 import tcp.server.BufferContext;
+import tcp.server.BytesSource;
 import tcp.server.EventEmitter;
 import tcp.server.reader.MessageReader;
 import tcp.server.reader.exception.ParseException;
@@ -18,27 +19,27 @@ public class SipMessageReader implements MessageReader<SipMessage> {
 
 	@Nullable
 	@Override
-	public Pair<SipMessage, Integer> read(BufferContext bufferContext, EventEmitter eventEmitter) throws ParseException {
-		if (!isProbableRequest(bufferContext)) {
+	public Pair<SipMessage, Integer> read(BytesSource bytesSource, EventEmitter eventEmitter) throws ParseException {
+		if (!isProbableRequest(bytesSource)) {
 			return null;
 		}
 		// Trailing CRLF
-		if (startsWithCRLF(bufferContext)) {
+		if (startsWithCRLF(bytesSource)) {
 			return new Pair<>(null, 4);
 		}
 		SipMessageBuilder sipMessageBuilder = null;
 		int prevCLRFIndex = -CLRF_LENGTH;
-		var n = bufferContext.size();
+		var n = bytesSource.size();
 		var i = 0;
 		for (; i < n - 1; i++) {
 			// Detect CLRF
-			var b = bufferContext.get(i);
-			if (b == CARRIAGE_RETURN && bufferContext.get(i + 1) == LINE_FEED) {
+			var b = bytesSource.get(i);
+			if (b == CARRIAGE_RETURN && bytesSource.get(i + 1) == LINE_FEED) {
 				// Last header
 				if (prevCLRFIndex + 2 == i) {
 					break;
 				}
-				var line = new CharSequenceImpl(bufferContext, prevCLRFIndex + CLRF_LENGTH, i);
+				var line = new CharSequenceImpl(bytesSource, prevCLRFIndex + CLRF_LENGTH, i);
 				eventEmitter.emit("Extracted line");
 				if (sipMessageBuilder == null) {
 					final String lineStr = line.toString();
@@ -72,16 +73,16 @@ public class SipMessageReader implements MessageReader<SipMessage> {
 		int payloadSize = sipMessageBuilder.getContentLength();
 
 		int bodyStartIndex = i + CLRF_LENGTH;
-		int readPayloadBytes = bufferContext.size() - bodyStartIndex;
+		int readPayloadBytes = bytesSource.size() - bodyStartIndex;
 		if (readPayloadBytes < payloadSize) {
 			return null;
 		}
-		var body = payloadSize == 0 ? new byte[0] : bufferContext.extract(bodyStartIndex, bodyStartIndex + payloadSize);
+		var body = payloadSize == 0 ? new byte[0] : bytesSource.extract(bodyStartIndex, bodyStartIndex + payloadSize);
 		sipMessageBuilder.setBody(body);
 		return new Pair<>(sipMessageBuilder.build(), bodyStartIndex + payloadSize);
 	}
 
-	private boolean startsWithCRLF(BufferContext bufferContext) {
+	private boolean startsWithCRLF(BytesSource bufferContext) {
 		if (bufferContext.size() < 4) {
 			return false;
 		}
@@ -91,7 +92,7 @@ public class SipMessageReader implements MessageReader<SipMessage> {
 				&& bufferContext.get(3) == LINE_FEED;
 	}
 
-	private boolean isProbableRequest(BufferContext bufferContext) {
+	private boolean isProbableRequest(BytesSource bufferContext) {
 		int n = bufferContext.size();
 		for (int i = 0; i < n - 3; i++) {
 			if (bufferContext.get(i) == CARRIAGE_RETURN

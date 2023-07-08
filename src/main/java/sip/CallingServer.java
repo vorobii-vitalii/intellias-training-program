@@ -4,6 +4,8 @@ import static java.nio.channels.SelectionKey.OP_ACCEPT;
 import static java.nio.channels.SelectionKey.OP_READ;
 import static java.nio.channels.SelectionKey.OP_WRITE;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.nio.channels.spi.SelectorProvider;
@@ -19,7 +21,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.neo4j.driver.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,19 +39,26 @@ import tcp.server.ByteBufferPool;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 import tcp.server.SocketMessageReaderImpl;
-import tcp.server.TCPServer;
-import tcp.server.TCPServerConfig;
+import tcp.server.GenericServer;
+import tcp.server.ServerConfig;
+import tcp.server.TCPServerConfigurer;
+import tcp.server.UDPServerConfigurer;
 import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
+import udp.RTPMessage;
+import udp.RTPMessageReader;
+import udp.UDPPacket;
+import udp.UDPReadOperationHandler;
 
-public class SipServer {
-	private static final Logger LOGGER = LoggerFactory.getLogger(SipServer.class);
+public class CallingServer {
+	private static final Logger LOGGER = LoggerFactory.getLogger(CallingServer.class);
 	public static final int BUFFER_EXPIRATION_TIME_MILLIS = 10_000;
 	public static final int REQUEST_QUEUE_CAPACITY = 10_000;
 	public static final Via CURRENT_VIA = new Via(new SipSentProtocol("SIP", "2.0", "TCP"),
-			new Address(getHost(), getPort()),
+			new Address(getHost(), getSipServerPort()),
 			Map.of("branch", "z9hG4bK25235636", "received", "127.0.0.1")
 	);
+	public static final SimpleMeterRegistry METER_REGISTRY = new SimpleMeterRegistry();
 
 	private static void startProcess(Runnable process, String processName) {
 		var thread = new Thread(process);
@@ -66,21 +74,75 @@ public class SipServer {
 	private static final ScheduledExecutorService EXECUTOR_SERVICE = Executors.newScheduledThreadPool(4);
 
 	public static void main(String[] args) {
+		startRTPServer();
+		startSipServer();
+	}
+
+	private static void startRTPServer() {
+		var rtpMessagesQueue = new ArrayBlockingQueue<UDPPacket<RTPMessage>>(REQUEST_QUEUE_CAPACITY);
+
+		RequestHandler<UDPPacket<RTPMessage>> rtpMessageHandler = request -> {
+			LOGGER.info("UDP RTP Packet: {}", request);
+		};
+
+		var rtpRequestHandleTimer = Timer.builder("rtp.request.time").register(METER_REGISTRY);
+		var rtpRequestsCount = Counter.builder("rtp.request.count").register(METER_REGISTRY);
+
+
+		RequestProcessor<UDPPacket<RTPMessage>> requestProcessor =
+				new RequestProcessor<>(rtpMessagesQueue, rtpMessageHandler, rtpRequestHandleTimer, rtpRequestsCount);
+
+		startProcess(requestProcessor, "RTP request processor");
+
+		var server = new GenericServer(
+				ServerConfig.builder()
+						.setName("RTP server")
+						.setHost(getHost())
+						.setPort(getSdpServerPort())
+						.setProtocolFamily(StandardProtocolFamily.INET)
+						.setInterestOps(OP_READ | OP_WRITE)
+						.onConnectionClose(connection -> {
+							LOGGER.info("Connection closed");
+						})
+						.build(),
+				SelectorProvider.provider(),
+				System.err::println,
+				Map.of(
+						OP_READ, new UDPReadOperationHandler<>(
+								2_000,
+								new BlockingQueueMessageProducer<>(rtpMessagesQueue),
+								new RTPMessageReader()
+						)
+//						OP_WRITE, new WriteOperationHandler(
+//								sipWriteTimer,
+//								sipWriteCount,
+//								(key, e) -> {
+//									LOGGER.warn("Error", e);
+//								},
+//								BUFFER_POOL,
+//								OpenTelemetry.noop()
+//						)
+				),
+				new UDPServerConfigurer());
+		server.start();
+	}
+
+	private static void startSipServer() {
 		var requestQueue = new ArrayBlockingQueue<NetworkRequest<SipMessage>>(REQUEST_QUEUE_CAPACITY);
 
-		var messageSerializer = new MessageSerializer(BUFFER_POOL);
-
-		var meterRegistry = new SimpleMeterRegistry();
-		var sipRequestHandleTimer = Timer.builder("sip.request.time").register(meterRegistry);
-		var sipWriteTimer = Timer.builder("sip.response.write.time").register(meterRegistry);
-		var sipRequestCount = Counter.builder("sip.request.count").register(meterRegistry);
-		var sipWriteCount = Counter.builder("sip.response.write.count").register(meterRegistry);
+		var sipRequestHandleTimer = Timer.builder("sip.request.time").register(METER_REGISTRY);
+		var sipWriteTimer = Timer.builder("sip.response.write.time").register(METER_REGISTRY);
+		var sipRequestCount = Counter.builder("sip.request.count").register(METER_REGISTRY);
+		var sipWriteCount = Counter.builder("sip.response.write.count").register(METER_REGISTRY);
 
 		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = request -> {
 			var sipMessage = request.request();
 			LOGGER.info("Received SIP message {} from {}", sipMessage, request.socketConnection());
 			if (sipMessage instanceof SipRequest sipRequest) {
 				switch (sipRequest.requestLine().method()) {
+					case "ACK" -> {
+						sendOK(sipRequest, request.socketConnection());
+					}
 					case "REGISTER" -> {
 						LOGGER.info("Client registered");
 						EXECUTOR_SERVICE.schedule(() -> {
@@ -117,7 +179,7 @@ public class SipServer {
 								sipResponseHeaders,
 								new byte[] {}
 						);
-						request.socketConnection().appendResponse(messageSerializer.serialize(response));
+						request.socketConnection().appendResponse(MESSAGE_SERIALIZER.serialize(response));
 						request.socketConnection().changeOperation(OperationType.WRITE);
 						EXECUTOR_SERVICE.schedule(() -> {
 							if (counter.getAndIncrement() % 2 == 0) {
@@ -147,10 +209,10 @@ public class SipServer {
 				Context::current
 		);
 
-		var server = new TCPServer(
-				TCPServerConfig.builder()
+		var server = new GenericServer(
+				ServerConfig.builder()
 						.setHost(getHost())
-						.setPort(getPort())
+						.setPort(getSipServerPort())
 						.setProtocolFamily(StandardProtocolFamily.INET)
 						.onConnectionClose(connection -> {
 							LOGGER.info("Connection closed");
@@ -170,10 +232,10 @@ public class SipServer {
 								BUFFER_POOL,
 								OpenTelemetry.noop()
 						)
-				));
+				),
+				new TCPServerConfigurer());
 		server.start();
 	}
-
 
 	private static ContactSet calculateContactSet(SipRequest sipRequest) {
 		final AddressOfRecord to = sipRequest.headers().getTo();
@@ -189,7 +251,7 @@ public class SipServer {
 		return new FullSipURI(
 				"sip",
 				new Credentials(null, null),
-				new Address(getHost(), getPort()),
+				new Address(getHost(), getSipServerPort()),
 				Map.of("transport", "tcp"),
 				Map.of()
 		);
@@ -269,20 +331,7 @@ public class SipServer {
 	}
 
 	private static void sendInvite(SipRequest registrationRequest, SocketConnection socketConnection) {
-		final byte[] sdpResponse = (
-				"""
-				v=0\r
-				o=- 1234567890 1 IN IP4 0.0.0.0\r
-				s=Talk\r
-				c=IN IP4 0.0.0.0\r
-				t=0 0\r
-				m=audio 49237 RTP/AVP 96\r
-				a=rtpmap:96 opus/48000/2\r
-				a=fmtp:96 useinbandfec=1\r
-				a=rtcp:40134\r
-				\r"""
-
-				).getBytes(StandardCharsets.UTF_8);
+		final byte[] sdpResponse = getSdpResponse();
 
 		var headers = new SipRequestHeaders();
 		headers.addVia(CURRENT_VIA);
@@ -332,19 +381,7 @@ public class SipServer {
 		sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
 		sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
 		sipResponseHeaders.setContentType(new SipMediaType("application", "sdp", Map.of()));
-		final byte[] sdpResponse = (
-				"""
-				v=0\r
-				o=- 1234567890 1 IN IP4 0.0.0.0\r
-				s=Talk\r
-				c=IN IP4 0.0.0.0\r
-				t=0 0\r
-				m=audio 49237 RTP/AVP 96\r
-				a=rtpmap:96 opus/48000/2\r
-				a=fmtp:96 useinbandfec=1\r
-				a=rtcp:40134\r
-				\r"""
-		).getBytes(StandardCharsets.UTF_8);
+		final byte[] sdpResponse = getSdpResponse();
 
 		sipResponseHeaders.setContentLength(sdpResponse.length);
 		var response = new SipResponse(
@@ -356,19 +393,77 @@ public class SipServer {
 		socketConnection.changeOperation(OperationType.WRITE);
 	}
 
+	private static byte[] getSdpResponse() {
+		return (
+				"""
+						v=0\r
+						o=John 3660 1765 IN IP4 127.0.0.1\r
+						s=Talk\r
+						c=IN IP4 127.0.0.1\r
+						t=0 0\r
+						a=rtcp-xr:rcvr-rtt=all:10000 stat-summary=loss,dup,jitt,TTL voip-metrics\r
+						a=record:off\r
+						m=audio %s RTP/AVP 96 97 98 0 8 3 9 99 18 100 102 10 11 101 103 104 105 106\r
+						a=rtpmap:96 opus/48000/2\r
+						a=fmtp:96 useinbandfec=1\r
+						a=rtpmap:97 speex/16000\r
+						a=fmtp:97 vbr=on\r
+						a=rtpmap:98 speex/8000\r
+						a=fmtp:98 vbr=on\r
+						a=rtpmap:99 iLBC/8000\r
+						a=fmtp:99 mode=30\r
+						a=fmtp:18 annexb=yes\r
+						a=rtpmap:100 speex/32000\r
+						a=fmtp:100 vbr=on\r
+						a=rtpmap:102 BV16/8000\r
+						a=rtpmap:101 telephone-event/48000\r
+						a=rtpmap:103 telephone-event/16000\r
+						a=rtpmap:104 telephone-event/8000\r
+						a=rtpmap:105 telephone-event/32000\r
+						a=rtpmap:106 telephone-event/44100\r
+						a=rtcp:49355\r
+						a=rtcp-fb:* trr-int 1000\r
+						a=rtcp-fb:* ccm tmmbr\r
+						\r"""
+
+//				"""
+//						v=0\r
+//						o=- 1234567890 1 IN IP4 127.0.0.1\r
+//						s=Talk\r
+//						c=IN IP4 127.0.0.1\r
+//						t=0 0\r
+//						m=audio %s RTP/AVP 96\r
+//						a=rtpmap:96 opus/48000/2\r
+//						a=fmtp:96 useinbandfec=1\r
+//						a=rtcp:40134\r
+//						\r"""
+				.formatted(getSdpServerPort())
+		).getBytes(StandardCharsets.UTF_8);
+	}
+
 	private static String getIpAddress(SocketConnection socketConnection) {
 		return socketConnection.getAddress().toString().substring(1);
 	}
 
-	private static int getPort() {
-		return Optional.ofNullable(System.getenv("PORT"))
+	private static int getSipServerPort() {
+		return Optional.ofNullable(System.getenv("SIP_PORT"))
 				.map(Integer::parseInt)
 				.orElse(5068);
 	}
 
+	private static int getSdpServerPort() {
+		return Optional.ofNullable(System.getenv("SDP_PORT"))
+				.map(Integer::parseInt)
+				.orElse(54258);
+	}
+
 	private static String getHost() {
 		return Optional.ofNullable(System.getenv("HOST"))
-				.orElse("0.0.0.0");
+				.orElse("127.0.0.1");
+	}
+
+	private static InetAddress getSocketAddress() {
+		return new InetSocketAddress(getHost(), getSipServerPort()).getAddress();
 	}
 
 }

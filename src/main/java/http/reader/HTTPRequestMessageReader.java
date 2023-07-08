@@ -8,6 +8,7 @@ import http.domain.HTTPRequest;
 import http.domain.HTTPRequestLine;
 import tcp.CharSequenceImpl;
 import tcp.server.BufferContext;
+import tcp.server.BytesSource;
 import tcp.server.EventEmitter;
 import tcp.server.reader.MessageReader;
 import tcp.server.reader.exception.ParseException;
@@ -28,25 +29,25 @@ public class HTTPRequestMessageReader implements MessageReader<HTTPRequest> {
 	}
 
 	@Override
-	public Pair<HTTPRequest, Integer> read(BufferContext bufferContext, EventEmitter eventEmitter) throws ParseException {
-		if (!isProbableRequest(bufferContext)) {
+	public Pair<HTTPRequest, Integer> read(BytesSource bytesSource, EventEmitter eventEmitter) throws ParseException {
+		if (!isProbableRequest(bytesSource)) {
 			return null;
 		}
 		int prevCLRFIndex = -CLRF_LENGTH;
-		var n = bufferContext.size();
+		var n = bytesSource.size();
 		var i = 0;
 		HTTPRequestLine requestLine = null;
 		var httpHeaders = new HTTPHeaders();
 		for (; i < n - 1; i++) {
 			// Detect CLRF
-			var b = bufferContext.get(i);
-			if (b == CARRIAGE_RETURN && bufferContext.get(i + 1) == LINE_FEED) {
+			var b = bytesSource.get(i);
+			if (b == CARRIAGE_RETURN && bytesSource.get(i + 1) == LINE_FEED) {
 				// Last header
 				if (prevCLRFIndex + 2 == i) {
 					break;
 				}
 
-				var line = new CharSequenceImpl(bufferContext, prevCLRFIndex + CLRF_LENGTH, i);
+				var line = new CharSequenceImpl(bytesSource, prevCLRFIndex + CLRF_LENGTH, i);
 				eventEmitter.emit("Extracted line");
 				if (requestLine == null) {
 					requestLine = HTTPRequestLine.parse(line);
@@ -75,21 +76,21 @@ public class HTTPRequestMessageReader implements MessageReader<HTTPRequest> {
 				.orElse(0);
 
 		int bodyStartIndex = i + CLRF_LENGTH;
-		int readPayloadBytes = bufferContext.size() - bodyStartIndex;
+		int readPayloadBytes = bytesSource.size() - bodyStartIndex;
 		if (readPayloadBytes < payloadSize) {
 			return null;
 		}
-		var body = payloadSize == 0 ? new byte[0] : bufferContext.extract(bodyStartIndex, bodyStartIndex + payloadSize);
+		var body = payloadSize == 0 ? new byte[0] : bytesSource.extract(bodyStartIndex, bodyStartIndex + payloadSize);
 		return new Pair<>(new HTTPRequest(requestLine, httpHeaders, body), bodyStartIndex + payloadSize);
 	}
 
-	private boolean isProbableRequest(BufferContext bufferContext) {
-		int n = bufferContext.size();
+	private boolean isProbableRequest(BytesSource bytesSource) {
+		int n = bytesSource.size();
 		for (int i = 0; i < n - 3; i++) {
-			if (bufferContext.get(i) == CARRIAGE_RETURN
-					&& bufferContext.get(i + 1) == LINE_FEED
-					&& bufferContext.get(i + 2) == CARRIAGE_RETURN
-					&& bufferContext.get(i + 3) == LINE_FEED) {
+			if (bytesSource.get(i) == CARRIAGE_RETURN
+					&& bytesSource.get(i + 1) == LINE_FEED
+					&& bytesSource.get(i + 2) == CARRIAGE_RETURN
+					&& bytesSource.get(i + 3) == LINE_FEED) {
 				return true;
 			}
 		}

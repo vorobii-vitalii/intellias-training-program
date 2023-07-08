@@ -4,13 +4,19 @@ import java.net.ProtocolFamily;
 import java.nio.channels.SelectionKey;
 import java.util.function.Consumer;
 
-public final class TCPServerConfig {
+public final class ServerConfig {
+	private String name = "Undefined";
 	private String host;
 	private int port;
 	private ProtocolFamily protocolFamily;
 	private Consumer<SelectionKey> onConnectionClose = key -> {};
+	private int serverInterestOps = SelectionKey.OP_ACCEPT;
 
-	private TCPServerConfig() {
+	private ServerConfig() {
+	}
+
+	public String getName() {
+		return name;
 	}
 
 	public String getHost() {
@@ -25,6 +31,10 @@ public final class TCPServerConfig {
 		return protocolFamily;
 	}
 
+	public int getServerInterestOps() {
+		return serverInterestOps;
+	}
+
 	public static Builder builder() {
 		return new Builder();
 	}
@@ -34,9 +44,14 @@ public final class TCPServerConfig {
 	}
 
 	public static class Builder {
-		private final TCPServerConfig config = new TCPServerConfig();
+		private final ServerConfig config = new ServerConfig();
 
 		private Builder() {
+		}
+
+		public Builder setName(String name) {
+			config.name = name;
+			return this;
 		}
 
 		public Builder setHost(String host) {
@@ -46,6 +61,11 @@ public final class TCPServerConfig {
 
 		public Builder setPort(int port) {
 			config.port = port;
+			return this;
+		}
+
+		public Builder setInterestOps(int ops) {
+			config.serverInterestOps = ops;
 			return this;
 		}
 
@@ -59,7 +79,7 @@ public final class TCPServerConfig {
 			return this;
 		}
 
-		public TCPServerConfig build() {
+		public ServerConfig build() {
 			return config;
 		}
 	}

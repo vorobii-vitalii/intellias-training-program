@@ -52,6 +52,14 @@
 
     <dependencies>
 
+        <!-- https://mvnrepository.com/artifact/club.minnced/opus-java -->
+        <dependency>
+            <groupId>club.minnced</groupId>
+            <artifactId>opus-java</artifactId>
+            <version>1.1.1</version>
+        </dependency>
+
+
         <!-- https://mvnrepository.com/artifact/com.google.api/gax -->
         <dependency>
             <groupId>com.google.api</groupId>
@@ -248,6 +256,13 @@
         </dependency>
 
     </dependencies>
+
+    <repositories>
+        <repository>
+            <id>henkelmax.public</id>
+            <url>https://maven.maxhenkel.de/repository/public</url>
+        </repository>
+    </repositories>
 
     <build>
         <extensions>

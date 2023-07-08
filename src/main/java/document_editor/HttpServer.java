@@ -64,7 +64,6 @@ import document_editor.event.handler.impl.PongEventHandler;
 import grpc.ContextPropagationServiceDecorator;
 import http.domain.HTTPMethod;
 import http.domain.HTTPRequest;
-import http.handler.FileDownloadHTTPHandlerStrategy;
 import http.handler.HTTPAcceptOperationHandler;
 import http.handler.HTTPNetworkRequestHandler;
 import http.post_processor.HTTPResponsePostProcessor;
@@ -113,8 +112,9 @@ import tcp.server.Poller;
 import tcp.server.RoundRobinProvider;
 import tcp.server.ServerAttachment;
 import tcp.server.SocketMessageReaderImpl;
-import tcp.server.TCPServer;
-import tcp.server.TCPServerConfig;
+import tcp.server.GenericServer;
+import tcp.server.ServerConfig;
+import tcp.server.TCPServerConfigurer;
 import tcp.server.TimerSocketMessageReader;
 import tcp.server.handler.DelegatingReadOperationHandler;
 import tcp.server.handler.GenericReadOperationHandler;
@@ -462,8 +462,8 @@ public class HttpServer {
 
 		RoundRobinProvider<Selector> httpSelectorProvider = new RoundRobinProvider<>(httpSelectors);
 
-		var server = new TCPServer(
-				TCPServerConfig.builder()
+		var server = new GenericServer(
+				ServerConfig.builder()
 						.setHost(getHost())
 						.setPort(getPort())
 						.setProtocolFamily(StandardProtocolFamily.INET)
@@ -478,7 +478,8 @@ public class HttpServer {
 								byteBufferPool,
 								openTelemetry.getTracer("HTTP accept connection handler")
 						)
-				));
+				),
+				new TCPServerConfigurer());
 		server.start();
 	}
 

@@ -1,15 +1,15 @@
 package tcp;
 
-import tcp.server.BufferContext;
+import tcp.server.BytesSource;
 
 public class CharSequenceImpl implements CharSequence {
-    private final BufferContext bufferContext;
+    private final BytesSource bytesSource;
     private final int from;
     private final int end;
     private String string;
 
-    public CharSequenceImpl(BufferContext bufferContext, int from, int end) {
-        this.bufferContext = bufferContext;
+    public CharSequenceImpl(BytesSource bytesSource, int from, int end) {
+        this.bytesSource = bytesSource;
         this.from = from;
         this.end = end;
     }
@@ -21,12 +21,12 @@ public class CharSequenceImpl implements CharSequence {
 
     @Override
     public char charAt(int index) {
-        return (char) bufferContext.get(from + index);
+        return (char) bytesSource.get(from + index);
     }
 
     @Override
     public CharSequence subSequence(int start, int end) {
-        return new CharSequenceImpl(bufferContext, from + start, from + end);
+        return new CharSequenceImpl(bytesSource, from + start, from + end);
     }
 
     @Override
@@ -42,7 +42,7 @@ public class CharSequenceImpl implements CharSequence {
     @Override
     public String toString() {
         if (string == null) {
-            this.string = new String(bufferContext.extract(from, end));
+            this.string = new String(bytesSource.extract(from, end));
         }
         return string;
     }

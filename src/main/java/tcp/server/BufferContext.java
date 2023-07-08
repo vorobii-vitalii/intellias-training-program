@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @NotThreadSafe
-public class BufferContext {
+public class BufferContext implements BytesSource {
 	private static final int SINGLE_BUFFER_SIZE = 8192;
 
 	private final List<ByteBuffer> byteBuffers = new ArrayList<>();

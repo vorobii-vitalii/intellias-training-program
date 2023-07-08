@@ -24,14 +24,15 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import tcp.server.TCPServer;
-import tcp.server.TCPServerConfig;
+import tcp.server.GenericServer;
+import tcp.server.ServerConfig;
+import tcp.server.TCPServerConfigurer;
 
 import static java.nio.channels.SelectionKey.*;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class TestTCPServer {
+class TestGenericServer {
 	private static final StandardProtocolFamily PROTOCOL_FAMILY = StandardProtocolFamily.INET;
 	private static final String HOST = "127.0.0.1";
 	private static final int PORT = 8925;
@@ -53,12 +54,12 @@ class TestTCPServer {
 	ServerSocketChannel serverSocketChannel;
 	@Mock
 	SelectionKey selectionKey;
-	TCPServer tCPServer;
+	GenericServer tCPServer;
 
 	@BeforeEach
 	void init() {
-		tCPServer = new TCPServer(
-				TCPServerConfig.builder()
+		tCPServer = new GenericServer(
+				ServerConfig.builder()
 						.setProtocolFamily(PROTOCOL_FAMILY)
 						.setHost(HOST)
 						.setPort(PORT)
@@ -69,7 +70,8 @@ class TestTCPServer {
 						OP_ACCEPT, acceptConsumer,
 						OP_READ, readConsumer,
 						OP_WRITE, writeConsumer
-				));
+				),
+				new TCPServerConfigurer());
 	}
 
 	@Test
