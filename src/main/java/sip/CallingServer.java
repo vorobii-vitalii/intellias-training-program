@@ -100,7 +100,7 @@ public class CallingServer {
 						.setHost(getHost())
 						.setPort(getSdpServerPort())
 						.setProtocolFamily(StandardProtocolFamily.INET)
-						.setInterestOps(OP_READ | OP_WRITE)
+						.setInterestOps(OP_READ)
 						.onConnectionClose(connection -> {
 							LOGGER.info("Connection closed");
 						})

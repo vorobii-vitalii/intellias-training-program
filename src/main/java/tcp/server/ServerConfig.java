@@ -84,4 +84,15 @@ public final class ServerConfig {
 		}
 	}
 
+	@Override
+	public String toString() {
+		return "ServerConfig{" +
+				"name='" + name + '\'' +
+				", host='" + host + '\'' +
+				", port=" + port +
+				", protocolFamily=" + protocolFamily +
+				", onConnectionClose=" + onConnectionClose +
+				", serverInterestOps=" + serverInterestOps +
+				'}';
+	}
 }

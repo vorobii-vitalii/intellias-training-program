@@ -60,7 +60,7 @@ public class GenericServer {
 		try (var selector = selectorProvider.openSelector();
 			 var serverSocketChannel = serverConfigurer.configureServerChannel(selectorProvider, serverConfig)
 		) {
-			LOGGER.info("Starting server {}", serverConfig.getName());
+			LOGGER.info("Starting server {}", serverConfig);
 			serverSocketChannel.register(selector, serverConfig.getServerInterestOps());
 			new Poller(selector, operationHandlerByType, serverConfig.getOnConnectionClose(), TIMEOUT).run();
 		} catch (IOException e) {

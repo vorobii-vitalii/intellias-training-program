@@ -90,7 +90,6 @@ public class WriteOperationHandler implements Consumer<SelectionKey> {
 						responses.addFirst(new MessageWriteRequest(buffers[i], callback));
 					}
 					else {
-						System.out.println("Response written");
 						byteBufferPool.save(buffers[i]);
 						messagesWrittenCounter.increment();
 						if (callback != null) {
