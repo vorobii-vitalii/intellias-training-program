@@ -10,6 +10,7 @@ import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.nio.channels.spi.SelectorProvider;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
@@ -34,6 +35,8 @@ import message_passing.BlockingQueueMessageProducer;
 import request_handler.NetworkRequest;
 import request_handler.RequestHandler;
 import request_handler.RequestProcessor;
+import rtcp.RTCPMessage;
+import rtcp.RTCPMessagesReader;
 import tcp.MessageSerializer;
 import tcp.server.ByteBufferPool;
 import tcp.server.OperationType;
@@ -75,7 +78,57 @@ public class CallingServer {
 
 	public static void main(String[] args) {
 		startRTPServer();
+		startRTCPServer();
 		startSipServer();
+	}
+
+	private static void startRTCPServer() {
+		var rtpMessagesQueue = new ArrayBlockingQueue<UDPPacket<List<RTCPMessage>>>(REQUEST_QUEUE_CAPACITY);
+
+		RequestHandler<UDPPacket<List<RTCPMessage>>> rtpMessageHandler = request -> {
+			LOGGER.info("UDP RTCP Packet: {}", request);
+		};
+
+		var rtcpRequestHandleTimer = Timer.builder("rtcp.request.time").register(METER_REGISTRY);
+		var rtcpRequestsCount = Counter.builder("rtcp.request.count").register(METER_REGISTRY);
+
+
+		RequestProcessor<UDPPacket<List<RTCPMessage>>> requestProcessor =
+				new RequestProcessor<>(rtpMessagesQueue, rtpMessageHandler, rtcpRequestHandleTimer, rtcpRequestsCount);
+
+		startProcess(requestProcessor, "RTCP request processor");
+
+		var server = new GenericServer(
+				ServerConfig.builder()
+						.setName("RTPC server")
+						.setHost(getHost())
+						.setPort(getRTCPServerPort())
+						.setProtocolFamily(StandardProtocolFamily.INET)
+						.setInterestOps(OP_READ)
+						.onConnectionClose(connection -> {
+							LOGGER.info("Connection closed");
+						})
+						.build(),
+				SelectorProvider.provider(),
+				System.err::println,
+				Map.of(
+						OP_READ, new UDPReadOperationHandler<>(
+								2_000,
+								new BlockingQueueMessageProducer<>(rtpMessagesQueue),
+								new RTCPMessagesReader(List.of())
+						)
+						//						OP_WRITE, new WriteOperationHandler(
+						//								sipWriteTimer,
+						//								sipWriteCount,
+						//								(key, e) -> {
+						//									LOGGER.warn("Error", e);
+						//								},
+						//								BUFFER_POOL,
+						//								OpenTelemetry.noop()
+						//						)
+				),
+				new UDPServerConfigurer());
+		server.start();
 	}
 
 	private static void startRTPServer() {
@@ -98,7 +151,7 @@ public class CallingServer {
 				ServerConfig.builder()
 						.setName("RTP server")
 						.setHost(getHost())
-						.setPort(getSdpServerPort())
+						.setPort(getRTPServerPort())
 						.setProtocolFamily(StandardProtocolFamily.INET)
 						.setInterestOps(OP_READ)
 						.onConnectionClose(connection -> {
@@ -421,7 +474,7 @@ public class CallingServer {
 						a=rtpmap:104 telephone-event/8000\r
 						a=rtpmap:105 telephone-event/32000\r
 						a=rtpmap:106 telephone-event/44100\r
-						a=rtcp:49355\r
+						a=rtcp:%s\r
 						a=rtcp-fb:* trr-int 1000\r
 						a=rtcp-fb:* ccm tmmbr\r
 						\r"""
@@ -437,7 +490,7 @@ public class CallingServer {
 //						a=fmtp:96 useinbandfec=1\r
 //						a=rtcp:40134\r
 //						\r"""
-				.formatted(getSdpServerPort())
+				.formatted(getRTPServerPort(), getRTCPServerPort())
 		).getBytes(StandardCharsets.UTF_8);
 	}
 
@@ -451,8 +504,14 @@ public class CallingServer {
 				.orElse(5068);
 	}
 
-	private static int getSdpServerPort() {
-		return Optional.ofNullable(System.getenv("SDP_PORT"))
+	private static int getRTCPServerPort() {
+		return Optional.ofNullable(System.getenv("RTCP_PORT"))
+				.map(Integer::parseInt)
+				.orElse(54257);
+	}
+
+	private static int getRTPServerPort() {
+		return Optional.ofNullable(System.getenv("RTP_PORT"))
 				.map(Integer::parseInt)
 				.orElse(54258);
 	}

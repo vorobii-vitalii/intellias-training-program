@@ -2,7 +2,6 @@ package tcp.server;
 
 import java.io.IOException;
 import java.nio.channels.spi.AbstractSelectableChannel;
-import java.nio.channels.spi.AbstractSelector;
 import java.nio.channels.spi.SelectorProvider;
 
 @FunctionalInterface

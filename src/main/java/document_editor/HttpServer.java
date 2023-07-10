@@ -187,8 +187,7 @@ public class HttpServer {
 	}
 
 	private static void schedulePeriodically(int delayMs, Runnable process) {
-		var executor = Executors.newSingleThreadScheduledExecutor();
-		executor.scheduleAtFixedRate(process, delayMs, delayMs, MILLISECONDS);
+		Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(process, delayMs, delayMs, MILLISECONDS);
 	}
 
 	private static <T> RingBuffer<T> createDisruptor(RequestHandler<T> requestHandler, Supplier<T> objCreator, Timer timer) {
