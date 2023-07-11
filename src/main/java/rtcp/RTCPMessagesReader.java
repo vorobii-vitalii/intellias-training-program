@@ -1,6 +1,7 @@
 package rtcp;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -38,8 +39,11 @@ public class RTCPMessagesReader implements MessageReader<List<RTCPMessage>> {
 	@Nullable
 	@Override
 	public Pair<List<RTCPMessage>, Integer> read(BytesSource bytesSource, EventEmitter eventEmitter) throws ParseException {
-		int numBytes = bytesSource.size();
+		if (bytesSource.isEmpty() || !isRTCPMessage(bytesSource.get(0))) {
+			return null;
+		}
 		var rtcpMessages = new ArrayList<RTCPMessage>();
+		int numBytes = bytesSource.size();
 		for (var i = 0; i < numBytes; ) {
 			var bytesLeft = numBytes - i;
 			if (bytesLeft < PACKET_HEADERS_SIZE) {
@@ -58,7 +62,6 @@ public class RTCPMessagesReader implements MessageReader<List<RTCPMessage>> {
 			var payloadType = bytesSource.get(i + 1);
 			var parser = reportParserByPayloadType.get(payloadType);
 			var headers = new RTCPHeaders(version, isPadded, length);
-			LOGGER.info("Parser RTCP headers {}", headers);
 			if (parser != null) {
 				var rtcpReport = parser.parse(
 						bytesSource.extract(i + PACKET_HEADERS_SIZE, i + length),
@@ -70,6 +73,10 @@ public class RTCPMessagesReader implements MessageReader<List<RTCPMessage>> {
 			i += length;
 		}
 		return new Pair<>(rtcpMessages, numBytes);
+	}
+
+	private boolean isRTCPMessage(byte b) {
+		return ((b & (1 << 7)) != 0) && ((b & (1 << 6)) == 0);
 	}
 
 	private int constructInt(byte b1, byte b2) {

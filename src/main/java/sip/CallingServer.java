@@ -37,6 +37,8 @@ import request_handler.RequestHandler;
 import request_handler.RequestProcessor;
 import rtcp.RTCPMessage;
 import rtcp.RTCPMessagesReader;
+import stun.StunMessage;
+import stun.StunMessageReader;
 import tcp.MessageSerializer;
 import tcp.server.ByteBufferPool;
 import tcp.server.OperationType;
@@ -52,6 +54,7 @@ import udp.RTPMessage;
 import udp.RTPMessageReader;
 import udp.UDPPacket;
 import udp.UDPReadOperationHandler;
+import util.Pair;
 
 public class CallingServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(CallingServer.class);
@@ -84,9 +87,14 @@ public class CallingServer {
 
 	private static void startRTCPServer() {
 		var rtpMessagesQueue = new ArrayBlockingQueue<UDPPacket<List<RTCPMessage>>>(REQUEST_QUEUE_CAPACITY);
+		var stunMessageQueue = new ArrayBlockingQueue<UDPPacket<StunMessage>>(REQUEST_QUEUE_CAPACITY);
 
 		RequestHandler<UDPPacket<List<RTCPMessage>>> rtpMessageHandler = request -> {
 			LOGGER.info("UDP RTCP Packet: {}", request);
+		};
+
+		RequestHandler<UDPPacket<StunMessage>> stunMessageHandler = request -> {
+			LOGGER.info("UDP Stun Packet: {}", request);
 		};
 
 		var rtcpRequestHandleTimer = Timer.builder("rtcp.request.time").register(METER_REGISTRY);
@@ -96,7 +104,11 @@ public class CallingServer {
 		RequestProcessor<UDPPacket<List<RTCPMessage>>> requestProcessor =
 				new RequestProcessor<>(rtpMessagesQueue, rtpMessageHandler, rtcpRequestHandleTimer, rtcpRequestsCount);
 
+		RequestProcessor<UDPPacket<StunMessage>> stunRequestProcessor =
+				new RequestProcessor<>(stunMessageQueue, stunMessageHandler, rtcpRequestHandleTimer, rtcpRequestsCount);
+
 		startProcess(requestProcessor, "RTCP request processor");
+		startProcess(stunRequestProcessor, "STUN request processor");
 
 		var server = new GenericServer(
 				ServerConfig.builder()
@@ -112,10 +124,18 @@ public class CallingServer {
 				SelectorProvider.provider(),
 				System.err::println,
 				Map.of(
-						OP_READ, new UDPReadOperationHandler<>(
+						OP_READ, new UDPReadOperationHandler(
 								2_000,
-								new BlockingQueueMessageProducer<>(rtpMessagesQueue),
-								new RTCPMessagesReader(List.of())
+								List.of(
+										new Pair<>(
+												new StunMessageReader(),
+												new BlockingQueueMessageProducer<>(stunMessageQueue)
+										),
+										new Pair<>(
+												new RTCPMessagesReader(List.of()),
+												new BlockingQueueMessageProducer<>(rtpMessagesQueue)
+										)
+								)
 						)
 						//						OP_WRITE, new WriteOperationHandler(
 						//								sipWriteTimer,
@@ -161,10 +181,14 @@ public class CallingServer {
 				SelectorProvider.provider(),
 				System.err::println,
 				Map.of(
-						OP_READ, new UDPReadOperationHandler<>(
+						OP_READ, new UDPReadOperationHandler(
 								2_000,
-								new BlockingQueueMessageProducer<>(rtpMessagesQueue),
-								new RTPMessageReader()
+								List.of(
+										new Pair<>(
+												new RTPMessageReader(),
+												new BlockingQueueMessageProducer<>(rtpMessagesQueue)
+										)
+								)
 						)
 //						OP_WRITE, new WriteOperationHandler(
 //								sipWriteTimer,
