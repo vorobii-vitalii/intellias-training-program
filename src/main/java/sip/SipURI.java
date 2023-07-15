@@ -24,4 +24,5 @@ public interface SipURI extends Serializable {
 		return new SIPAbsoluteURI(charSequence);
 	}
 
+	SipURI toCanonicalForm();
 }

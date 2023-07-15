@@ -37,6 +37,10 @@ import request_handler.RequestHandler;
 import request_handler.RequestProcessor;
 import rtcp.RTCPMessage;
 import rtcp.RTCPMessagesReader;
+import sip.request_handling.SipRequestMessageHandler;
+import sip.request_handling.register.InMemoryBindingStorage;
+import sip.request_handling.register.InviteRequestHandler;
+import sip.request_handling.register.RegisterSIPRequestHandler;
 import stun.StunMessage;
 import stun.StunMessageReader;
 import tcp.MessageSerializer;
@@ -212,64 +216,81 @@ public class CallingServer {
 		var sipRequestCount = Counter.builder("sip.request.count").register(METER_REGISTRY);
 		var sipWriteCount = Counter.builder("sip.response.write.count").register(METER_REGISTRY);
 
-		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = request -> {
-			var sipMessage = request.request();
-			LOGGER.info("Received SIP message {} from {}", sipMessage, request.socketConnection());
-			if (sipMessage instanceof SipRequest sipRequest) {
-				switch (sipRequest.requestLine().method()) {
-					case "ACK" -> {
-						sendOK(sipRequest, request.socketConnection());
-					}
-					case "REGISTER" -> {
-						LOGGER.info("Client registered");
-						EXECUTOR_SERVICE.schedule(() -> {
-							sendInvite(sipRequest, request.socketConnection());
-						}, 5000, TimeUnit.MILLISECONDS);
-						//					SIP/2.0 200 OK
-						//					Via: SIP/2.0/UDP bobspc.biloxi.com:5060;branch=z9hG4bKnashds7
-						//					;received=192.0.2.4
-						//					To: Bob <sip:bob@biloxi.com>;tag=2493k59kd
-						//					From: Bob <sip:bob@biloxi.com>;tag=456248
-						//					Call-ID: 843817637684230@998sdasdh09
-						//					CSeq: 1826 REGISTER
-						//					Contact: <sip:bob@192.0.2.4>
-						//							Expires: 7200
-						//					Content-Length: 0
-						sendOK(sipRequest, request.socketConnection());
-					}
-					case "INVITE" -> {
-						LOGGER.info("Client calling");
-						var sipResponseHeaders = new SipResponseHeaders();
-						for (Via via : sipRequest.headers().getViaList()) {
-							sipResponseHeaders.addVia(via.normalize());
-						}
-						sipResponseHeaders.addVia(CURRENT_VIA);
-						sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
-						sipResponseHeaders.setTo(sipRequest.headers().getTo()
-								.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
-						);
-						sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
-						sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
-						sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
-						var response = new SipResponse(
-								new SipResponseLine(new SipVersion(2, 0), new SipStatusCode(180), "Ringing"),
-								sipResponseHeaders,
-								new byte[] {}
-						);
-						request.socketConnection().appendResponse(MESSAGE_SERIALIZER.serialize(response));
-						request.socketConnection().changeOperation(OperationType.WRITE);
-						EXECUTOR_SERVICE.schedule(() -> {
-							if (counter.getAndIncrement() % 2 == 0) {
-								sendOK(sipRequest, request.socketConnection());
-							} else {
-								sendBusy(sipRequest, request.socketConnection());
-							}
-						}, 3000, TimeUnit.MILLISECONDS);
-					}
-				}
-			}
+//		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = request -> {
+//			var sipMessage = request.request();
+//			LOGGER.info("Received SIP message {} from {}", sipMessage, request.socketConnection());
+//			if (sipMessage instanceof SipRequest sipRequest) {
+//				switch (sipRequest.requestLine().method()) {
+//					case "ACK" -> {
+//						sendOK(sipRequest, request.socketConnection());
+//					}
+//					case "REGISTER" -> {
+//						LOGGER.info("Client registered");
+//						EXECUTOR_SERVICE.schedule(() -> {
+//							sendInvite(sipRequest, request.socketConnection());
+//						}, 5000, TimeUnit.MILLISECONDS);
+//						//					SIP/2.0 200 OK
+//						//					Via: SIP/2.0/UDP bobspc.biloxi.com:5060;branch=z9hG4bKnashds7
+//						//					;received=192.0.2.4
+//						//					To: Bob <sip:bob@biloxi.com>;tag=2493k59kd
+//						//					From: Bob <sip:bob@biloxi.com>;tag=456248
+//						//					Call-ID: 843817637684230@998sdasdh09
+//						//					CSeq: 1826 REGISTER
+//						//					Contact: <sip:bob@192.0.2.4>
+//						//							Expires: 7200
+//						//					Content-Length: 0
+//						sendOK(sipRequest, request.socketConnection());
+//					}
+//					case "INVITE" -> {
+//						LOGGER.info("Client calling");
+//						var sipResponseHeaders = new SipResponseHeaders();
+//						for (Via via : sipRequest.headers().getViaList()) {
+//							sipResponseHeaders.addVia(via.normalize());
+//						}
+//						sipResponseHeaders.addVia(CURRENT_VIA);
+//						sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
+//						sipResponseHeaders.setTo(sipRequest.headers().getTo()
+//								.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
+//						);
+//						sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
+//						sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
+//						sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
+//						var response = new SipResponse(
+//								new SipResponseLine(new SipVersion(2, 0), new SipStatusCode(180), "Ringing"),
+//								sipResponseHeaders,
+//								new byte[] {}
+//						);
+//						request.socketConnection().appendResponse(MESSAGE_SERIALIZER.serialize(response));
+//						request.socketConnection().changeOperation(OperationType.WRITE);
+//						EXECUTOR_SERVICE.schedule(() -> {
+//							if (counter.getAndIncrement() % 2 == 0) {
+//								sendOK(sipRequest, request.socketConnection());
+//							} else {
+//								sendBusy(sipRequest, request.socketConnection());
+//							}
+//						}, 3000, TimeUnit.MILLISECONDS);
+//					}
+//				}
+//			}
+//
+//		};
 
-		};
+		final InMemoryBindingStorage bindingStorage = new InMemoryBindingStorage();
+		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = new SipRequestMessageHandler(
+				List.of(
+						new RegisterSIPRequestHandler(
+								MESSAGE_SERIALIZER,
+								bindingStorage,
+								CURRENT_VIA
+						),
+						new InviteRequestHandler(
+								bindingStorage,
+								MESSAGE_SERIALIZER,
+								CURRENT_VIA,
+								getCurrentSipURI()
+						)
+				)
+		);
 
 		RequestProcessor<NetworkRequest<SipMessage>> requestProcessor =
 				new RequestProcessor<>(requestQueue, sipRequestHandler, sipRequestHandleTimer, sipRequestCount);
@@ -316,7 +337,6 @@ public class CallingServer {
 
 	private static ContactSet calculateContactSet(SipRequest sipRequest) {
 		final AddressOfRecord to = sipRequest.headers().getTo();
-		//
 		return new ContactSet(Set.of(new AddressOfRecord(
 				to.name(),
 				getCurrentSipURI(),
@@ -447,7 +467,6 @@ public class CallingServer {
 		var sipResponseHeaders = new SipResponseHeaders();
 		for (Via via : sipRequest.headers().getViaList()) {
 			sipResponseHeaders.addVia(via.normalize());
-//					.addParameter("received", getIpAddress(socketConnection)));
 		}
 		sipResponseHeaders.addVia(CURRENT_VIA);
 		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
@@ -469,6 +488,10 @@ public class CallingServer {
 		socketConnection.appendResponse(MESSAGE_SERIALIZER.serialize(response));
 		socketConnection.changeOperation(OperationType.WRITE);
 	}
+
+	// SSL Engine, test using SSL engine
+	// max udp = 1536 - headers size
+
 
 	private static byte[] getSdpResponse() {
 		return (

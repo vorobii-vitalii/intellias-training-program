@@ -8,6 +8,10 @@ import util.Serializable;
 public record Address(String host, Integer port) implements Serializable {
 	private static final byte COLON = (byte) ':';
 
+	public Address toCanonicalForm() {
+		return new Address(host, null);
+	}
+
 	public static Address parse(String str) {
 		var arr = str.trim().split(":");
 		var host = arr[0].trim();

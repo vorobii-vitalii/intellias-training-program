@@ -145,4 +145,9 @@ public record FullSipURI(
 
 		return new FullSipURI(protocol, credentials, new Address(host, port), uriParameters, queryParameters);
 	}
+
+	@Override
+	public SipURI toCanonicalForm() {
+		return new FullSipURI(protocol, credentials, address.toCanonicalForm(), Map.of(), Map.of());
+	}
 }

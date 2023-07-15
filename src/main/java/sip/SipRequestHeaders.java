@@ -8,6 +8,8 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import com.google.common.collect.ImmutableMap;
+
 import util.Serializable;
 
 //8.1.1.9 Supported and Require
@@ -77,6 +79,7 @@ public class SipRequestHeaders implements Serializable {
 			"t", "to",
 			"v", "via"
 	);
+	public static final String EXPIRES = "expires";
 
 	private final Map<String, List<String>> extensionHeaderMap = new HashMap<>();
 	private final List<Via> viaList = new ArrayList<>();
@@ -89,19 +92,21 @@ public class SipRequestHeaders implements Serializable {
 	private ContactList contactList;
 	private SipMediaType contentType;
 	private String callId;
+	private Integer expires;
 
-	private final Map<String, Consumer<String>> headerSetterByHeaderName = Map.of(
-			"from", v -> this.from = AddressOfRecord.parse(v),
-			"to", v -> this.to = AddressOfRecord.parse(v),
-			"refer-to", v -> this.referTo = AddressOfRecord.parse(v),
-			"cseq", v -> this.commandSequence = CommandSequence.parse(v),
-			"via", v -> viaList.addAll(Via.parseMultiple(v)),
-			"content-length", v -> contentLength = Integer.parseInt(v.trim()),
-			"max-forwards", v -> maxForwards = Integer.parseInt(v.trim()),
-			"contact", v -> contactList = ContactList.parse(v),
-			"content-type", v -> contentType = SipMediaType.parse(v),
-			"call-id", v -> callId = v.trim()
-	);
+	private final Map<String, Consumer<String>> headerSetterByHeaderName = ImmutableMap.<String, Consumer<String>>builder()
+			.put("from", v -> this.from = AddressOfRecord.parse(v))
+			.put("to", v -> this.to = AddressOfRecord.parse(v))
+			.put("refer-to", v -> this.referTo = AddressOfRecord.parse(v))
+			.put("cseq", v -> this.commandSequence = CommandSequence.parse(v))
+			.put("via", v -> viaList.addAll(Via.parseMultiple(v)))
+			.put("content-length", v -> contentLength = Integer.parseInt(v.trim()))
+			.put("max-forwards", v -> maxForwards = Integer.parseInt(v.trim()))
+			.put("contact", v -> contactList = ContactList.parse(v))
+			.put("content-type", v -> contentType = SipMediaType.parse(v))
+			.put("call-id", v -> callId = v.trim())
+			.put("expires", v -> expires = Integer.parseInt(v.trim()))
+			.build();
 
 	public void addSingleHeader(String headerName, String value) {
 		var lowerCasedHeader = headerName.toLowerCase();
@@ -201,6 +206,14 @@ public class SipRequestHeaders implements Serializable {
 		return callId;
 	}
 
+	public Integer getExpires() {
+		return expires;
+	}
+
+	public void setExpires(Integer expires) {
+		this.expires = expires;
+	}
+
 	public void setCallId(String callId) {
 		this.callId = callId;
 	}
@@ -217,7 +230,7 @@ public class SipRequestHeaders implements Serializable {
 		return contentLength == that.contentLength && Objects.equals(extensionHeaderMap, that.extensionHeaderMap) && Objects.equals(from, that.from)
 				&& Objects.equals(to, that.to) && Objects.equals(referTo, that.referTo) && Objects.equals(commandSequence, that.commandSequence)
 				&& Objects.equals(maxForwards, that.maxForwards) && Objects.equals(viaList, that.viaList) && Objects.equals(contactList,
-				that.contactList) && Objects.equals(contentType, that.contentType) && Objects.equals(callId, that.callId);
+				that.contactList) && Objects.equals(contentType, that.contentType) && Objects.equals(callId, that.callId) && Objects.equals(expires, that.expires);
 	}
 
 	@Override
@@ -239,6 +252,7 @@ public class SipRequestHeaders implements Serializable {
 				", contactList=" + contactList +
 				", contentType=" + contentType +
 				", callId=" + callId +
+				", expires=" + expires +
 				'}';
 	}
 
@@ -251,6 +265,7 @@ public class SipRequestHeaders implements Serializable {
 		serializeIfNeeded(CONTACT, contactList, dest);
 		serializeIfNeeded(CONTENT_TYPE, contentType, dest);
 		serializeIfNeeded(MAX_FORWARDS, maxForwards, dest, v -> String.valueOf(v).getBytes(StandardCharsets.UTF_8));
+		serializeIfNeeded(EXPIRES, expires, dest, v -> String.valueOf(v).getBytes(StandardCharsets.UTF_8));
 		serializeIfNeeded(CONTENT_LENGTH, contentLength, dest, v -> String.valueOf(v).getBytes(StandardCharsets.UTF_8));
 		serializeIfNeeded(CALL_ID, callId, dest, v -> v.getBytes(StandardCharsets.UTF_8));
 		for (var via : viaList) {
@@ -276,6 +291,7 @@ public class SipRequestHeaders implements Serializable {
 		total += calculateHeaderFieldSize(CONTENT_TYPE, contentType);
 		total += calculateHeaderFieldSize(MAX_FORWARDS, maxForwards, v -> String.valueOf(v).length());
 		total += calculateHeaderFieldSize(CONTENT_LENGTH, contentLength, v -> String.valueOf(v).length());
+		total += calculateHeaderFieldSize(EXPIRES, expires, v -> String.valueOf(v).length());
 		total += calculateHeaderFieldSize(CALL_ID, callId, String::length);
 		for (var via : viaList) {
 			total += calculateHeaderFieldSize(VIA, via);

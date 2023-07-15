@@ -33,6 +33,14 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 	public static final byte PARAMETERS_DELIMITER_CHAR = (byte) ';';
 	public static final char PARAMETER_DELIMITER = '=';
 
+	public Optional<String> getParameterValue(String parameterName) {
+		return Optional.ofNullable(parameters().get(parameterName));
+	}
+
+	public AddressOfRecord toCanonicalForm() {
+		return new AddressOfRecord(FALLBACK_NAME, sipURI.toCanonicalForm(), Map.of());
+	}
+
 	public AddressOfRecord addParam(String param, String value) {
 		var newParameters = new HashMap<>(parameters);
 		newParameters.put(param, value);
@@ -40,19 +48,20 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 	}
 
 	public static AddressOfRecord parse(String charSequence) {
-		var laquotIndex = findFromFromBegging(charSequence, LAQUOT);
+		var str = charSequence.trim();
+		var laquotIndex = findFromFromBegging(str, LAQUOT);
 		// addr-spec case
 		if (laquotIndex == NOT_FOUND) {
-			return new AddressOfRecord(FALLBACK_NAME, SipURI.parse(charSequence), Map.of());
+			return new AddressOfRecord(FALLBACK_NAME, SipURI.parse(str), Map.of());
 		}
-		var raquotIndex = findFromFromBegging(charSequence, RAQUOT);
-		var displayName = Optional.ofNullable(trim(charSequence, 0, laquotIndex - 1, CHARACTERS_TO_EXCLUDE))
+		var raquotIndex = findFromFromBegging(str, RAQUOT);
+		var displayName = Optional.ofNullable(trim(str, 0, laquotIndex - 1, CHARACTERS_TO_EXCLUDE))
 				.filter(s -> !s.isEmpty())
 				.map(s -> isQuoted(s) ? s.substring(1, s.length() - 1) : s)
 				.orElse(FALLBACK_NAME);
-		var sipURI = SipURI.parse(charSequence.subSequence(laquotIndex + 1, raquotIndex).toString());
+		var sipURI = SipURI.parse(str.subSequence(laquotIndex + 1, raquotIndex).toString());
 		return new AddressOfRecord(displayName, sipURI,
-				parseParameters(charSequence.subSequence(raquotIndex + 1, charSequence.length()).toString(), PARAMETERS_DELIMITER));
+				parseParameters(str.subSequence(raquotIndex + 1, str.length()).toString(), PARAMETERS_DELIMITER));
 	}
 
 	private static boolean isQuoted(String str) {
