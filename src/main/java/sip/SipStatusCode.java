@@ -16,4 +16,9 @@ public record SipStatusCode(int statusCode) implements Serializable {
 	public int getSize() {
 		return 3;
 	}
+
+	public boolean isErroneous() {
+		return statusCode >= 400;
+	}
+
 }

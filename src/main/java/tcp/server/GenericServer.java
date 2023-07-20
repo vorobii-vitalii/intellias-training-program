@@ -2,8 +2,8 @@ package tcp.server;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -21,6 +21,7 @@ public class GenericServer {
 	private final Map<Integer, Consumer<SelectionKey>> operationHandlerByType;
 	private Thread serverThread;
 	private final ServerConfigurer serverConfigurer;
+	private final UnsafeSupplier<Selector> selectorSupplier;
 
 	public GenericServer(
 			ServerConfig serverConfig,
@@ -34,6 +35,23 @@ public class GenericServer {
 		this.selectorProvider = selectorProvider;
 		this.operationHandlerByType = operationHandlerByType;
 		this.serverConfigurer = serverConfigurer;
+		this.selectorSupplier = selectorProvider::openSelector;
+	}
+
+	public GenericServer(
+			ServerConfig serverConfig,
+			SelectorProvider selectorProvider,
+			Consumer<Throwable> errorHandler,
+			Map<Integer, Consumer<SelectionKey>> operationHandlerByType,
+			ServerConfigurer serverConfigurer,
+			UnsafeSupplier<Selector> selectorSupplier
+	) {
+		this.serverConfig = serverConfig;
+		this.errorHandler = errorHandler;
+		this.selectorProvider = selectorProvider;
+		this.operationHandlerByType = operationHandlerByType;
+		this.serverConfigurer = serverConfigurer;
+		this.selectorSupplier = selectorSupplier;
 	}
 
 
@@ -57,7 +75,7 @@ public class GenericServer {
 	}
 
 	private void runServer() {
-		try (var selector = selectorProvider.openSelector();
+		try (var selector = selectorSupplier.get();
 			 var serverSocketChannel = serverConfigurer.configureServerChannel(selectorProvider, serverConfig)
 		) {
 			LOGGER.info("Starting server {}", serverConfig);

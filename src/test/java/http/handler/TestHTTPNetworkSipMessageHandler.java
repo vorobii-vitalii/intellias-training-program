@@ -32,7 +32,7 @@ import tcp.server.SocketConnection;
 import util.Constants;
 
 @ExtendWith(MockitoExtension.class)
-class TestHTTPNetworkSIPRequestHandler {
+class TestHTTPNetworkSipMessageHandler {
 
 	public static final HTTPRequest HTTP_REQUEST = new HTTPRequest(
 			new HTTPRequestLine(HTTPMethod.GET, "/path", new HTTPVersion(1, 1))

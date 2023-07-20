@@ -13,9 +13,10 @@ import java.util.function.Function;
 
 import javax.annotation.Nonnull;
 
+import document_editor.utils.Copyable;
 import util.Serializable;
 
-public class SipResponseHeaders implements Serializable {
+public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHeaders> {
 	private static final String FROM = "from";
 	private static final String TO = "to";
 	private static final String REFER_TO = "refer-to";
@@ -257,6 +258,10 @@ public class SipResponseHeaders implements Serializable {
 		viaList.add(via);
 	}
 
+	public void addViaAtBeggining(Via via) {
+		viaList.add(0, via);
+	}
+
 	public void setCallId(String callId) {
 		this.callId = callId;
 	}
@@ -302,4 +307,26 @@ public class SipResponseHeaders implements Serializable {
 				'}';
 	}
 
+	@Override
+	public SipResponseHeaders replicate() {
+		var sipResponseHeaders = new SipResponseHeaders();
+		sipResponseHeaders.setFrom(from);
+		sipResponseHeaders.setTo(to);
+		sipResponseHeaders.setReferTo(referTo);
+		sipResponseHeaders.setCommandSequence(commandSequence);
+		for (var via : viaList) {
+			sipResponseHeaders.addVia(via);
+		}
+		sipResponseHeaders.setContactList(contactList);
+		sipResponseHeaders.setContentType(contentType);
+		sipResponseHeaders.setCallId(callId);
+		sipResponseHeaders.setContentLength(contentLength);
+		sipResponseHeaders.setMaxForwards(maxForwards);
+		for (var entry : extensionHeaderMap.entrySet()) {
+			for (var value : entry.getValue()) {
+				sipResponseHeaders.addExtensionHeader(entry.getKey(), value);
+			}
+		}
+		return sipResponseHeaders;
+	}
 }

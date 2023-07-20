@@ -9,7 +9,7 @@ import util.Serializable;
 //Response          =  Status-Line
 //		*( message-header )
 //		CRLF
-//		[ message-body ]
+//		[ message-payload ]
 //
 //		Status-Line     =  SIP-Version SP Status-Code SP Reason-Phrase CRLF
 public record SipResponseLine(SipVersion version, SipStatusCode sipStatusCode, String reasonPhrase) implements Serializable {

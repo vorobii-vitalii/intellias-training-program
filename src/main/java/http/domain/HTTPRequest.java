@@ -46,7 +46,7 @@ public class HTTPRequest {
 		return "HTTPRequest{" +
 						"httpRequestLine=" + httpRequestLine +
 						", headers=" + headers +
-						", body=" + Arrays.toString(body) +
+						", payload=" + Arrays.toString(body) +
 						'}';
 	}
 }

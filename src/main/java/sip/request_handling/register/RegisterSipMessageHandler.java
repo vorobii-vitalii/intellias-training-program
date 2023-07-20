@@ -1,6 +1,5 @@
 package sip.request_handling.register;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -17,13 +16,13 @@ import sip.SipResponseHeaders;
 import sip.SipResponseLine;
 import sip.SipStatusCode;
 import sip.Via;
-import sip.request_handling.SIPRequestHandler;
+import sip.request_handling.SipRequestHandler;
 import tcp.MessageSerializer;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 
-public class RegisterSIPRequestHandler implements SIPRequestHandler {
-	private static final Logger LOGGER = LoggerFactory.getLogger(RegisterSIPRequestHandler.class);
+public class RegisterSipMessageHandler implements SipRequestHandler {
+	private static final Logger LOGGER = LoggerFactory.getLogger(RegisterSipMessageHandler.class);
 	private static final int DEFAULT_EXPIRATION = 3600;
 
 	public static final Integer REMOVE_BINDINGS = 0;
@@ -32,14 +31,14 @@ public class RegisterSIPRequestHandler implements SIPRequestHandler {
 	private final BindingStorage bindingStorage;
 	private final Via serverVia;
 
-	public RegisterSIPRequestHandler(MessageSerializer messageSerializer, BindingStorage bindingStorage, Via serverVia) {
+	public RegisterSipMessageHandler(MessageSerializer messageSerializer, BindingStorage bindingStorage, Via serverVia) {
 		this.messageSerializer = messageSerializer;
 		this.bindingStorage = bindingStorage;
 		this.serverVia = serverVia;
 	}
 
 	@Override
-	public void processRequest(SipRequest sipRequest, SocketConnection socketConnection) {
+	public void process(SipRequest sipRequest, SocketConnection socketConnection) {
 		// Index for list of bindings
 		var addressOfRecord = sipRequest.headers().getTo().toCanonicalForm();
 		var contactList = sipRequest.headers().getContactList();
@@ -87,6 +86,7 @@ public class RegisterSIPRequestHandler implements SIPRequestHandler {
 		sipResponseHeaders.setContactList(new ContactSet(
 				bindingStorage.getCurrentBindings(addressOfRecord)
 		));
+		sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
 		sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
 		return new SipResponse(
 				new SipResponseLine(
@@ -112,7 +112,7 @@ public class RegisterSIPRequestHandler implements SIPRequestHandler {
 	}
 
 	@Override
-	public String getHandledRequestType() {
+	public String getHandledType() {
 		return "REGISTER";
 	}
 

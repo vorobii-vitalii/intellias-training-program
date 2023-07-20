@@ -4,10 +4,13 @@ import static java.nio.channels.SelectionKey.OP_ACCEPT;
 import static java.nio.channels.SelectionKey.OP_READ;
 import static java.nio.channels.SelectionKey.OP_WRITE;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
+import java.nio.channels.Selector;
+import java.nio.channels.spi.AbstractSelector;
 import java.nio.channels.spi.SelectorProvider;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -17,10 +20,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,10 +36,19 @@ import request_handler.RequestHandler;
 import request_handler.RequestProcessor;
 import rtcp.RTCPMessage;
 import rtcp.RTCPMessagesReader;
+import sip.request_handling.ProxyAttributesAppenderSipResponsePostProcessor;
+import sip.request_handling.RTPMediaAddressProcessor;
+import sip.request_handling.RemoveRejectedCallResponsePostProcessor;
+import sip.request_handling.SDPMediaAddressProcessor;
+import sip.request_handling.SDPReplacementSipResponsePostProcessor;
+import sip.request_handling.SIPConnectionPreparer;
 import sip.request_handling.SipRequestMessageHandler;
+import sip.request_handling.SipResponseHandler;
+import sip.request_handling.TCPConnectionsContext;
+import sip.request_handling.calls.InMemoryCallsRepository;
 import sip.request_handling.register.InMemoryBindingStorage;
 import sip.request_handling.register.InviteRequestHandler;
-import sip.request_handling.register.RegisterSIPRequestHandler;
+import sip.request_handling.register.RegisterSipMessageHandler;
 import stun.StunMessage;
 import stun.StunMessageReader;
 import tcp.MessageSerializer;
@@ -52,6 +60,7 @@ import tcp.server.GenericServer;
 import tcp.server.ServerConfig;
 import tcp.server.TCPServerConfigurer;
 import tcp.server.UDPServerConfigurer;
+import tcp.server.UnsafeSupplier;
 import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
 import udp.RTPMessage;
@@ -79,11 +88,8 @@ public class CallingServer {
 
 	private static final ByteBufferPool BUFFER_POOL = new ByteBufferPool(ByteBuffer::allocate, BUFFER_EXPIRATION_TIME_MILLIS);
 	private static final MessageSerializer MESSAGE_SERIALIZER = new MessageSerializer(BUFFER_POOL);
-	private static final AtomicInteger counter = new AtomicInteger();
 
-	private static final ScheduledExecutorService EXECUTOR_SERVICE = Executors.newScheduledThreadPool(4);
-
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 		startRTPServer();
 		startRTCPServer();
 		startSipServer();
@@ -208,13 +214,18 @@ public class CallingServer {
 		server.start();
 	}
 
-	private static void startSipServer() {
+	private static void startSipServer() throws IOException {
 		var requestQueue = new ArrayBlockingQueue<NetworkRequest<SipMessage>>(REQUEST_QUEUE_CAPACITY);
 
 		var sipRequestHandleTimer = Timer.builder("sip.request.time").register(METER_REGISTRY);
 		var sipWriteTimer = Timer.builder("sip.response.write.time").register(METER_REGISTRY);
 		var sipRequestCount = Counter.builder("sip.request.count").register(METER_REGISTRY);
 		var sipWriteCount = Counter.builder("sip.response.write.count").register(METER_REGISTRY);
+
+		var selectorProvider = SelectorProvider.provider();
+		var selector = selectorProvider.openSelector();
+
+		var tcpConnectionsContext = new TCPConnectionsContext(new SIPConnectionPreparer(BUFFER_POOL, selector));
 
 //		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = request -> {
 //			var sipMessage = request.request();
@@ -275,10 +286,14 @@ public class CallingServer {
 //
 //		};
 
-		final InMemoryBindingStorage bindingStorage = new InMemoryBindingStorage();
+		var bindingStorage = new InMemoryBindingStorage();
+		var callsRepository = new InMemoryCallsRepository();
+		List<SDPMediaAddressProcessor> sdpMediaAddressProcessors = List.of(new RTPMediaAddressProcessor(
+				new Address(getHost(), getRTPServerPort())
+		));
 		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = new SipRequestMessageHandler(
 				List.of(
-						new RegisterSIPRequestHandler(
+						new RegisterSipMessageHandler(
 								MESSAGE_SERIALIZER,
 								bindingStorage,
 								CURRENT_VIA
@@ -287,11 +302,25 @@ public class CallingServer {
 								bindingStorage,
 								MESSAGE_SERIALIZER,
 								CURRENT_VIA,
-								getCurrentSipURI()
+								getCurrentSipURI(),
+								sdpMediaAddressProcessors,
+								callsRepository
 						)
-				)
-		);
-
+				),
+				new SipResponseHandler(
+						List.of(
+								new RemoveRejectedCallResponsePostProcessor(callsRepository),
+								new SDPReplacementSipResponsePostProcessor(
+										callsRepository,
+										sdpMediaAddressProcessors
+								),
+								new ProxyAttributesAppenderSipResponsePostProcessor(
+										CURRENT_VIA,
+										getCurrentSipURI()
+								)
+						),
+						MESSAGE_SERIALIZER,
+						callsRepository));
 		RequestProcessor<NetworkRequest<SipMessage>> requestProcessor =
 				new RequestProcessor<>(requestQueue, sipRequestHandler, sipRequestHandleTimer, sipRequestCount);
 
@@ -316,24 +345,27 @@ public class CallingServer {
 							LOGGER.info("Connection closed");
 						})
 						.build(),
-				SelectorProvider.provider(),
+				selectorProvider,
 				System.err::println,
 				Map.of(
-						OP_ACCEPT, new SipAcceptOperationHandler(BUFFER_POOL),
+						OP_ACCEPT, new SipAcceptOperationHandler(tcpConnectionsContext),
 						OP_READ, sipReadHandler,
 						OP_WRITE, new WriteOperationHandler(
 								sipWriteTimer,
 								sipWriteCount,
 								(key, e) -> {
-									LOGGER.warn("Error", e);
+//									LOGGER.warn("Error", e);
 								},
 								BUFFER_POOL,
 								OpenTelemetry.noop()
 						)
 				),
-				new TCPServerConfigurer());
+				new TCPServerConfigurer(),
+				() -> selector);
 		server.start();
 	}
+
+	// Received request SipRequest{requestLine=SipRequestLine[method=REGISTER, requestURI=FullSipURI[protocol=sip, credentials=Credentials[username=service, password=null], address=Address[host=0.0.0.0, port=5068], uriParameters={}, queryParameters={}], version=SipVersion[majorVersion=2, minorVersion=0]], headers=SipHeaders{headerMap={subject=[Performance Test]}, viaList=[Via[sipSentProtocol=SipSentProtocol[protocolName=SIP, protocolVersion=2.0, transportName=TCP], sentBy=Address[host=127.0.0.1, port=36297], parameters={branch=z9hG4bK-59879-62-0}]], from=AddressOfRecord[name=sipp, sipURI=FullSipURI[protocol=sip, credentials=Credentials[username=sipp, password=null], address=Address[host=127.0.0.1, port=36297], uriParameters={}, queryParameters={}], parameters={tag=59879SIPpTag0062}], to=AddressOfRecord[name=service, sipURI=FullSipURI[protocol=sip, credentials=Credentials[username=service, password=null], address=Address[host=0.0.0.0, port=5068], uriParameters={}, queryParameters={}], parameters={}], referTo=null, commandSequence=CommandSequence[sequenceNumber=1, commandName=REGISTER], maxForwards=70, contentLength=0, contactList=ContactSet[allowedAddressOfRecords=[AddressOfRecord[name=Anonymous, sipURI=FullSipURI[protocol=sip, credentials=Credentials[username=sipp, password=null], address=Address[host=127.0.0.1, port=36297], uriParameters={}, queryParameters={}], parameters={}]]], contentType=SipMediaType[mediaType=application, mediaSubType=sdp, parameters={}], callId=62-59879@127.0.0.1, expires=null}, payload=[]}
 
 	private static ContactSet calculateContactSet(SipRequest sipRequest) {
 		final AddressOfRecord to = sipRequest.headers().getTo();

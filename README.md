@@ -25,3 +25,5 @@ Capture trafick: tcpdump -w websocket.pcap -s 2500 -vv -i lo
 
 https://medium.com/@pawilon/tuning-your-linux-kernel-and-haproxy-instance-for-high-loads-1a2105ea553e
 https://www.linangran.com/?p=547
+
+sipp -sf uac-auth.xml  0.0.0.0:5068 -t tn -max_socket 20 -trace_err

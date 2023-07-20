@@ -31,7 +31,9 @@ public class EchoServer {
 						OP_READ, new EchoReadOperationHandler(),
 						OP_WRITE, new EchoWriteOperationHandler()
 				),
-				new TCPServerConfigurer());
+				new TCPServerConfigurer(),
+				selectorProvider::openSelector
+		);
 	}
 
 	public void start() {

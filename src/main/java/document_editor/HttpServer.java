@@ -461,6 +461,7 @@ public class HttpServer {
 
 		RoundRobinProvider<Selector> httpSelectorProvider = new RoundRobinProvider<>(httpSelectors);
 
+		final SelectorProvider selectorProvider = SelectorProvider.provider();
 		var server = new GenericServer(
 				ServerConfig.builder()
 						.setHost(getHost())
@@ -468,7 +469,7 @@ public class HttpServer {
 						.setProtocolFamily(StandardProtocolFamily.INET)
 						.onConnectionClose(closeConnection)
 						.build(),
-				SelectorProvider.provider(),
+				selectorProvider,
 				System.err::println,
 				// Yourkit
 				Map.of(
