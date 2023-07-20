@@ -70,7 +70,7 @@ public class ConnectionImpl implements SocketConnection {
 
 	@Override
 	public SocketAddress getAddress() {
-		return serverAttachment.getChannel().getLocalAddress();
+		return serverAttachment.getChannel().getRemoteAddres();
 	}
 
 	@Override

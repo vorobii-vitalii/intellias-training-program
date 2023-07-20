@@ -24,7 +24,7 @@ public class ProxyAttributesAppenderSipResponsePostProcessor implements SipRespo
 	public SipResponse process(SipResponse sipResponse, SocketConnection socketConnection) {
 		var sipResponseCopy = sipResponse.replicate();
 		sipResponseCopy.headers().setContactList(calculateContactSet(sipResponse));
-		sipResponseCopy.headers().addViaAtBeggining(proxyVia);
+//		sipResponseCopy.headers().addViaAtBeggining(proxyVia);
 		sipResponseCopy.headers().setTo(sipResponseCopy.headers().getTo()
 				.addParam("tag", UUID.nameUUIDFromBytes(sipResponseCopy.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
 		);

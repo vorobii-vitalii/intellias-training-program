@@ -1,5 +1,8 @@
 package sip.request_handling.register;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.channels.Selector;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -62,7 +65,6 @@ public class InviteRequestHandler implements SipRequestHandler {
 
 	@Override
 	public void process(SipRequest sipRequest, SocketConnection socketConnection) {
-		Selector selector;
 		var toAddressOfRecord = sipRequest.headers().getTo();
 		// Assume address of record host = current host for now...
 		var connections = bindingStorage.getConnectionsByAddressOfRecord(toAddressOfRecord.toCanonicalForm());
@@ -119,7 +121,7 @@ public class InviteRequestHandler implements SipRequestHandler {
 	private void sendInvite(SipRequest originalRequest, SocketConnection clientToCall, SessionDescription sessionDescription) {
 		// prototype pattern
 		var sipRequestHeaders = new SipRequestHeaders();
-		sipRequestHeaders.addVia(serverVia);
+//		sipRequestHeaders.addVia(serverVia);
 		for (Via via : originalRequest.headers().getViaList()) {
 			sipRequestHeaders.addVia(via.normalize());
 		}
@@ -142,17 +144,24 @@ public class InviteRequestHandler implements SipRequestHandler {
 
 	private void sendTryingResponse(SipRequest sipRequest, SocketConnection socketConnection) {
 		var sipResponseHeaders = new SipResponseHeaders();
-		sipResponseHeaders.addVia(serverVia);
-		for (Via via : sipRequest.headers().getViaList()) {
-			sipResponseHeaders.addVia(via.normalize());
+//		sipResponseHeaders.addVia(serverVia);
+		for (int i = 0; i < sipRequest.headers().getViaList().size(); i++) {
+			var via = sipRequest.headers().getViaList().get(i).normalize();
+			sipResponseHeaders.addVia(via);
+//			if (i == 0) {
+//				var address = (InetSocketAddress) socketConnection.getAddress();
+//				sipResponseHeaders.addVia(via.addParameter("received", "127.0.0.1" + ":" + address.getPort()));
+//			}
+//			else {
+//			}
 		}
-		sipResponseHeaders.addExtensionHeader("Status", "ringing");
 		sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
 		sipResponseHeaders.setMaxForwards(sipRequest.headers().getMaxForwards() - 1);
 		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
 		sipResponseHeaders.setTo(sipRequest.headers().getTo()
 				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
 		);
+		sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
 		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
 //		sipResponseHeaders.setContactList(sipRequest.headers().getContactList());
 		var sipResponse = new SipResponse(
@@ -171,8 +180,15 @@ public class InviteRequestHandler implements SipRequestHandler {
 	private void sendNotFoundResponse(SipRequest sipRequest, SocketConnection socketConnection) {
 		var sipResponseHeaders = new SipResponseHeaders();
 		sipResponseHeaders.addVia(serverVia);
-		for (Via via : sipRequest.headers().getViaList()) {
-			sipResponseHeaders.addVia(via.normalize());
+		for (int i = 0; i < sipRequest.headers().getViaList().size(); i++) {
+			var via = sipRequest.headers().getViaList().get(i).normalize();
+			if (i == 0) {
+				var address = (InetSocketAddress) socketConnection.getAddress();
+				sipResponseHeaders.addVia(via.addParameter("received", address.getHostName() + ":" + address.getPort()));
+			}
+			else {
+				sipResponseHeaders.addVia(via);
+			}
 		}
 		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
 		sipResponseHeaders.setTo(sipRequest.headers().getTo()

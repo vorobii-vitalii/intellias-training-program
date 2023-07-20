@@ -46,6 +46,7 @@ import sip.request_handling.SipRequestMessageHandler;
 import sip.request_handling.SipResponseHandler;
 import sip.request_handling.TCPConnectionsContext;
 import sip.request_handling.calls.InMemoryCallsRepository;
+import sip.request_handling.register.AckRequestHandler;
 import sip.request_handling.register.InMemoryBindingStorage;
 import sip.request_handling.register.InviteRequestHandler;
 import sip.request_handling.register.RegisterSipMessageHandler;
@@ -75,7 +76,7 @@ public class CallingServer {
 	public static final int REQUEST_QUEUE_CAPACITY = 10_000;
 	public static final Via CURRENT_VIA = new Via(new SipSentProtocol("SIP", "2.0", "TCP"),
 			new Address(getHost(), getSipServerPort()),
-			Map.of("branch", "z9hG4bK25235636", "received", "127.0.0.1")
+			Map.of("branch", "z9hG4bK25235636")
 	);
 	public static final SimpleMeterRegistry METER_REGISTRY = new SimpleMeterRegistry();
 
@@ -299,6 +300,14 @@ public class CallingServer {
 								CURRENT_VIA
 						),
 						new InviteRequestHandler(
+								bindingStorage,
+								MESSAGE_SERIALIZER,
+								CURRENT_VIA,
+								getCurrentSipURI(),
+								sdpMediaAddressProcessors,
+								callsRepository
+						),
+						new AckRequestHandler(
 								bindingStorage,
 								MESSAGE_SERIALIZER,
 								CURRENT_VIA,

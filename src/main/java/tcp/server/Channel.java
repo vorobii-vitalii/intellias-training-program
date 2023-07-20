@@ -10,4 +10,6 @@ public interface Channel {
 	boolean isOpen();
 	void close() throws IOException;
 	SocketAddress getLocalAddress();
+
+	SocketAddress getRemoteAddres();
 }

@@ -44,4 +44,14 @@ public class NIOChannel implements Channel {
 			throw new UncheckedIOException(e);
 		}
 	}
+
+	@Override
+	public SocketAddress getRemoteAddres() {
+		try {
+			return socketChannel.getRemoteAddress();
+		}
+		catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
 }
