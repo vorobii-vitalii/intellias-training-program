@@ -9,8 +9,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
-import java.nio.channels.Selector;
-import java.nio.channels.spi.AbstractSelector;
 import java.nio.channels.spi.SelectorProvider;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -61,7 +59,6 @@ import tcp.server.GenericServer;
 import tcp.server.ServerConfig;
 import tcp.server.TCPServerConfigurer;
 import tcp.server.UDPServerConfigurer;
-import tcp.server.UnsafeSupplier;
 import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
 import udp.RTPMessage;
@@ -305,8 +302,8 @@ public class CallingServer {
 								CURRENT_VIA,
 								getCurrentSipURI(),
 								sdpMediaAddressProcessors,
-								callsRepository
-						),
+								callsRepository,
+								getSdpResponse()),
 						new AckRequestHandler(
 								bindingStorage,
 								MESSAGE_SERIALIZER,
@@ -325,7 +322,8 @@ public class CallingServer {
 								),
 								new ProxyAttributesAppenderSipResponsePostProcessor(
 										CURRENT_VIA,
-										getCurrentSipURI()
+										getCurrentSipURI(),
+										getSdpResponse()
 								)
 						),
 						MESSAGE_SERIALIZER,

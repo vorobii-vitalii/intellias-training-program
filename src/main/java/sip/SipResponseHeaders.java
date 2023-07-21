@@ -315,7 +315,7 @@ public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHe
 		sipResponseHeaders.setReferTo(referTo);
 		sipResponseHeaders.setCommandSequence(commandSequence);
 		for (var via : viaList) {
-			sipResponseHeaders.addVia(via);
+			sipResponseHeaders.addVia(via.normalize());
 		}
 		sipResponseHeaders.setContactList(contactList);
 		sipResponseHeaders.setContentType(contentType);

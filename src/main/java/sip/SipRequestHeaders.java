@@ -50,7 +50,7 @@ import util.Serializable;
 //		in standards-track RFCs.
 
 
-public class SipRequestHeaders implements Serializable {
+public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHeaders> {
 	public static final char COLON = ':';
 	public static final char CARRET = '\r';
 	public static final char NEW_LINE = '\n';
@@ -93,6 +93,51 @@ public class SipRequestHeaders implements Serializable {
 	private SipMediaType contentType;
 	private String callId;
 	private Integer expires;
+
+	@Override
+	public SipRequestHeaders replicate() {
+		var sipRequestHeaders = new SipRequestHeaders();
+		sipRequestHeaders.setFrom(from);
+		sipRequestHeaders.setTo(to);
+		sipRequestHeaders.setReferTo(referTo);
+		sipRequestHeaders.setCommandSequence(commandSequence);
+		for (var via : viaList) {
+			sipRequestHeaders.addVia(via.normalize());
+		}
+		sipRequestHeaders.setContactList(contactList);
+		sipRequestHeaders.setContentType(contentType);
+		sipRequestHeaders.setCallId(callId);
+		sipRequestHeaders.setContentLength(contentLength);
+		sipRequestHeaders.setMaxForwards(maxForwards);
+		for (var entry : extensionHeaderMap.entrySet()) {
+			for (var value : entry.getValue()) {
+				sipRequestHeaders.addSingleHeader(entry.getKey(), value);
+			}
+		}
+		return sipRequestHeaders;
+	}
+
+	public SipResponseHeaders toResponseHeaders() {
+		var sipResponseHeaders = new SipResponseHeaders();
+		sipResponseHeaders.setFrom(from);
+		sipResponseHeaders.setTo(to);
+		sipResponseHeaders.setReferTo(referTo);
+		sipResponseHeaders.setCommandSequence(commandSequence);
+		for (var via : viaList) {
+			sipResponseHeaders.addVia(via.normalize());
+		}
+		sipResponseHeaders.setContactList(contactList);
+		sipResponseHeaders.setContentType(contentType);
+		sipResponseHeaders.setCallId(callId);
+		sipResponseHeaders.setContentLength(contentLength);
+		sipResponseHeaders.setMaxForwards(maxForwards);
+		for (var entry : extensionHeaderMap.entrySet()) {
+			for (var value : entry.getValue()) {
+				sipResponseHeaders.addExtensionHeader(entry.getKey(), value);
+			}
+		}
+		return sipResponseHeaders;
+	}
 
 	private final Map<String, Consumer<String>> headerSetterByHeaderName = ImmutableMap.<String, Consumer<String>>builder()
 			.put("from", v -> this.from = AddressOfRecord.parse(v))
@@ -200,6 +245,10 @@ public class SipRequestHeaders implements Serializable {
 
 	public void addVia(Via via) {
 		viaList.add(via);
+	}
+
+	public void addViaFront(Via via) {
+		viaList.add(0, via);
 	}
 
 	public String getCallId() {
@@ -339,5 +388,4 @@ public class SipRequestHeaders implements Serializable {
 		byteBuffer.put((byte) CARRET);
 		byteBuffer.put((byte) NEW_LINE);
 	}
-
 }

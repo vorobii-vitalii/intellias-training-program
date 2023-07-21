@@ -1,14 +1,10 @@
 package sip.request_handling.register;
 
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.nio.channels.Selector;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +13,6 @@ import net.sourceforge.jsdp.SDPException;
 import net.sourceforge.jsdp.SDPFactory;
 import net.sourceforge.jsdp.SessionDescription;
 import sip.AddressOfRecord;
-import sip.ContactList;
 import sip.ContactSet;
 import sip.SipRequest;
 import sip.SipRequestHeaders;
@@ -29,7 +24,6 @@ import sip.SipStatusCode;
 import sip.SipURI;
 import sip.Via;
 import sip.request_handling.SDPMediaAddressProcessor;
-import sip.request_handling.SipMessageHandler;
 import sip.request_handling.SipRequestHandler;
 import sip.request_handling.calls.CallsRepository;
 import tcp.MessageSerializer;
@@ -46,6 +40,7 @@ public class InviteRequestHandler implements SipRequestHandler {
 	private final SipURI currentSipURI;
 	private final Collection<SDPMediaAddressProcessor> sdpMediaAddressProcessors;
 	private final CallsRepository callsRepository;
+	private final byte[] sdpResponse;
 
 	public InviteRequestHandler(
 			BindingStorage bindingStorage,
@@ -53,14 +48,15 @@ public class InviteRequestHandler implements SipRequestHandler {
 			Via serverVia,
 			SipURI currentSipURI,
 			Collection<SDPMediaAddressProcessor> sdpMediaAddressProcessors,
-			CallsRepository callsRepository
-	) {
+			CallsRepository callsRepository,
+			byte[] sdpResponse) {
 		this.bindingStorage = bindingStorage;
 		this.messageSerializer = messageSerializer;
 		this.serverVia = serverVia;
 		this.currentSipURI = currentSipURI;
 		this.sdpMediaAddressProcessors = sdpMediaAddressProcessors;
 		this.callsRepository = callsRepository;
+		this.sdpResponse = sdpResponse;
 	}
 
 	@Override
@@ -120,50 +116,24 @@ public class InviteRequestHandler implements SipRequestHandler {
 
 	private void sendInvite(SipRequest originalRequest, SocketConnection clientToCall, SessionDescription sessionDescription) {
 		// prototype pattern
-		var sipRequestHeaders = new SipRequestHeaders();
-//		sipRequestHeaders.addVia(serverVia);
-		for (Via via : originalRequest.headers().getViaList()) {
-			sipRequestHeaders.addVia(via.normalize());
-		}
-		sipRequestHeaders.setFrom(originalRequest.headers().getFrom());
-		sipRequestHeaders.setTo(originalRequest.headers().getTo());
-		sipRequestHeaders.setContactList(calculateContactSet(originalRequest));
-//		sipRequestHeaders.setContactList(originalRequest.headers().getContactList());
-		sipRequestHeaders.setCallId(originalRequest.headers().getCallId());
-		sipRequestHeaders.setMaxForwards(originalRequest.headers().getMaxForwards() - 1);
-		sipRequestHeaders.setCommandSequence(originalRequest.headers().getCommandSequence());
+		var requestCopy = originalRequest.replicate();
+		requestCopy.headers().addViaFront(serverVia);
 		var serializedSDP = sessionDescription.toString().getBytes(StandardCharsets.UTF_8);
 		var sipResponse = new SipRequest(
-				new SipRequestLine(INVITE, originalRequest.requestLine().requestURI(), originalRequest.requestLine().version()),
-				sipRequestHeaders,
-				serializedSDP
+				requestCopy.requestLine(),
+				requestCopy.headers(),
+				sdpResponse
 		);
 		clientToCall.appendResponse(messageSerializer.serialize(sipResponse));
 		clientToCall.changeOperation(OperationType.WRITE);
 	}
 
 	private void sendTryingResponse(SipRequest sipRequest, SocketConnection socketConnection) {
-		var sipResponseHeaders = new SipResponseHeaders();
-//		sipResponseHeaders.addVia(serverVia);
-		for (int i = 0; i < sipRequest.headers().getViaList().size(); i++) {
-			var via = sipRequest.headers().getViaList().get(i).normalize();
-			sipResponseHeaders.addVia(via);
-//			if (i == 0) {
-//				var address = (InetSocketAddress) socketConnection.getAddress();
-//				sipResponseHeaders.addVia(via.addParameter("received", "127.0.0.1" + ":" + address.getPort()));
-//			}
-//			else {
-//			}
+		var sipResponseHeaders = sipRequest.headers().toResponseHeaders();
+		sipResponseHeaders.addViaAtBeggining(serverVia);
+		for (Via via : sipRequest.headers().getViaList()) {
+			sipResponseHeaders.addVia(via.normalize());
 		}
-		sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
-		sipResponseHeaders.setMaxForwards(sipRequest.headers().getMaxForwards() - 1);
-		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
-		sipResponseHeaders.setTo(sipRequest.headers().getTo()
-				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
-		);
-		sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
-		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
-//		sipResponseHeaders.setContactList(sipRequest.headers().getContactList());
 		var sipResponse = new SipResponse(
 				new SipResponseLine(
 						sipRequest.requestLine().version(),
@@ -192,10 +162,10 @@ public class InviteRequestHandler implements SipRequestHandler {
 		}
 		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
 		sipResponseHeaders.setTo(sipRequest.headers().getTo()
-				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
+//				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
 		);
-		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
-//		sipResponseHeaders.setContactList(sipRequest.headers().getContactList());
+//		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
+		sipResponseHeaders.setContactList(sipRequest.headers().getContactList());
 		var sipResponse = new SipResponse(
 				new SipResponseLine(
 						sipRequest.requestLine().version(),

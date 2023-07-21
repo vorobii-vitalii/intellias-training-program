@@ -70,48 +70,28 @@ public class AckRequestHandler implements SipRequestHandler {
 		}
 	}
 
+	//[20:38:47:745][Warning]Core:linphone: For payload type opus, proposed number was 96 but the remote phone answered 106
+
 	private void sendAck(SipRequest originalRequest, SocketConnection connection) {
 		// prototype pattern
-		var sipRequestHeaders = new SipRequestHeaders();
-		//		sipRequestHeaders.addVia(serverVia);
-		for (Via via : originalRequest.headers().getViaList()) {
-			sipRequestHeaders.addVia(via.normalize());
-		}
-		sipRequestHeaders.setFrom(originalRequest.headers().getFrom());
-		sipRequestHeaders.setTo(originalRequest.headers().getTo());
-		sipRequestHeaders.setContactList(calculateContactSet(originalRequest));
-		//		sipRequestHeaders.setContactList(originalRequest.headers().getContactList());
-		sipRequestHeaders.setCallId(originalRequest.headers().getCallId());
-		sipRequestHeaders.setMaxForwards(originalRequest.headers().getMaxForwards() - 1);
-		sipRequestHeaders.setCommandSequence(originalRequest.headers().getCommandSequence());
-		var sipResponse = new SipRequest(
-				new SipRequestLine(ACK, originalRequest.requestLine().requestURI(), originalRequest.requestLine().version()),
-				sipRequestHeaders,
-				new byte[] {}
-		);
-		connection.appendResponse(messageSerializer.serialize(sipResponse));
+		var requestCopy = originalRequest.replicate();
+		requestCopy.headers().addViaFront(serverVia);
+		connection.appendResponse(messageSerializer.serialize(requestCopy));
 		connection.changeOperation(OperationType.WRITE);
 	}
 
 	private void sendNotFoundResponse(SipRequest sipRequest, SocketConnection socketConnection) {
 		var sipResponseHeaders = new SipResponseHeaders();
 		sipResponseHeaders.addVia(serverVia);
-		for (int i = 0; i < sipRequest.headers().getViaList().size(); i++) {
-			var via = sipRequest.headers().getViaList().get(i).normalize();
-			if (i == 0) {
-				var address = (InetSocketAddress) socketConnection.getAddress();
-				sipResponseHeaders.addVia(via.addParameter("received", address.getHostName() + ":" + address.getPort()));
-			}
-			else {
-				sipResponseHeaders.addVia(via);
-			}
+		for (Via via : sipRequest.headers().getViaList()) {
+			sipResponseHeaders.addVia(via.normalize());
 		}
 		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
 		sipResponseHeaders.setTo(sipRequest.headers().getTo()
-				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
+//				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
 		);
-		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
-		//		sipResponseHeaders.setContactList(sipRequest.headers().getContactList());
+//		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
+				sipResponseHeaders.setContactList(sipRequest.headers().getContactList());
 		var sipResponse = new SipResponse(
 				new SipResponseLine(
 						sipRequest.requestLine().version(),

@@ -6,7 +6,17 @@ import java.util.Objects;
 
 import util.Serializable;
 
-public record SipRequest(SipRequestLine requestLine, SipRequestHeaders headers, byte[] payload) implements Serializable, SipMessage {
+public record SipRequest(SipRequestLine requestLine, SipRequestHeaders headers, byte[] payload)
+		implements Serializable, SipMessage, Cloneable<SipRequest> {
+
+	@Override
+	public SipRequest replicate() {
+		return new SipRequest(
+				requestLine,
+				headers.replicate(),
+				payload
+		);
+	}
 
 	@Override
 	public boolean equals(Object o) {
