@@ -76,6 +76,7 @@ public class AckRequestHandler implements SipRequestHandler {
 		// prototype pattern
 		var requestCopy = originalRequest.replicate();
 		requestCopy.headers().addViaFront(serverVia);
+		requestCopy.headers().setContactList(new ContactSet(Set.of(new AddressOfRecord("", currentSipURI, Map.of()))));
 		connection.appendResponse(messageSerializer.serialize(requestCopy));
 		connection.changeOperation(OperationType.WRITE);
 	}

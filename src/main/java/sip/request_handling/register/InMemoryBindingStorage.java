@@ -19,7 +19,7 @@ import tcp.server.SocketConnection;
 @ThreadSafe
 public class InMemoryBindingStorage implements BindingStorage {
 	private static final Logger LOGGER = LoggerFactory.getLogger(InMemoryBindingStorage.class);
-	public static final String EXPIRES = "expires";
+	private static final String EXPIRES = "expires";
 	private final Map<AddressOfRecord, Map<AddressOfRecord, BindingInfo>> bindings = new ConcurrentHashMap<>();
 
 	@Override

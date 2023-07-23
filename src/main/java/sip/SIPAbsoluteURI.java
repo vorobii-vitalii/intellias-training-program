@@ -10,4 +10,9 @@ public record SIPAbsoluteURI(String uri) implements SipURI {
 	public SipURI toCanonicalForm() {
 		return this;
 	}
+
+	@Override
+	public SipURI addParam(String paramName, String value) {
+		throw new IllegalStateException("");
+	}
 }

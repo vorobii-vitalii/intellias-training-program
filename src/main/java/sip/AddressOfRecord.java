@@ -17,7 +17,6 @@ import javax.annotation.Nonnull;
 import util.Serializable;
 
 public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Nonnull Map<String, String> parameters) implements Serializable {
-	private static final String FALLBACK_NAME = "Anonymous";
 	private static final char LAQUOT = '<';
 	private static final char RAQUOT = '>';
 	private static final int NAME_DELIMITER_LENGTH = 1;
@@ -38,7 +37,7 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 	}
 
 	public AddressOfRecord toCanonicalForm() {
-		return new AddressOfRecord(FALLBACK_NAME, sipURI.toCanonicalForm(), Map.of());
+		return new AddressOfRecord("", sipURI.toCanonicalForm(), Map.of());
 	}
 
 	public AddressOfRecord addParam(String param, String value) {
@@ -52,13 +51,13 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 		var laquotIndex = findFromFromBegging(str, LAQUOT);
 		// addr-spec case
 		if (laquotIndex == NOT_FOUND) {
-			return new AddressOfRecord(FALLBACK_NAME, SipURI.parse(str), Map.of());
+			return new AddressOfRecord("", SipURI.parse(str), Map.of());
 		}
 		var raquotIndex = findFromFromBegging(str, RAQUOT);
 		var displayName = Optional.ofNullable(trim(str, 0, laquotIndex - 1, CHARACTERS_TO_EXCLUDE))
 				.filter(s -> !s.isEmpty())
 				.map(s -> isQuoted(s) ? s.substring(1, s.length() - 1) : s)
-				.orElse(FALLBACK_NAME);
+				.orElse("");
 		var sipURI = SipURI.parse(str.subSequence(laquotIndex + 1, raquotIndex).toString());
 		return new AddressOfRecord(displayName, sipURI,
 				parseParameters(str.subSequence(raquotIndex + 1, str.length()).toString(), PARAMETERS_DELIMITER));
@@ -77,10 +76,12 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 
 	@Override
 	public void serialize(ByteBuffer dest) {
-		dest.put((byte) NAME_DELIMITER);
-		dest.put(name.getBytes(StandardCharsets.UTF_8));
-		dest.put((byte) NAME_DELIMITER);
-		dest.put(SPACE);
+		if (!name.isEmpty()) {
+			dest.put((byte) NAME_DELIMITER);
+			dest.put(name.getBytes(StandardCharsets.UTF_8));
+			dest.put((byte) NAME_DELIMITER);
+			dest.put(SPACE);
+		}
 		dest.put((byte) LAQUOT);
 		sipURI.serialize(dest);
 		dest.put((byte) RAQUOT);
@@ -94,14 +95,17 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 
 	@Override
 	public int getSize() {
-		return NAME_DELIMITER_LENGTH
-				+ name.length()
-				+ NAME_DELIMITER_LENGTH
-				+ AOR_DELIMITER_LENGTH
-				+ SIP_URI_DELIMITER_LENGTH
+		var totalSize = SIP_URI_DELIMITER_LENGTH
 				+ sipURI.getSize()
 				+ SIP_URI_DELIMITER_LENGTH
 				+ getParametersInBytes();
+		if (!name.isEmpty()) {
+			totalSize += NAME_DELIMITER_LENGTH
+					+ name.length()
+					+ NAME_DELIMITER_LENGTH
+					+ AOR_DELIMITER_LENGTH;
+		}
+		return totalSize;
 	}
 
 	private int getParametersInBytes() {

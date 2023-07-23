@@ -3,7 +3,9 @@ package sip;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -13,7 +15,8 @@ import java.util.function.Function;
 
 import javax.annotation.Nonnull;
 
-import document_editor.utils.Copyable;
+import com.google.common.collect.ImmutableMap;
+
 import util.Serializable;
 
 public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHeaders> {
@@ -45,9 +48,10 @@ public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHe
 			"t", "to",
 			"v", "via"
 	);
+	public static final String RECORD_ROUTE = "record-route";
 
 	private final Map<String, List<String>> extensionHeaderMap = new HashMap<>();
-	private final List<Via> viaList = new ArrayList<>();
+	private final Deque<Via> viaList = new LinkedList<>();
 	private AddressOfRecord from;
 	private AddressOfRecord to;
 	private AddressOfRecord referTo;
@@ -57,19 +61,21 @@ public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHe
 	private ContactList contactList;
 	private SipMediaType contentType;
 	private String callId;
+	private final List<AddressOfRecord> recordRoutes = new ArrayList<>();
 
-	private final Map<String, Consumer<String>> headerSetterByHeaderName = Map.of(
-			"from", v -> this.from = AddressOfRecord.parse(v),
-			"to", v -> this.to = AddressOfRecord.parse(v),
-			"refer-to", v -> this.referTo = AddressOfRecord.parse(v),
-			"cseq", v -> this.commandSequence = CommandSequence.parse(v),
-			"via", v -> viaList.addAll(Via.parseMultiple(v)),
-			"content-length", v -> contentLength = Integer.parseInt(v.trim()),
-			"max-forwards", v -> maxForwards = Integer.parseInt(v.trim()),
-			"contact", v -> contactList = ContactList.parse(v),
-			"content-type", v -> contentType = SipMediaType.parse(v),
-			"call-id", v -> callId = v.trim()
-	);
+	private final Map<String, Consumer<String>> headerSetterByHeaderName = ImmutableMap.<String, Consumer<String>>builder()
+			.put("from", v -> this.from = AddressOfRecord.parse(v))
+			.put("to", v -> this.to = AddressOfRecord.parse(v))
+			.put("refer-to", v -> this.referTo = AddressOfRecord.parse(v))
+			.put("cseq", v -> this.commandSequence = CommandSequence.parse(v))
+			.put("via", v -> viaList.addAll(Via.parseMultiple(v)))
+			.put("content-length", v -> contentLength = Integer.parseInt(v.trim()))
+			.put("max-forwards", v -> maxForwards = Integer.parseInt(v.trim()))
+			.put("contact", v -> contactList = ContactList.parse(v))
+			.put("content-type", v -> contentType = SipMediaType.parse(v))
+			.put("call-id", v -> callId = v.trim())
+			.put("record-route", v -> recordRoutes.add(AddressOfRecord.parse(v.trim())))
+			.build();
 
 	@Override
 	public void serialize(ByteBuffer dest) {
@@ -84,6 +90,9 @@ public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHe
 		serializeIfNeeded(CALL_ID, callId, dest, v -> v.getBytes(StandardCharsets.UTF_8));
 		for (var via : viaList) {
 			serializeIfNeeded(VIA, via, dest);
+		}
+		for (var sipUri : recordRoutes) {
+			serializeIfNeeded(RECORD_ROUTE, sipUri, dest);
 		}
 		for (var entry : extensionHeaderMap.entrySet()){
 			for (var value : entry.getValue()) {
@@ -108,6 +117,9 @@ public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHe
 		total += calculateHeaderFieldSize(CALL_ID, callId, String::length);
 		for (var via : viaList) {
 			total += calculateHeaderFieldSize(VIA, via);
+		}
+		for (var sipUri : recordRoutes) {
+			total += calculateHeaderFieldSize(RECORD_ROUTE, sipUri);
 		}
 		for (var entry : extensionHeaderMap.entrySet()){
 			for (var value : entry.getValue()) {
@@ -226,7 +238,7 @@ public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHe
 	}
 
 	@Nonnull
-	public List<Via> getViaList() {
+	public Deque<Via> getViaList() {
 		return viaList;
 	}
 
@@ -255,11 +267,11 @@ public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHe
 	}
 
 	public void addVia(Via via) {
-		viaList.add(via);
+		viaList.addLast(via);
 	}
 
 	public void addViaAtBeggining(Via via) {
-		viaList.add(0, via);
+		viaList.addFirst(via);
 	}
 
 	public void setCallId(String callId) {
@@ -304,6 +316,7 @@ public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHe
 				", contactList=" + contactList +
 				", contentType=" + contentType +
 				", callId=" + callId +
+				", recordRoutes=" + recordRoutes +
 				'}';
 	}
 
@@ -317,6 +330,9 @@ public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHe
 		for (var via : viaList) {
 			sipResponseHeaders.addVia(via.normalize());
 		}
+		for (var recordRoute : recordRoutes) {
+			sipResponseHeaders.addRecordRoute(recordRoute);
+		}
 		sipResponseHeaders.setContactList(contactList);
 		sipResponseHeaders.setContentType(contentType);
 		sipResponseHeaders.setCallId(callId);
@@ -329,4 +345,13 @@ public class SipResponseHeaders implements Serializable, Cloneable<SipResponseHe
 		}
 		return sipResponseHeaders;
 	}
+
+	public void addRecordRouteFront(AddressOfRecord addressOfRecord) {
+		recordRoutes.add(0, addressOfRecord);
+	}
+
+	public void addRecordRoute(AddressOfRecord sipUri) {
+		recordRoutes.add(sipUri);
+	}
+
 }

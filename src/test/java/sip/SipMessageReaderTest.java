@@ -63,7 +63,7 @@ class SipMessageReaderTest {
 						Map.of()
 		));
 		sipRequestHeaders.addSingleHeader("Call-ID", "a84b4c76e66710@pc33.atlanta.com");
-		sipRequestHeaders.setContentType(new SipMediaType("application", "udp", Map.of()));
+		sipRequestHeaders.setContentType(new SipMediaType("application", "sdp", Map.of()));
 		sipRequestHeaders.setCommandSequence(new CommandSequence(314159, "INVITE"));
 		sipRequestHeaders.setContactList(new ContactSet(Set.of(
 				new AddressOfRecord(

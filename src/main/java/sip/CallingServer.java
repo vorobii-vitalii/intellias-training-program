@@ -10,7 +10,6 @@ import java.net.InetSocketAddress;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.nio.channels.spi.SelectorProvider;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,7 +42,9 @@ import sip.request_handling.SIPConnectionPreparer;
 import sip.request_handling.SipRequestMessageHandler;
 import sip.request_handling.SipResponseHandler;
 import sip.request_handling.TCPConnectionsContext;
+import sip.request_handling.ViaCreator;
 import sip.request_handling.calls.InMemoryCallsRepository;
+import sip.request_handling.normalize.SipRequestViaParameterNormalizer;
 import sip.request_handling.register.AckRequestHandler;
 import sip.request_handling.register.InMemoryBindingStorage;
 import sip.request_handling.register.InviteRequestHandler;
@@ -294,6 +295,7 @@ public class CallingServer {
 						new RegisterSipMessageHandler(
 								MESSAGE_SERIALIZER,
 								bindingStorage,
+								new ViaCreator(),
 								CURRENT_VIA
 						),
 						new InviteRequestHandler(
@@ -302,8 +304,8 @@ public class CallingServer {
 								CURRENT_VIA,
 								getCurrentSipURI(),
 								sdpMediaAddressProcessors,
-								callsRepository,
-								getSdpResponse()),
+								callsRepository
+						),
 						new AckRequestHandler(
 								bindingStorage,
 								MESSAGE_SERIALIZER,
@@ -322,12 +324,11 @@ public class CallingServer {
 								),
 								new ProxyAttributesAppenderSipResponsePostProcessor(
 										CURRENT_VIA,
-										getCurrentSipURI(),
-										getSdpResponse()
-								)
+										sdpMediaAddressProcessors, new AddressOfRecord("", getCurrentSipURI(), Map.of()))
 						),
 						MESSAGE_SERIALIZER,
-						callsRepository));
+						callsRepository),
+				List.of(new SipRequestViaParameterNormalizer()));
 		RequestProcessor<NetworkRequest<SipMessage>> requestProcessor =
 				new RequestProcessor<>(requestQueue, sipRequestHandler, sipRequestHandleTimer, sipRequestCount);
 
@@ -466,34 +467,6 @@ public class CallingServer {
 		socketConnection.changeOperation(OperationType.WRITE);
 	}
 
-	private static void sendInvite(SipRequest registrationRequest, SocketConnection socketConnection) {
-		final byte[] sdpResponse = getSdpResponse();
-
-		var headers = new SipRequestHeaders();
-		headers.addVia(CURRENT_VIA);
-		headers.setMaxForwards(70);
-		headers.setFrom(createFrom());
-		// addParam("tag", UUID.nameUUIDFromBytes(registrationRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
-		headers.setTo(new AddressOfRecord(
-				registrationRequest.headers().getFrom().name(),
-				registrationRequest.headers().getFrom().sipURI(),
-				Map.of()
-		));
-		headers.setContactList(calculateContactSet(registrationRequest));
-		headers.setCallId(String.valueOf(new Random().nextInt()));
-		headers.setCommandSequence(new CommandSequence(1, "INVITE"));
-		headers.setContentType(new SipMediaType("application", "sdp", Map.of()));
-		headers.setContentLength(sdpResponse.length);
-
-		var sipRequest = new SipRequest(
-				new SipRequestLine("INVITE", registrationRequest.headers().getFrom().sipURI(), new SipVersion(2, 0)),
-				headers,
-				sdpResponse
-		);
-		socketConnection.appendResponse(MESSAGE_SERIALIZER.serialize(sipRequest));
-		socketConnection.changeOperation(OperationType.WRITE);
-	}
-
 	private static AddressOfRecord createFrom() {
 		return new AddressOfRecord(
 				"George " + new Random().nextInt(),
@@ -502,87 +475,8 @@ public class CallingServer {
 		);
 	}
 
-	private static void sendOK(SipRequest sipRequest, SocketConnection socketConnection) {
-		var sipResponseHeaders = new SipResponseHeaders();
-		for (Via via : sipRequest.headers().getViaList()) {
-			sipResponseHeaders.addVia(via.normalize());
-		}
-		sipResponseHeaders.addVia(CURRENT_VIA);
-		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
-		sipResponseHeaders.setTo(sipRequest.headers().getTo()
-				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
-		);
-		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
-		sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
-		sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
-		sipResponseHeaders.setContentType(new SipMediaType("application", "sdp", Map.of()));
-		final byte[] sdpResponse = getSdpResponse();
-
-		sipResponseHeaders.setContentLength(sdpResponse.length);
-		var response = new SipResponse(
-				new SipResponseLine(new SipVersion(2, 0), new SipStatusCode(200), "OK"),
-				sipResponseHeaders,
-				sdpResponse
-		);
-		socketConnection.appendResponse(MESSAGE_SERIALIZER.serialize(response));
-		socketConnection.changeOperation(OperationType.WRITE);
-	}
-
 	// SSL Engine, test using SSL engine
 	// max udp = 1536 - headers size
-
-
-	private static byte[] getSdpResponse() {
-		return (
-				"""
-						v=0\r
-						o=John 3660 1765 IN IP4 127.0.0.1\r
-						s=Talk\r
-						c=IN IP4 127.0.0.1\r
-						t=0 0\r
-						a=rtcp-xr:rcvr-rtt=all:10000 stat-summary=loss,dup,jitt,TTL voip-metrics\r
-						a=record:off\r
-						m=audio %s RTP/AVP 96 97 98 0 8 3 9 99 18 100 102 10 11 101 103 104 105 106\r
-						a=rtpmap:96 opus/48000/2\r
-						a=fmtp:96 useinbandfec=1\r
-						a=rtpmap:97 speex/16000\r
-						a=fmtp:97 vbr=on\r
-						a=rtpmap:98 speex/8000\r
-						a=fmtp:98 vbr=on\r
-						a=rtpmap:99 iLBC/8000\r
-						a=fmtp:99 mode=30\r
-						a=fmtp:18 annexb=yes\r
-						a=rtpmap:100 speex/32000\r
-						a=fmtp:100 vbr=on\r
-						a=rtpmap:102 BV16/8000\r
-						a=rtpmap:101 telephone-event/48000\r
-						a=rtpmap:103 telephone-event/16000\r
-						a=rtpmap:104 telephone-event/8000\r
-						a=rtpmap:105 telephone-event/32000\r
-						a=rtpmap:106 telephone-event/44100\r
-						a=rtcp:%s\r
-						a=rtcp-fb:* trr-int 1000\r
-						a=rtcp-fb:* ccm tmmbr\r
-						\r"""
-
-//				"""
-//						v=0\r
-//						o=- 1234567890 1 IN IP4 127.0.0.1\r
-//						s=Talk\r
-//						c=IN IP4 127.0.0.1\r
-//						t=0 0\r
-//						m=audio %s RTP/AVP 96\r
-//						a=rtpmap:96 opus/48000/2\r
-//						a=fmtp:96 useinbandfec=1\r
-//						a=rtcp:40134\r
-//						\r"""
-				.formatted(getRTPServerPort(), getRTCPServerPort())
-		).getBytes(StandardCharsets.UTF_8);
-	}
-
-	private static String getIpAddress(SocketConnection socketConnection) {
-		return socketConnection.getAddress().toString().substring(1);
-	}
 
 	private static int getSipServerPort() {
 		return Optional.ofNullable(System.getenv("SIP_PORT"))

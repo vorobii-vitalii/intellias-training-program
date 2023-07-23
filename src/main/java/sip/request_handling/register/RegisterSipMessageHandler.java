@@ -17,6 +17,7 @@ import sip.SipResponseLine;
 import sip.SipStatusCode;
 import sip.Via;
 import sip.request_handling.SipRequestHandler;
+import sip.request_handling.ViaCreator;
 import tcp.MessageSerializer;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
@@ -29,11 +30,13 @@ public class RegisterSipMessageHandler implements SipRequestHandler {
 
 	private final MessageSerializer messageSerializer;
 	private final BindingStorage bindingStorage;
+	private final ViaCreator viaCreator;
 	private final Via serverVia;
 
-	public RegisterSipMessageHandler(MessageSerializer messageSerializer, BindingStorage bindingStorage, Via serverVia) {
+	public RegisterSipMessageHandler(MessageSerializer messageSerializer, BindingStorage bindingStorage, ViaCreator viaCreator, Via serverVia) {
 		this.messageSerializer = messageSerializer;
 		this.bindingStorage = bindingStorage;
+		this.viaCreator = viaCreator;
 		this.serverVia = serverVia;
 	}
 
@@ -67,18 +70,19 @@ public class RegisterSipMessageHandler implements SipRequestHandler {
 					.collect(Collectors.toList());
 			var expiration = Optional.ofNullable(sipRequest.headers().getExpires()).orElse(DEFAULT_EXPIRATION);
 			bindingStorage.addBindings(socketConnection, addressOfRecord, newBindings, expiration);
-			socketConnection.appendResponse(messageSerializer.serialize(createOKResponse(sipRequest, addressOfRecord)));
+			socketConnection.appendResponse(messageSerializer.serialize(createOKResponse(sipRequest, addressOfRecord, socketConnection)));
 			socketConnection.changeOperation(OperationType.WRITE);
 		}
 
 	}
 
-	private SipResponse createOKResponse(SipRequest sipRequest, AddressOfRecord addressOfRecord) {
+	private SipResponse createOKResponse(SipRequest sipRequest, AddressOfRecord addressOfRecord, SocketConnection socketConnection) {
 		var sipResponseHeaders = new SipResponseHeaders();
+//		sipResponseHeaders.addVia(viaCreator.createVia(socketConnection));
+//		sipResponseHeaders.addVia(serverVia);
 		for (Via via : sipRequest.headers().getViaList()) {
 			sipResponseHeaders.addVia(via.normalize());
 		}
-		sipResponseHeaders.addVia(serverVia);
 		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
 		sipResponseHeaders.setTo(sipRequest.headers().getTo()
 				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())

@@ -80,6 +80,7 @@ public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHead
 			"v", "via"
 	);
 	public static final String EXPIRES = "expires";
+	public static final String RECORD_ROUTE = "record-route";
 
 	private final Map<String, List<String>> extensionHeaderMap = new HashMap<>();
 	private final List<Via> viaList = new ArrayList<>();
@@ -93,6 +94,7 @@ public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHead
 	private SipMediaType contentType;
 	private String callId;
 	private Integer expires;
+	private final List<AddressOfRecord> recordRoutes = new ArrayList<>();
 
 	@Override
 	public SipRequestHeaders replicate() {
@@ -243,12 +245,24 @@ public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHead
 		this.contentType = contentType;
 	}
 
+	public void addRecordRoute(AddressOfRecord addressOfRecord) {
+		recordRoutes.add(addressOfRecord);
+	}
+
+	public void addRecordRouteFront(AddressOfRecord addressOfRecord) {
+		recordRoutes.add(0, addressOfRecord);
+	}
+
 	public void addVia(Via via) {
 		viaList.add(via);
 	}
 
 	public void addViaFront(Via via) {
 		viaList.add(0, via);
+	}
+
+	public List<AddressOfRecord> getRecordRoutes() {
+		return recordRoutes;
 	}
 
 	public String getCallId() {
@@ -302,6 +316,7 @@ public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHead
 				", contentType=" + contentType +
 				", callId=" + callId +
 				", expires=" + expires +
+				", recordRoutes=" + recordRoutes +
 				'}';
 	}
 
@@ -319,6 +334,9 @@ public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHead
 		serializeIfNeeded(CALL_ID, callId, dest, v -> v.getBytes(StandardCharsets.UTF_8));
 		for (var via : viaList) {
 			serializeIfNeeded(VIA, via, dest);
+		}
+		for (var sipUri : recordRoutes) {
+			serializeIfNeeded(RECORD_ROUTE, sipUri, dest);
 		}
 		for (var entry : extensionHeaderMap.entrySet()){
 			for (var value : entry.getValue()) {
@@ -344,6 +362,9 @@ public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHead
 		total += calculateHeaderFieldSize(CALL_ID, callId, String::length);
 		for (var via : viaList) {
 			total += calculateHeaderFieldSize(VIA, via);
+		}
+		for (var sipUri : recordRoutes) {
+			total += calculateHeaderFieldSize(RECORD_ROUTE, sipUri);
 		}
 		for (var entry : extensionHeaderMap.entrySet()){
 			for (var value : entry.getValue()) {

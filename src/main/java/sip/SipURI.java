@@ -25,4 +25,6 @@ public interface SipURI extends Serializable {
 	}
 
 	SipURI toCanonicalForm();
+
+	SipURI addParam(String paramName, String value);
 }

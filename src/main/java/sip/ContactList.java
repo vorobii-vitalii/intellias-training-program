@@ -1,6 +1,11 @@
 package sip;
 
 import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import util.Serializable;
@@ -20,7 +25,13 @@ import util.Serializable;
 //delta-seconds      =  1*DIGIT
 public interface ContactList extends Serializable {
 	String STAR = "*";
-	String COMMA = ",";
+	char COMMA = ',';
+
+	Map<Character, Character> MAP = Map.of(
+			'<', '>',
+			'"', '"',
+			'\'', '\''
+	);
 
 	boolean shouldCall(AddressOfRecord addressOfRecord);
 
@@ -29,8 +40,28 @@ public interface ContactList extends Serializable {
 		if (STAR.equals(trimmed)) {
 			return new ContactAny();
 		}
-		return new ContactSet(Arrays.stream(trimmed.split(COMMA))
-						.map(AddressOfRecord::parse)
-						.collect(Collectors.toSet()));
+		var deque = new LinkedList<Character>();
+		var previousIndex = 0;
+		Set<AddressOfRecord> addressOfRecords = new HashSet<>();
+		for (var i = 0; i < trimmed.length(); i++) {
+			var c = trimmed.charAt(i);
+			// TODO: Create more "generic" function
+			if (COMMA == c) {
+				// Can parse one of addresses
+				if (deque.isEmpty()) {
+					addressOfRecords.add(AddressOfRecord.parse(str.substring(previousIndex, i)));
+					previousIndex = i + 1;
+				}
+			}
+			else {
+				if (!deque.isEmpty() && MAP.get(deque.peekLast()) == c) {
+					deque.removeLast();
+				} else if (MAP.containsKey(c)) {
+					deque.addLast(c);
+				}
+			}
+		}
+		addressOfRecords.add(AddressOfRecord.parse(trimmed.substring(previousIndex, trimmed.length())));
+		return new ContactSet(addressOfRecords);
 	}
 }

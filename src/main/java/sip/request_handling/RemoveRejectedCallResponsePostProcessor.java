@@ -14,9 +14,9 @@ public class RemoveRejectedCallResponsePostProcessor implements SipResponsePostP
 	@Override
 	public SipResponse process(SipResponse sipResponse, SocketConnection socketConnection) {
 		var callId = sipResponse.headers().getCallId();
-		if (sipResponse.responseLine().sipStatusCode().isErroneous()) {
-			callsRepository.remove(callId);
-		}
+//		if (sipResponse.responseLine().sipStatusCode().isErroneous()) {
+//			callsRepository.remove(callId);
+//		}
 		return sipResponse;
 	}
 }

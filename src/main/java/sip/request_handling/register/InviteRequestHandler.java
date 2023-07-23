@@ -1,6 +1,5 @@
 package sip.request_handling.register;
 
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
@@ -15,8 +14,6 @@ import net.sourceforge.jsdp.SessionDescription;
 import sip.AddressOfRecord;
 import sip.ContactSet;
 import sip.SipRequest;
-import sip.SipRequestHeaders;
-import sip.SipRequestLine;
 import sip.SipResponse;
 import sip.SipResponseHeaders;
 import sip.SipResponseLine;
@@ -40,7 +37,6 @@ public class InviteRequestHandler implements SipRequestHandler {
 	private final SipURI currentSipURI;
 	private final Collection<SDPMediaAddressProcessor> sdpMediaAddressProcessors;
 	private final CallsRepository callsRepository;
-	private final byte[] sdpResponse;
 
 	public InviteRequestHandler(
 			BindingStorage bindingStorage,
@@ -48,15 +44,14 @@ public class InviteRequestHandler implements SipRequestHandler {
 			Via serverVia,
 			SipURI currentSipURI,
 			Collection<SDPMediaAddressProcessor> sdpMediaAddressProcessors,
-			CallsRepository callsRepository,
-			byte[] sdpResponse) {
+			CallsRepository callsRepository
+	) {
 		this.bindingStorage = bindingStorage;
 		this.messageSerializer = messageSerializer;
 		this.serverVia = serverVia;
 		this.currentSipURI = currentSipURI;
 		this.sdpMediaAddressProcessors = sdpMediaAddressProcessors;
 		this.callsRepository = callsRepository;
-		this.sdpResponse = sdpResponse;
 	}
 
 	@Override
@@ -88,8 +83,8 @@ public class InviteRequestHandler implements SipRequestHandler {
 			for (SocketConnection connection : connections) {
 				sendInvite(sipRequest, connection, sessionDescription);
 			}
-			LOGGER.info("Sending trying...");
-			sendTryingResponse(sipRequest, socketConnection);
+//			LOGGER.info("Sending trying...");
+//			sendTryingResponse(sipRequest, socketConnection);
 		}
 		catch (SDPException e) {
 			LOGGER.error("Failed to parse SDP message", e);
@@ -118,52 +113,34 @@ public class InviteRequestHandler implements SipRequestHandler {
 		// prototype pattern
 		var requestCopy = originalRequest.replicate();
 		requestCopy.headers().addViaFront(serverVia);
+//		requestCopy.headers().addRecordRouteFront(new AddressOfRecord(
+//				"",
+//				currentSipURI.addParam("lr", ""),
+//				Map.of()
+//		));
+		requestCopy.headers().setContactList(new ContactSet(Set.of(new AddressOfRecord("", currentSipURI, Map.of()))));
 		var serializedSDP = sessionDescription.toString().getBytes(StandardCharsets.UTF_8);
 		var sipResponse = new SipRequest(
 				requestCopy.requestLine(),
 				requestCopy.headers(),
-				sdpResponse
+				serializedSDP
 		);
 		clientToCall.appendResponse(messageSerializer.serialize(sipResponse));
 		clientToCall.changeOperation(OperationType.WRITE);
 	}
 
-	private void sendTryingResponse(SipRequest sipRequest, SocketConnection socketConnection) {
-		var sipResponseHeaders = sipRequest.headers().toResponseHeaders();
-		sipResponseHeaders.addViaAtBeggining(serverVia);
-		for (Via via : sipRequest.headers().getViaList()) {
-			sipResponseHeaders.addVia(via.normalize());
-		}
-		var sipResponse = new SipResponse(
-				new SipResponseLine(
-						sipRequest.requestLine().version(),
-						new SipStatusCode(100),
-						"Trying..."
-				),
-				sipResponseHeaders,
-				new byte[] {}
-		);
-		socketConnection.appendResponse(messageSerializer.serialize(sipResponse));
-		socketConnection.changeOperation(OperationType.WRITE);
-	}
-
 	private void sendNotFoundResponse(SipRequest sipRequest, SocketConnection socketConnection) {
 		var sipResponseHeaders = new SipResponseHeaders();
 		sipResponseHeaders.addVia(serverVia);
-		for (int i = 0; i < sipRequest.headers().getViaList().size(); i++) {
-			var via = sipRequest.headers().getViaList().get(i).normalize();
-			if (i == 0) {
-				var address = (InetSocketAddress) socketConnection.getAddress();
-				sipResponseHeaders.addVia(via.addParameter("received", address.getHostName() + ":" + address.getPort()));
-			}
-			else {
-				sipResponseHeaders.addVia(via);
-			}
-		}
 		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
 		sipResponseHeaders.setTo(sipRequest.headers().getTo()
 //				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
 		);
+		sipResponseHeaders.addRecordRouteFront(new AddressOfRecord(
+				"",
+				currentSipURI,
+				Map.of("lr", "")
+		));
 //		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
 		sipResponseHeaders.setContactList(sipRequest.headers().getContactList());
 		var sipResponse = new SipResponse(

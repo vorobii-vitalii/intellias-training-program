@@ -3,6 +3,7 @@ package sip;
 import javax.annotation.Nonnull;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -97,6 +98,20 @@ public record FullSipURI(
 	public static final String URI_PARAMETERS_DELIMITER = ";";
 	public static final String QUERY_PARAMETERS_DELIMITER = "&";
 
+	@Override
+	public SipURI addParam(String paramName, String value) {
+		var newParameters = new HashMap<>(uriParameters);
+		newParameters.put(paramName, value);
+		return new FullSipURI(
+				protocol,
+				credentials,
+				address,
+				newParameters,
+				queryParameters
+		);
+	}
+
+
 	public static boolean isSipURI(CharSequence charSequence) {
 		return SIP_URL_PATTERN.matcher(charSequence).matches();
 	}
@@ -150,4 +165,5 @@ public record FullSipURI(
 	public SipURI toCanonicalForm() {
 		return new FullSipURI(protocol, credentials, address.toCanonicalForm(), Map.of(), Map.of());
 	}
+
 }
