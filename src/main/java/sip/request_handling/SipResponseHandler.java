@@ -31,13 +31,13 @@ public class SipResponseHandler implements SipMessageHandler<SipResponse> {
 	@Override
 	public void process(SipResponse sipResponse, SocketConnection socketConnection) {
 		var callId = sipResponse.headers().getCallId();
+		var connections = callsRepository.upsert(callId).connectionsInvolved();
 		var resultResponse = sipResponsePostProcessors.stream()
 				.reduce(
 						sipResponse,
 						(currentResponse, sipResponsePostProcessor) -> sipResponsePostProcessor.process(currentResponse, socketConnection),
 						(a, b) -> b
 				);
-		var connections = callsRepository.upsert(callId).connectionsInvolved();
 		LOGGER.info("Call id = {} response from {} connections = {}", callId, socketConnection, connections);
 		for (var connection : connections) {
 			if (!connection.equals(socketConnection)) {

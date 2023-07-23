@@ -5,17 +5,12 @@ import static java.nio.channels.SelectionKey.OP_READ;
 import static java.nio.channels.SelectionKey.OP_WRITE;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 
 import org.slf4j.Logger;
@@ -35,7 +30,7 @@ import rtcp.RTCPMessage;
 import rtcp.RTCPMessagesReader;
 import sip.request_handling.ProxyAttributesAppenderSipResponsePostProcessor;
 import sip.request_handling.RTPMediaAddressProcessor;
-import sip.request_handling.RemoveRejectedCallResponsePostProcessor;
+import sip.request_handling.BindingUpdateResponsePostProcessor;
 import sip.request_handling.SDPMediaAddressProcessor;
 import sip.request_handling.SDPReplacementSipResponsePostProcessor;
 import sip.request_handling.SIPConnectionPreparer;
@@ -46,6 +41,7 @@ import sip.request_handling.ViaCreator;
 import sip.request_handling.calls.InMemoryCallsRepository;
 import sip.request_handling.normalize.SipRequestViaParameterNormalizer;
 import sip.request_handling.register.AckRequestHandler;
+import sip.request_handling.register.ByeRequestProcessor;
 import sip.request_handling.register.InMemoryBindingStorage;
 import sip.request_handling.register.InviteRequestHandler;
 import sip.request_handling.register.RegisterSipMessageHandler;
@@ -53,11 +49,9 @@ import stun.StunMessage;
 import stun.StunMessageReader;
 import tcp.MessageSerializer;
 import tcp.server.ByteBufferPool;
-import tcp.server.OperationType;
-import tcp.server.SocketConnection;
-import tcp.server.SocketMessageReaderImpl;
 import tcp.server.GenericServer;
 import tcp.server.ServerConfig;
+import tcp.server.SocketMessageReaderImpl;
 import tcp.server.TCPServerConfigurer;
 import tcp.server.UDPServerConfigurer;
 import tcp.server.handler.GenericReadOperationHandler;
@@ -99,11 +93,11 @@ public class CallingServer {
 		var stunMessageQueue = new ArrayBlockingQueue<UDPPacket<StunMessage>>(REQUEST_QUEUE_CAPACITY);
 
 		RequestHandler<UDPPacket<List<RTCPMessage>>> rtpMessageHandler = request -> {
-			LOGGER.info("UDP RTCP Packet: {}", request);
+//			LOGGER.info("UDP RTCP Packet: {}", request);
 		};
 
 		RequestHandler<UDPPacket<StunMessage>> stunMessageHandler = request -> {
-			LOGGER.info("UDP Stun Packet: {}", request);
+//			LOGGER.info("UDP Stun Packet: {}", request);
 		};
 
 		var rtcpRequestHandleTimer = Timer.builder("rtcp.request.time").register(METER_REGISTRY);
@@ -146,15 +140,6 @@ public class CallingServer {
 										)
 								)
 						)
-						//						OP_WRITE, new WriteOperationHandler(
-						//								sipWriteTimer,
-						//								sipWriteCount,
-						//								(key, e) -> {
-						//									LOGGER.warn("Error", e);
-						//								},
-						//								BUFFER_POOL,
-						//								OpenTelemetry.noop()
-						//						)
 				),
 				new UDPServerConfigurer());
 		server.start();
@@ -164,7 +149,7 @@ public class CallingServer {
 		var rtpMessagesQueue = new ArrayBlockingQueue<UDPPacket<RTPMessage>>(REQUEST_QUEUE_CAPACITY);
 
 		RequestHandler<UDPPacket<RTPMessage>> rtpMessageHandler = request -> {
-			LOGGER.info("UDP RTP Packet: {}", request);
+//			LOGGER.info("UDP RTP Packet: {}", request);
 		};
 
 		var rtpRequestHandleTimer = Timer.builder("rtp.request.time").register(METER_REGISTRY);
@@ -199,15 +184,6 @@ public class CallingServer {
 										)
 								)
 						)
-//						OP_WRITE, new WriteOperationHandler(
-//								sipWriteTimer,
-//								sipWriteCount,
-//								(key, e) -> {
-//									LOGGER.warn("Error", e);
-//								},
-//								BUFFER_POOL,
-//								OpenTelemetry.noop()
-//						)
 				),
 				new UDPServerConfigurer());
 		server.start();
@@ -225,66 +201,6 @@ public class CallingServer {
 		var selector = selectorProvider.openSelector();
 
 		var tcpConnectionsContext = new TCPConnectionsContext(new SIPConnectionPreparer(BUFFER_POOL, selector));
-
-//		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = request -> {
-//			var sipMessage = request.request();
-//			LOGGER.info("Received SIP message {} from {}", sipMessage, request.socketConnection());
-//			if (sipMessage instanceof SipRequest sipRequest) {
-//				switch (sipRequest.requestLine().method()) {
-//					case "ACK" -> {
-//						sendOK(sipRequest, request.socketConnection());
-//					}
-//					case "REGISTER" -> {
-//						LOGGER.info("Client registered");
-//						EXECUTOR_SERVICE.schedule(() -> {
-//							sendInvite(sipRequest, request.socketConnection());
-//						}, 5000, TimeUnit.MILLISECONDS);
-//						//					SIP/2.0 200 OK
-//						//					Via: SIP/2.0/UDP bobspc.biloxi.com:5060;branch=z9hG4bKnashds7
-//						//					;received=192.0.2.4
-//						//					To: Bob <sip:bob@biloxi.com>;tag=2493k59kd
-//						//					From: Bob <sip:bob@biloxi.com>;tag=456248
-//						//					Call-ID: 843817637684230@998sdasdh09
-//						//					CSeq: 1826 REGISTER
-//						//					Contact: <sip:bob@192.0.2.4>
-//						//							Expires: 7200
-//						//					Content-Length: 0
-//						sendOK(sipRequest, request.socketConnection());
-//					}
-//					case "INVITE" -> {
-//						LOGGER.info("Client calling");
-//						var sipResponseHeaders = new SipResponseHeaders();
-//						for (Via via : sipRequest.headers().getViaList()) {
-//							sipResponseHeaders.addVia(via.normalize());
-//						}
-//						sipResponseHeaders.addVia(CURRENT_VIA);
-//						sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
-//						sipResponseHeaders.setTo(sipRequest.headers().getTo()
-//								.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
-//						);
-//						sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
-//						sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
-//						sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
-//						var response = new SipResponse(
-//								new SipResponseLine(new SipVersion(2, 0), new SipStatusCode(180), "Ringing"),
-//								sipResponseHeaders,
-//								new byte[] {}
-//						);
-//						request.socketConnection().appendResponse(MESSAGE_SERIALIZER.serialize(response));
-//						request.socketConnection().changeOperation(OperationType.WRITE);
-//						EXECUTOR_SERVICE.schedule(() -> {
-//							if (counter.getAndIncrement() % 2 == 0) {
-//								sendOK(sipRequest, request.socketConnection());
-//							} else {
-//								sendBusy(sipRequest, request.socketConnection());
-//							}
-//						}, 3000, TimeUnit.MILLISECONDS);
-//					}
-//				}
-//			}
-//
-//		};
-
 		var bindingStorage = new InMemoryBindingStorage();
 		var callsRepository = new InMemoryCallsRepository();
 		List<SDPMediaAddressProcessor> sdpMediaAddressProcessors = List.of(new RTPMediaAddressProcessor(
@@ -313,11 +229,18 @@ public class CallingServer {
 								getCurrentSipURI(),
 								sdpMediaAddressProcessors,
 								callsRepository
+						),
+						new ByeRequestProcessor(
+								callsRepository,
+								bindingStorage,
+								getCurrentSipURI(),
+								CURRENT_VIA,
+								MESSAGE_SERIALIZER
 						)
 				),
 				new SipResponseHandler(
 						List.of(
-								new RemoveRejectedCallResponsePostProcessor(callsRepository),
+								new BindingUpdateResponsePostProcessor(callsRepository),
 								new SDPReplacementSipResponsePostProcessor(
 										callsRepository,
 										sdpMediaAddressProcessors
@@ -327,7 +250,8 @@ public class CallingServer {
 										sdpMediaAddressProcessors, new AddressOfRecord("", getCurrentSipURI(), Map.of()))
 						),
 						MESSAGE_SERIALIZER,
-						callsRepository),
+						callsRepository
+				),
 				List.of(new SipRequestViaParameterNormalizer()));
 		RequestProcessor<NetworkRequest<SipMessage>> requestProcessor =
 				new RequestProcessor<>(requestQueue, sipRequestHandler, sipRequestHandleTimer, sipRequestCount);
@@ -373,17 +297,6 @@ public class CallingServer {
 		server.start();
 	}
 
-	// Received request SipRequest{requestLine=SipRequestLine[method=REGISTER, requestURI=FullSipURI[protocol=sip, credentials=Credentials[username=service, password=null], address=Address[host=0.0.0.0, port=5068], uriParameters={}, queryParameters={}], version=SipVersion[majorVersion=2, minorVersion=0]], headers=SipHeaders{headerMap={subject=[Performance Test]}, viaList=[Via[sipSentProtocol=SipSentProtocol[protocolName=SIP, protocolVersion=2.0, transportName=TCP], sentBy=Address[host=127.0.0.1, port=36297], parameters={branch=z9hG4bK-59879-62-0}]], from=AddressOfRecord[name=sipp, sipURI=FullSipURI[protocol=sip, credentials=Credentials[username=sipp, password=null], address=Address[host=127.0.0.1, port=36297], uriParameters={}, queryParameters={}], parameters={tag=59879SIPpTag0062}], to=AddressOfRecord[name=service, sipURI=FullSipURI[protocol=sip, credentials=Credentials[username=service, password=null], address=Address[host=0.0.0.0, port=5068], uriParameters={}, queryParameters={}], parameters={}], referTo=null, commandSequence=CommandSequence[sequenceNumber=1, commandName=REGISTER], maxForwards=70, contentLength=0, contactList=ContactSet[allowedAddressOfRecords=[AddressOfRecord[name=Anonymous, sipURI=FullSipURI[protocol=sip, credentials=Credentials[username=sipp, password=null], address=Address[host=127.0.0.1, port=36297], uriParameters={}, queryParameters={}], parameters={}]]], contentType=SipMediaType[mediaType=application, mediaSubType=sdp, parameters={}], callId=62-59879@127.0.0.1, expires=null}, payload=[]}
-
-	private static ContactSet calculateContactSet(SipRequest sipRequest) {
-		final AddressOfRecord to = sipRequest.headers().getTo();
-		return new ContactSet(Set.of(new AddressOfRecord(
-				to.name(),
-				getCurrentSipURI(),
-				Map.of()
-		)));
-	}
-
 	private static FullSipURI getCurrentSipURI() {
 		return new FullSipURI(
 				"sip",
@@ -393,88 +306,6 @@ public class CallingServer {
 				Map.of()
 		);
 	}
-
-	//	INVITE sip:bob@biloxi.com SIP/2.0
-//	Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKnashds8
-//	Max-Forwards: 70
-//	To: Bob <sip:bob@biloxi.com>
-//	From: Alice <sip:alice@atlanta.com>;tag=1928301774
-//	Call-ID: a84b4c76e66710
-//	CSeq: 314159 INVITE
-//	Contact: <sip:alice@pc33.atlanta.com>
-//	Content-Type: application/sdp
-//	Content-Length: 142
-
-//	SIP/2.0 200 OK
-//	Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKnashds8
-//	;received=192.0.2.1
-//	To: Bob <sip:bob@biloxi.com>;tag=a6c85cf
-//	From: Alice <sip:alice@atlanta.com>;tag=1928301774
-//	Call-ID: a84b4c76e66710
-//	CSeq: 314159 INVITE
-//	Contact: <sip:bob@192.0.2.4>
-//	Content-Type: application/sdp
-//	Content-Length: 131
-
-//	F1 INVITE Alice -> atlanta.com proxy
-//
-//	INVITE sip:bob@biloxi.com SIP/2.0
-//	Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKnashds8
-//	Max-Forwards: 70
-//	To: Bob <sip:bob@biloxi.com>
-//	From: Alice <sip:alice@atlanta.com>;tag=1928301774
-//	Call-ID: a84b4c76e66710
-//	CSeq: 314159 INVITE
-//	Contact: <sip:alice@pc33.atlanta.com>
-//	Content-Type: application/sdp
-//	Content-Length: 142
-//
-//			(Alice's SDP not shown)
-//
-//
-//
-//	F2 100 Trying atlanta.com proxy -> Alice
-//
-//	SIP/2.0 100 Trying
-//	Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKnashds8
-//	;received=192.0.2.1
-//	To: Bob <sip:bob@biloxi.com>
-//	From: Alice <sip:alice@atlanta.com>;tag=1928301774
-//	Call-ID: a84b4c76e66710
-//	CSeq: 314159 INVITE
-//	Content-Length: 0
-
-	private static void sendBusy(SipRequest sipRequest, SocketConnection socketConnection) {
-		var sipResponseHeaders = new SipResponseHeaders();
-		for (Via via : sipRequest.headers().getViaList()) {
-			sipResponseHeaders.addVia(via.normalize());
-		}
-		sipResponseHeaders.addVia(CURRENT_VIA);
-		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
-		sipResponseHeaders.setTo(sipRequest.headers().getTo()
-				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
-		);
-		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
-		sipResponseHeaders.setCallId(sipRequest.headers().getCallId());
-		sipResponseHeaders.setCommandSequence(sipRequest.headers().getCommandSequence());
-		sipResponseHeaders.setContentType(new SipMediaType("application", "sdp", Map.of()));
-		var response = new SipResponse(
-				new SipResponseLine(new SipVersion(2, 0), new SipStatusCode(486), "Busy here"),
-				sipResponseHeaders,
-				new byte[] {}
-		);
-		socketConnection.appendResponse(MESSAGE_SERIALIZER.serialize(response));
-		socketConnection.changeOperation(OperationType.WRITE);
-	}
-
-	private static AddressOfRecord createFrom() {
-		return new AddressOfRecord(
-				"George " + new Random().nextInt(),
-				getCurrentSipURI(),
-				Map.of("tag", UUID.nameUUIDFromBytes(getCurrentSipURI().getURIAsString().getBytes()).toString())
-		);
-	}
-
 	// SSL Engine, test using SSL engine
 	// max udp = 1536 - headers size
 
@@ -499,10 +330,6 @@ public class CallingServer {
 	private static String getHost() {
 		return Optional.ofNullable(System.getenv("HOST"))
 				.orElse("127.0.0.1");
-	}
-
-	private static InetAddress getSocketAddress() {
-		return new InetSocketAddress(getHost(), getSipServerPort()).getAddress();
 	}
 
 }
