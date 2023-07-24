@@ -6,7 +6,6 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.sourceforge.jsdp.SDPException;
 import sip.AddressOfRecord;
 import sip.ContactSet;
 import sip.SipRequest;
@@ -42,12 +41,8 @@ public class ByeRequestProcessor implements SipRequestHandler {
 	@Override
 	public void process(SipRequest sipRequest, SocketConnection socketConnection) {
 		var toAddressOfRecord = sipRequest.headers().getTo();
-		// Assume address of record host = current host for now...
 		var connections = bindingStorage.getConnectionsByAddressOfRecord(toAddressOfRecord.toCanonicalForm());
-		// Such client is not connected to server, assume if not connected = still exists.
-		// sipp -sn branchc 0.0.0.0:5068 -t tn -max_socket 20 -trace_err
 		if (connections.isEmpty()) {
-			// No connections
 			return;
 		}
 		var callId = sipRequest.headers().getCallId();
@@ -57,7 +52,6 @@ public class ByeRequestProcessor implements SipRequestHandler {
 		for (SocketConnection connection : connections) {
 			sendBye(sipRequest, connection);
 		}
-//		callsRepository.remove(callId);
 	}
 
 	private void sendBye(SipRequest originalRequest, SocketConnection clientToCall) {

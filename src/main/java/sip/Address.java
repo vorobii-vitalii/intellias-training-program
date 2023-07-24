@@ -1,5 +1,8 @@
 package sip;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
@@ -10,6 +13,11 @@ public record Address(String host, Integer port) implements Serializable {
 
 	public Address toCanonicalForm() {
 		return new Address(host, null);
+	}
+
+	public static Address fromSocketAddress(SocketAddress socketAddress) {
+		var address = (InetSocketAddress) socketAddress;
+		return new Address(address.getHostName(), address.getPort());
 	}
 
 	public static Address parse(String str) {

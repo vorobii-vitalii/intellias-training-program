@@ -7,5 +7,6 @@ import net.sourceforge.jsdp.SessionDescription;
 
 public interface SDPMediaAddressProcessor {
 	@Nullable
-	MediaAddressReplacement replaceAddress(SessionDescription sessionDescription) throws SDPException;
+	MediaAddress getMediaAddress(SessionDescription sessionDescription) throws SDPException;
+	void update(SessionDescription sessionDescription) throws SDPException;
 }

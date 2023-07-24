@@ -20,7 +20,7 @@ public class RTCPMediaAddressProcessor implements SDPMediaAddressProcessor {
 
 	@Nullable
 	@Override
-	public MediaAddressReplacement replaceAddress(SessionDescription sessionDescription) throws SDPException {
+	public MediaAddress getMediaAddress(SessionDescription sessionDescription) throws SDPException {
 		//		var copySessionDescription = (SessionDescription) sessionDescription.clone();
 		var mediaDescriptions = sessionDescription.getMediaDescriptions();
 		var mainConnection = sessionDescription.getConnection();
@@ -38,12 +38,12 @@ public class RTCPMediaAddressProcessor implements SDPMediaAddressProcessor {
 		if (port == NOT_FOUND) {
 			return null;
 		}
-		return new MediaAddressReplacement(
-				RTP_MEDIA_FORMAT,
-				new Address(previousIP, port),
-				proxyAddress,
-				sessionDescription
-		);
+		return new MediaAddress(RTP_MEDIA_FORMAT, new Address(previousIP, port));
+	}
+
+	@Override
+	public void update(SessionDescription sessionDescription) {
+
 	}
 
 	private boolean isRTP(Media media) {

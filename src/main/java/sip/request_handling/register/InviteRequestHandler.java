@@ -30,7 +30,8 @@ import tcp.server.SocketConnection;
 // 24.2 Session Setup
 public class InviteRequestHandler implements SipRequestHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(InviteRequestHandler.class);
-	public static final String INVITE = "INVITE";
+	private static final String INVITE = "INVITE";
+
 	private final BindingStorage bindingStorage;
 	private final MessageSerializer messageSerializer;
 	private final Via serverVia;
@@ -71,20 +72,22 @@ public class InviteRequestHandler implements SipRequestHandler {
 			var callDetails = callsRepository.upsert(callId).setCallerContact(calculateCallerContact(sipRequest));
 			callDetails.addConnection(socketConnection);
 			var sessionDescription = SDPFactory.parseSessionDescription(new String(sipRequest.payload(), StandardCharsets.UTF_8));
+			LOGGER.info("SDP before {}", sessionDescription);
 			for (var sdpMediaAddressProcessor : sdpMediaAddressProcessors) {
-				var mediaAddressReplacement = sdpMediaAddressProcessor.replaceAddress(sessionDescription);
-				if (mediaAddressReplacement != null) {
-					callDetails.addMediaMapping(mediaAddressReplacement.mediaAddressType(), mediaAddressReplacement.originalAddress());
-					sessionDescription = mediaAddressReplacement.updatedSessionDescription();
+				var mediaAddress = sdpMediaAddressProcessor.getMediaAddress(sessionDescription);
+				if (mediaAddress != null) {
+					callDetails.addMediaMapping(mediaAddress.mediaAddressType(), mediaAddress.originalAddress());
 				}
 			}
+			for (var sdpMediaAddressProcessor : sdpMediaAddressProcessors) {
+				sdpMediaAddressProcessor.update(sessionDescription);
+			}
+			LOGGER.info("SDP after {}", sessionDescription);
 			callsRepository.update(callId, callDetails);
 			LOGGER.info("Sending invites");
 			for (SocketConnection connection : connections) {
 				sendInvite(sipRequest, connection, sessionDescription);
 			}
-//			LOGGER.info("Sending trying...");
-//			sendTryingResponse(sipRequest, socketConnection);
 		}
 		catch (SDPException e) {
 			LOGGER.error("Failed to parse SDP message", e);
@@ -113,11 +116,6 @@ public class InviteRequestHandler implements SipRequestHandler {
 		// prototype pattern
 		var requestCopy = originalRequest.replicate();
 		requestCopy.headers().addViaFront(serverVia);
-//		requestCopy.headers().addRecordRouteFront(new AddressOfRecord(
-//				"",
-//				currentSipURI.addParam("lr", ""),
-//				Map.of()
-//		));
 		requestCopy.headers().setContactList(new ContactSet(Set.of(new AddressOfRecord("", currentSipURI, Map.of()))));
 		var serializedSDP = sessionDescription.toString().getBytes(StandardCharsets.UTF_8);
 		var sipResponse = new SipRequest(
@@ -133,15 +131,7 @@ public class InviteRequestHandler implements SipRequestHandler {
 		var sipResponseHeaders = new SipResponseHeaders();
 		sipResponseHeaders.addVia(serverVia);
 		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
-		sipResponseHeaders.setTo(sipRequest.headers().getTo()
-//				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
-		);
-		sipResponseHeaders.addRecordRouteFront(new AddressOfRecord(
-				"",
-				currentSipURI,
-				Map.of("lr", "")
-		));
-//		sipResponseHeaders.setContactList(calculateContactSet(sipRequest));
+		sipResponseHeaders.setTo(sipRequest.headers().getTo());
 		sipResponseHeaders.setContactList(sipRequest.headers().getContactList());
 		var sipResponse = new SipResponse(
 				new SipResponseLine(
@@ -155,10 +145,4 @@ public class InviteRequestHandler implements SipRequestHandler {
 		socketConnection.appendResponse(messageSerializer.serialize(sipResponse));
 		socketConnection.changeOperation(OperationType.WRITE);
 	}
-
-	private ContactSet calculateContactSet(SipRequest sipRequest) {
-		var to = sipRequest.headers().getTo();
-		return new ContactSet(Set.of(new AddressOfRecord(to.name(), currentSipURI, Map.of())));
-	}
-
 }

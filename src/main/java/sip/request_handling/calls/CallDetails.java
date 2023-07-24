@@ -11,13 +11,18 @@ import sip.SipURI;
 import tcp.server.SocketConnection;
 
 public record CallDetails(
+		String callId,
 		Map<String, Set<Address>> addressesByMediaAddressType,
 		@Deprecated Set<SocketConnection> connectionsInvolved,
-		@Nullable SipURI callerContact
+		@Deprecated @Nullable SipURI callerContact
 ) {
 	public void addMediaMapping(String mediaAddressType, Address address) {
 		addressesByMediaAddressType.computeIfAbsent(mediaAddressType, s -> new HashSet<>());
 		addressesByMediaAddressType.get(mediaAddressType).add(address);
+	}
+
+	public CallDetails setCallId(String newCallId) {
+		return new CallDetails(newCallId, addressesByMediaAddressType, connectionsInvolved, callerContact);
 	}
 
 	public void addConnection(SocketConnection socketConnection) {
@@ -25,7 +30,7 @@ public record CallDetails(
 	}
 
 	public CallDetails setCallerContact(SipURI callerContact) {
-		return new CallDetails(addressesByMediaAddressType, connectionsInvolved, callerContact);
+		return new CallDetails(callId, addressesByMediaAddressType, connectionsInvolved, callerContact);
 	}
 
 }

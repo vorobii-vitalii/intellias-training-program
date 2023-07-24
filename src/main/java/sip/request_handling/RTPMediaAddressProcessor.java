@@ -1,11 +1,8 @@
 package sip.request_handling;
 
-import java.util.Arrays;
-
 import javax.annotation.Nullable;
 
 import net.sourceforge.jsdp.Media;
-import net.sourceforge.jsdp.MediaDescription;
 import net.sourceforge.jsdp.SDPException;
 import net.sourceforge.jsdp.SessionDescription;
 import sip.Address;
@@ -21,8 +18,7 @@ public class RTPMediaAddressProcessor implements SDPMediaAddressProcessor {
 
 	@Nullable
 	@Override
-	public MediaAddressReplacement replaceAddress(SessionDescription sessionDescription) throws SDPException {
-//		var copySessionDescription = (SessionDescription) sessionDescription.clone();
+	public MediaAddress getMediaAddress(SessionDescription sessionDescription) throws SDPException {
 		var mediaDescriptions = sessionDescription.getMediaDescriptions();
 		var mainConnection = sessionDescription.getConnection();
 		var previousIP = mainConnection.getAddress();
@@ -39,12 +35,21 @@ public class RTPMediaAddressProcessor implements SDPMediaAddressProcessor {
 		if (port == NOT_FOUND) {
 			return null;
 		}
-		return new MediaAddressReplacement(
-				RTP_MEDIA_FORMAT,
-				new Address(previousIP, port),
-				proxyAddress,
-				sessionDescription
-		);
+		return new MediaAddress(RTP_MEDIA_FORMAT, new Address(previousIP, port));
+	}
+
+	@Override
+	public void update(SessionDescription sessionDescription) throws SDPException {
+		var mediaDescriptions = sessionDescription.getMediaDescriptions();
+		var mainConnection = sessionDescription.getConnection();
+		mainConnection.setAddress(proxyAddress.host());
+		for (var mediaDescription : mediaDescriptions) {
+			var media = mediaDescription.getMedia();
+			if (isRTP(media)) {
+				media.setPort(proxyAddress.port());
+				break;
+			}
+		}
 	}
 
 	private boolean isRTP(Media media) {

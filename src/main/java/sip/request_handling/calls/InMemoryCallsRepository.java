@@ -22,7 +22,7 @@ public class InMemoryCallsRepository implements CallsRepository {
 	@Override
 	public CallDetails upsert(@Nonnull String callId) {
 		return callDetailsMap.compute(callId, (
-				s, callDetails) -> callDetails != null ? callDetails : new CallDetails(new HashMap<>(), new HashSet<>(), null));
+				s, callDetails) -> callDetails != null ? callDetails : new CallDetails(callId, new HashMap<>(), new HashSet<>(), null));
 	}
 
 	@Override

@@ -42,32 +42,8 @@ public class ProxyAttributesAppenderSipResponsePostProcessor implements SipRespo
 				break;
 			}
 		}
-		var body = sipResponse.payload();
-		if (body.length > 0) {
-			try {
-				var sessionDescription = SDPFactory.parseSessionDescription(new String(body, StandardCharsets.UTF_8));
-				LOGGER.info("Response with original SDP = {}", sessionDescription);
-				for (var sdpMediaAddressProcessor : sdpMediaAddressProcessors) {
-					MediaAddressReplacement mediaAddressReplacement = sdpMediaAddressProcessor.replaceAddress(sessionDescription);
-					if (mediaAddressReplacement != null) {
-						sessionDescription = mediaAddressReplacement.updatedSessionDescription();
-					}
-				}
-				LOGGER.info("Response with updated SDP = {}", sessionDescription);
-				body = sessionDescription.toString().getBytes(StandardCharsets.UTF_8);
-			}
-			catch (SDPException e) {
-				throw new RuntimeException(e);
-			}
-		}
-
 		sipResponseCopy.headers().setContactList(new ContactSet(Set.of(proxyContact)));
 		sipResponseCopy.headers().setContentType(new SipMediaType("application", "sdp", Map.of()));
-		return new SipResponse(
-				sipResponseCopy.responseLine(),
-				sipResponseCopy.headers(),
-				body
-		);
+		return sipResponseCopy;
 	}
-
 }

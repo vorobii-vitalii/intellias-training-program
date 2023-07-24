@@ -43,9 +43,11 @@ public class Poller implements Runnable {
 							return;
 						}
 						var readyOps = selectionKey.readyOps();
-						var operationHandler = operationHandlerByType.get(readyOps);
-						if (operationHandler != null) {
-							operationHandler.accept(selectionKey);
+						for (var entry : operationHandlerByType.entrySet()) {
+							var interestOps = entry.getKey();
+							if ((readyOps & interestOps) != 0) {
+								entry.getValue().accept(selectionKey);
+							}
 						}
 					} catch (Throwable error) {
 						LOGGER.error("Error", error);

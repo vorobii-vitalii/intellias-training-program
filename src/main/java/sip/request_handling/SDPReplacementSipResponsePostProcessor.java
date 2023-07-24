@@ -34,14 +34,17 @@ public class SDPReplacementSipResponsePostProcessor implements SipResponsePostPr
 				var callDetails = callsRepository.upsert(callId);
 				callDetails.addConnection(socketConnection);
 				var sessionDescription = SDPFactory.parseSessionDescription(new String(sipResponse.payload(), StandardCharsets.UTF_8));
+				LOGGER.info("Session description before {}", sessionDescription);
 				for (var sdpMediaAddressProcessor : sdpMediaAddressProcessors) {
-					var mediaAddressReplacement = sdpMediaAddressProcessor.replaceAddress(sessionDescription);
-					if (mediaAddressReplacement != null) {
-						callDetails.addMediaMapping(mediaAddressReplacement.mediaAddressType(), mediaAddressReplacement.originalAddress());
-						sessionDescription = mediaAddressReplacement.updatedSessionDescription();
-						LOGGER.info("Did media address replacement {}", mediaAddressReplacement);
+					var mediaAddress = sdpMediaAddressProcessor.getMediaAddress(sessionDescription);
+					if (mediaAddress != null) {
+						callDetails.addMediaMapping(mediaAddress.mediaAddressType(), mediaAddress.originalAddress());
 					}
 				}
+				for (var sdpMediaAddressProcessor : sdpMediaAddressProcessors) {
+					sdpMediaAddressProcessor.update(sessionDescription);
+				}
+				LOGGER.info("Session description after {}", sessionDescription);
 				callsRepository.update(callId, callDetails);
 				return new SipResponse(
 						sipResponse.responseLine(),

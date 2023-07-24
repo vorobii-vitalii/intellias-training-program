@@ -8,10 +8,12 @@ import java.io.IOException;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.nio.channels.spi.SelectorProvider;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +41,8 @@ import sip.request_handling.SipResponseHandler;
 import sip.request_handling.TCPConnectionsContext;
 import sip.request_handling.ViaCreator;
 import sip.request_handling.calls.InMemoryCallsRepository;
+import sip.request_handling.media.InMemoryMediaMappingStorage;
+import sip.request_handling.media.MediaCallInitiator;
 import sip.request_handling.normalize.SipRequestViaParameterNormalizer;
 import sip.request_handling.register.AckRequestHandler;
 import sip.request_handling.register.ByeRequestProcessor;
@@ -48,6 +52,7 @@ import sip.request_handling.register.RegisterSipMessageHandler;
 import stun.StunMessage;
 import stun.StunMessageReader;
 import tcp.MessageSerializer;
+import tcp.server.BufferCopier;
 import tcp.server.ByteBufferPool;
 import tcp.server.GenericServer;
 import tcp.server.ServerConfig;
@@ -56,10 +61,13 @@ import tcp.server.TCPServerConfigurer;
 import tcp.server.UDPServerConfigurer;
 import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
+import udp.ForwardingUDPReadOperationHandler;
 import udp.RTPMessage;
 import udp.RTPMessageReader;
+import udp.RTPPacketTypeRecognizer;
 import udp.UDPPacket;
 import udp.UDPReadOperationHandler;
+import udp.UDPWriteOperationHandler;
 import util.Pair;
 
 public class CallingServer {
@@ -71,6 +79,7 @@ public class CallingServer {
 			Map.of("branch", "z9hG4bK25235636")
 	);
 	public static final SimpleMeterRegistry METER_REGISTRY = new SimpleMeterRegistry();
+	public static final InMemoryMediaMappingStorage MEDIA_MAPPING_STORAGE = new InMemoryMediaMappingStorage();
 
 	private static void startProcess(Runnable process, String processName) {
 		var thread = new Thread(process);
@@ -145,21 +154,15 @@ public class CallingServer {
 		server.start();
 	}
 
+	//
 	private static void startRTPServer() {
+		Map<Address, Deque<ByteBuffer>> map = new ConcurrentHashMap<>();
+
 		var rtpMessagesQueue = new ArrayBlockingQueue<UDPPacket<RTPMessage>>(REQUEST_QUEUE_CAPACITY);
 
 		RequestHandler<UDPPacket<RTPMessage>> rtpMessageHandler = request -> {
 //			LOGGER.info("UDP RTP Packet: {}", request);
 		};
-
-		var rtpRequestHandleTimer = Timer.builder("rtp.request.time").register(METER_REGISTRY);
-		var rtpRequestsCount = Counter.builder("rtp.request.count").register(METER_REGISTRY);
-
-
-		RequestProcessor<UDPPacket<RTPMessage>> requestProcessor =
-				new RequestProcessor<>(rtpMessagesQueue, rtpMessageHandler, rtpRequestHandleTimer, rtpRequestsCount);
-
-		startProcess(requestProcessor, "RTP request processor");
 
 		var server = new GenericServer(
 				ServerConfig.builder()
@@ -175,14 +178,15 @@ public class CallingServer {
 				SelectorProvider.provider(),
 				System.err::println,
 				Map.of(
-						OP_READ, new UDPReadOperationHandler(
+						OP_READ, new ForwardingUDPReadOperationHandler(
 								2_000,
-								List.of(
-										new Pair<>(
-												new RTPMessageReader(),
-												new BlockingQueueMessageProducer<>(rtpMessagesQueue)
-										)
-								)
+								MEDIA_MAPPING_STORAGE,
+								new BufferCopier(BUFFER_POOL),
+								List.of(new RTPPacketTypeRecognizer()),
+								map
+						),
+						OP_WRITE, new UDPWriteOperationHandler(
+								map
 						)
 				),
 				new UDPServerConfigurer());
@@ -206,6 +210,7 @@ public class CallingServer {
 		List<SDPMediaAddressProcessor> sdpMediaAddressProcessors = List.of(new RTPMediaAddressProcessor(
 				new Address(getHost(), getRTPServerPort())
 		));
+		var mediaCallInitiator = new MediaCallInitiator(MEDIA_MAPPING_STORAGE);
 		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = new SipRequestMessageHandler(
 				List.of(
 						new RegisterSipMessageHandler(
@@ -227,8 +232,8 @@ public class CallingServer {
 								MESSAGE_SERIALIZER,
 								CURRENT_VIA,
 								getCurrentSipURI(),
-								sdpMediaAddressProcessors,
-								callsRepository
+								callsRepository,
+								mediaCallInitiator
 						),
 						new ByeRequestProcessor(
 								callsRepository,
