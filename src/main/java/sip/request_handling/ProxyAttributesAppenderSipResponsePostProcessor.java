@@ -2,7 +2,6 @@ package sip.request_handling;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
-import java.util.Deque;
 import java.util.Map;
 import java.util.Set;
 
@@ -34,9 +33,7 @@ public class ProxyAttributesAppenderSipResponsePostProcessor implements SipRespo
 	@Override
 	public SipResponse process(SipResponse sipResponse, SocketConnection socketConnection) {
 		var sipResponseCopy = sipResponse.replicate();
-//		sipResponseCopy.headers().setContactList(calculateContactSet(sipResponse));
-//		sipResponseCopy.headers().addViaAtBeggining(viaCreator.createVia(socketConnection));
-		final Deque<Via> viaList = sipResponseCopy.headers().getViaList();
+		var viaList = sipResponseCopy.headers().getViaList();
 		LOGGER.info("Response from {}", socketConnection);
 		while (!viaList.isEmpty()) {
 			var currVia = viaList.pollFirst();
@@ -66,9 +63,6 @@ public class ProxyAttributesAppenderSipResponsePostProcessor implements SipRespo
 
 		sipResponseCopy.headers().setContactList(new ContactSet(Set.of(proxyContact)));
 		sipResponseCopy.headers().setContentType(new SipMediaType("application", "sdp", Map.of()));
-//		sipResponseCopy.headers().setTo(sipResponseCopy.headers().getTo()
-//				.addParam("tag", UUID.nameUUIDFromBytes(sipResponseCopy.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
-//		);
 		return new SipResponse(
 				sipResponseCopy.responseLine(),
 				sipResponseCopy.headers(),

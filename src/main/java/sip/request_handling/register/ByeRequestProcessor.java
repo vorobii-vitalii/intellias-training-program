@@ -22,6 +22,7 @@ public class ByeRequestProcessor implements SipRequestHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ByeRequestProcessor.class);
 
 	public static final String BYE = "BYE";
+	public static final String CANCEL = "CANCEL";
 
 	private final CallsRepository callsRepository;
 	private final BindingStorage bindingStorage;
@@ -56,7 +57,7 @@ public class ByeRequestProcessor implements SipRequestHandler {
 		for (SocketConnection connection : connections) {
 			sendBye(sipRequest, connection);
 		}
-		callsRepository.remove(callId);
+//		callsRepository.remove(callId);
 	}
 
 	private void sendBye(SipRequest originalRequest, SocketConnection clientToCall) {
@@ -74,6 +75,12 @@ public class ByeRequestProcessor implements SipRequestHandler {
 
 	@Override
 	public String getHandledType() {
-		return BYE;
+		// Ignored
+		return null;
+	}
+
+	@Override
+	public Set<String> getHandledTypes() {
+		return Set.of(BYE, CANCEL);
 	}
 }

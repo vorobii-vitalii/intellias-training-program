@@ -1,6 +1,7 @@
 package sip.request_handling;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
@@ -20,7 +21,7 @@ import sip.request_handling.normalize.SipRequestNormalizeContext;
 public class SipRequestMessageHandler implements RequestHandler<NetworkRequest<SipMessage>> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SipRequestMessageHandler.class);
 
-	private final Map<String, SipMessageHandler<SipRequest>> requestHandlerMap;
+	private final Map<String, SipMessageHandler<SipRequest>> requestHandlerMap = new HashMap<>();
 	private final SipMessageHandler<SipResponse> sipResponseHandler;
 	private final Collection<SipMessageNormalizer<SipRequest, SipRequestNormalizeContext>> sipRequestsNormalizers;
 
@@ -29,8 +30,11 @@ public class SipRequestMessageHandler implements RequestHandler<NetworkRequest<S
 			SipMessageHandler<SipResponse> sipResponseHandler,
 			Collection<SipMessageNormalizer<SipRequest, SipRequestNormalizeContext>> sipRequestsNormalizers
 	) {
-		requestHandlerMap = sipMessageHandlers.stream()
-				.collect(Collectors.toMap(SipRequestHandler::getHandledType, v -> v));
+		for (var sipMessageHandler : sipMessageHandlers) {
+			for (var handledType : sipMessageHandler.getHandledTypes()) {
+				requestHandlerMap.put(handledType, sipMessageHandler);
+			}
+		}
 		this.sipResponseHandler = sipResponseHandler;
 		this.sipRequestsNormalizers = sipRequestsNormalizers;
 	}
