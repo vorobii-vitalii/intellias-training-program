@@ -80,9 +80,7 @@ public class RegisterSipMessageHandler implements SipRequestHandler {
 			sipResponseHeaders.addVia(via.normalize());
 		}
 		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
-		sipResponseHeaders.setTo(sipRequest.headers().getTo()
-				.addParam("tag", UUID.nameUUIDFromBytes(sipRequest.headers().getTo().sipURI().getURIAsString().getBytes()).toString())
-		);
+		sipResponseHeaders.setTo(sipRequest.headers().getTo());
 		sipResponseHeaders.setContactList(new ContactSet(
 				bindingStorage.getCurrentBindings(addressOfRecord)
 		));
