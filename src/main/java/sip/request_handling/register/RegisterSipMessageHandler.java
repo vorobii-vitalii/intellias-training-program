@@ -1,6 +1,7 @@
 package sip.request_handling.register;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -17,27 +18,24 @@ import sip.SipResponseLine;
 import sip.SipStatusCode;
 import sip.Via;
 import sip.request_handling.SipRequestHandler;
-import sip.request_handling.ViaCreator;
 import tcp.MessageSerializer;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 
 public class RegisterSipMessageHandler implements SipRequestHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RegisterSipMessageHandler.class);
+	// TODO: Create parameter instead
 	private static final int DEFAULT_EXPIRATION = 3600;
 
 	public static final Integer REMOVE_BINDINGS = 0;
+	public static final String REGISTER = "REGISTER";
 
 	private final MessageSerializer messageSerializer;
 	private final BindingStorage bindingStorage;
-	private final ViaCreator viaCreator;
-	private final Via serverVia;
 
-	public RegisterSipMessageHandler(MessageSerializer messageSerializer, BindingStorage bindingStorage, ViaCreator viaCreator, Via serverVia) {
+	public RegisterSipMessageHandler(MessageSerializer messageSerializer, BindingStorage bindingStorage) {
 		this.messageSerializer = messageSerializer;
 		this.bindingStorage = bindingStorage;
-		this.viaCreator = viaCreator;
-		this.serverVia = serverVia;
 	}
 
 	@Override
@@ -70,16 +68,14 @@ public class RegisterSipMessageHandler implements SipRequestHandler {
 					.collect(Collectors.toList());
 			var expiration = Optional.ofNullable(sipRequest.headers().getExpires()).orElse(DEFAULT_EXPIRATION);
 			bindingStorage.addBindings(socketConnection, addressOfRecord, newBindings, expiration);
-			socketConnection.appendResponse(messageSerializer.serialize(createOKResponse(sipRequest, addressOfRecord, socketConnection)));
+			socketConnection.appendResponse(messageSerializer.serialize(createOKResponse(sipRequest, addressOfRecord)));
 			socketConnection.changeOperation(OperationType.WRITE);
 		}
 
 	}
 
-	private SipResponse createOKResponse(SipRequest sipRequest, AddressOfRecord addressOfRecord, SocketConnection socketConnection) {
+	private SipResponse createOKResponse(SipRequest sipRequest, AddressOfRecord addressOfRecord) {
 		var sipResponseHeaders = new SipResponseHeaders();
-//		sipResponseHeaders.addVia(viaCreator.createVia(socketConnection));
-//		sipResponseHeaders.addVia(serverVia);
 		for (Via via : sipRequest.headers().getViaList()) {
 			sipResponseHeaders.addVia(via.normalize());
 		}
@@ -116,8 +112,7 @@ public class RegisterSipMessageHandler implements SipRequestHandler {
 	}
 
 	@Override
-	public String getHandledType() {
-		return "REGISTER";
+	public Set<String> getHandledTypes() {
+		return Set.of(REGISTER);
 	}
-
 }

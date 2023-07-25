@@ -1,4 +1,4 @@
-package sip.request_handling.register;
+package sip.request_handling.invite;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -22,7 +22,9 @@ import sip.SipURI;
 import sip.Via;
 import sip.request_handling.SDPMediaAddressProcessor;
 import sip.request_handling.SipRequestHandler;
+import sip.request_handling.Updater;
 import sip.request_handling.calls.CallsRepository;
+import sip.request_handling.register.BindingStorage;
 import tcp.MessageSerializer;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
@@ -31,37 +33,32 @@ import tcp.server.SocketConnection;
 public class InviteRequestHandler implements SipRequestHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(InviteRequestHandler.class);
 	private static final String INVITE = "INVITE";
+	private static final int NOT_FOUND = 404;
 
 	private final BindingStorage bindingStorage;
 	private final MessageSerializer messageSerializer;
-	private final Via serverVia;
-	private final SipURI currentSipURI;
 	private final Collection<SDPMediaAddressProcessor> sdpMediaAddressProcessors;
 	private final CallsRepository callsRepository;
+	private final Updater<SipRequest> sipRequestUpdater;
 
 	public InviteRequestHandler(
 			BindingStorage bindingStorage,
 			MessageSerializer messageSerializer,
-			Via serverVia,
-			SipURI currentSipURI,
 			Collection<SDPMediaAddressProcessor> sdpMediaAddressProcessors,
-			CallsRepository callsRepository
+			CallsRepository callsRepository,
+			Updater<SipRequest> sipRequestUpdater
 	) {
 		this.bindingStorage = bindingStorage;
 		this.messageSerializer = messageSerializer;
-		this.serverVia = serverVia;
-		this.currentSipURI = currentSipURI;
 		this.sdpMediaAddressProcessors = sdpMediaAddressProcessors;
 		this.callsRepository = callsRepository;
+		this.sipRequestUpdater = sipRequestUpdater;
 	}
 
 	@Override
 	public void process(SipRequest sipRequest, SocketConnection socketConnection) {
 		var toAddressOfRecord = sipRequest.headers().getTo();
-		// Assume address of record host = current host for now...
 		var connections = bindingStorage.getConnectionsByAddressOfRecord(toAddressOfRecord.toCanonicalForm());
-		// Such client is not connected to server, assume if not connected = still exists.
-		// sipp -sn branchc 0.0.0.0:5068 -t tn -max_socket 20 -trace_err
 		if (connections.isEmpty()) {
 			LOGGER.warn("Sending not found response");
 			sendNotFoundResponse(sipRequest, socketConnection);
@@ -107,42 +104,25 @@ public class InviteRequestHandler implements SipRequestHandler {
 		throw new IllegalStateException("Contact list in unexpected format..." + contactList);
 	}
 
-	@Override
-	public String getHandledType() {
-		return INVITE;
-	}
 
 	private void sendInvite(SipRequest originalRequest, SocketConnection clientToCall, SessionDescription sessionDescription) {
-		// prototype pattern
-		var requestCopy = originalRequest.replicate();
-		requestCopy.headers().addViaFront(serverVia);
-		requestCopy.headers().setContactList(new ContactSet(Set.of(new AddressOfRecord("", currentSipURI, Map.of()))));
+		var requestCopy = sipRequestUpdater.update(originalRequest.replicate());
 		var serializedSDP = sessionDescription.toString().getBytes(StandardCharsets.UTF_8);
-		var sipResponse = new SipRequest(
-				requestCopy.requestLine(),
-				requestCopy.headers(),
-				serializedSDP
-		);
+		var sipResponse = new SipRequest(requestCopy.requestLine(), requestCopy.headers(), serializedSDP);
 		clientToCall.appendResponse(messageSerializer.serialize(sipResponse));
 		clientToCall.changeOperation(OperationType.WRITE);
 	}
 
 	private void sendNotFoundResponse(SipRequest sipRequest, SocketConnection socketConnection) {
-		var sipResponseHeaders = new SipResponseHeaders();
-		sipResponseHeaders.addVia(serverVia);
-		sipResponseHeaders.setFrom(sipRequest.headers().getFrom());
-		sipResponseHeaders.setTo(sipRequest.headers().getTo());
-		sipResponseHeaders.setContactList(sipRequest.headers().getContactList());
-		var sipResponse = new SipResponse(
-				new SipResponseLine(
-						sipRequest.requestLine().version(),
-						new SipStatusCode(404),
-						"Client not found..."
-				),
-				sipResponseHeaders,
-				new byte[] {}
-		);
+		var sipResponseHeaders = sipRequest.headers().toResponseHeaders();
+		var responseLine = new SipResponseLine(sipRequest.requestLine().version(), new SipStatusCode(NOT_FOUND), "Not found");
+		var sipResponse = new SipResponse(responseLine, sipResponseHeaders, new byte[] {});
 		socketConnection.appendResponse(messageSerializer.serialize(sipResponse));
 		socketConnection.changeOperation(OperationType.WRITE);
+	}
+
+	@Override
+	public Set<String> getHandledTypes() {
+		return Set.of(INVITE);
 	}
 }

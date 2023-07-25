@@ -12,6 +12,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -36,18 +37,22 @@ import sip.request_handling.BindingUpdateResponsePostProcessor;
 import sip.request_handling.SDPMediaAddressProcessor;
 import sip.request_handling.SDPReplacementSipResponsePostProcessor;
 import sip.request_handling.SIPConnectionPreparer;
-import sip.request_handling.SipRequestMessageHandler;
+import sip.request_handling.SipMessageNetworkRequestHandler;
 import sip.request_handling.SipResponseHandler;
 import sip.request_handling.TCPConnectionsContext;
 import sip.request_handling.ViaCreator;
 import sip.request_handling.calls.InMemoryCallsRepository;
+import sip.request_handling.enricher.CompositeUpdater;
+import sip.request_handling.enricher.ContactListFixerSipRequestUpdater;
+import sip.request_handling.enricher.ProxyViaSipRequestUpdater;
 import sip.request_handling.media.InMemoryMediaMappingStorage;
 import sip.request_handling.media.MediaCallInitiator;
+import sip.request_handling.normalize.Normalizer;
 import sip.request_handling.normalize.SipRequestViaParameterNormalizer;
 import sip.request_handling.register.AckRequestHandler;
 import sip.request_handling.register.ByeRequestProcessor;
 import sip.request_handling.register.InMemoryBindingStorage;
-import sip.request_handling.register.InviteRequestHandler;
+import sip.request_handling.invite.InviteRequestHandler;
 import sip.request_handling.register.RegisterSipMessageHandler;
 import stun.StunMessage;
 import stun.StunMessageReader;
@@ -63,7 +68,6 @@ import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
 import udp.ForwardingUDPReadOperationHandler;
 import udp.RTPMessage;
-import udp.RTPMessageReader;
 import udp.RTPPacketTypeRecognizer;
 import udp.UDPPacket;
 import udp.UDPReadOperationHandler;
@@ -211,36 +215,34 @@ public class CallingServer {
 				new Address(getHost(), getRTPServerPort())
 		));
 		var mediaCallInitiator = new MediaCallInitiator(MEDIA_MAPPING_STORAGE);
-		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = new SipRequestMessageHandler(
+		final CompositeUpdater<SipRequest> sipRequestUpdater = new CompositeUpdater<>(
 				List.of(
-						new RegisterSipMessageHandler(
-								MESSAGE_SERIALIZER,
-								bindingStorage,
-								new ViaCreator(),
-								CURRENT_VIA
-						),
+						new ContactListFixerSipRequestUpdater(
+								() -> new ContactSet(Set.of(new AddressOfRecord("", getCurrentSipURI(), Map.of())))),
+						new ProxyViaSipRequestUpdater(CURRENT_VIA))
+		);
+		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = new SipMessageNetworkRequestHandler(
+				List.of(
+						new RegisterSipMessageHandler(MESSAGE_SERIALIZER, bindingStorage),
 						new InviteRequestHandler(
 								bindingStorage,
 								MESSAGE_SERIALIZER,
-								CURRENT_VIA,
-								getCurrentSipURI(),
 								sdpMediaAddressProcessors,
-								callsRepository
+								callsRepository,
+								sipRequestUpdater
 						),
 						new AckRequestHandler(
 								bindingStorage,
 								MESSAGE_SERIALIZER,
-								CURRENT_VIA,
-								getCurrentSipURI(),
 								callsRepository,
-								mediaCallInitiator
+								mediaCallInitiator,
+								sipRequestUpdater
 						),
 						new ByeRequestProcessor(
 								callsRepository,
 								bindingStorage,
-								getCurrentSipURI(),
-								CURRENT_VIA,
-								MESSAGE_SERIALIZER
+								MESSAGE_SERIALIZER,
+								sipRequestUpdater
 						)
 				),
 				new SipResponseHandler(
@@ -257,7 +259,7 @@ public class CallingServer {
 						MESSAGE_SERIALIZER,
 						callsRepository
 				),
-				List.of(new SipRequestViaParameterNormalizer()));
+				new Normalizer<>(List.of(new SipRequestViaParameterNormalizer())));
 		RequestProcessor<NetworkRequest<SipMessage>> requestProcessor =
 				new RequestProcessor<>(requestQueue, sipRequestHandler, sipRequestHandleTimer, sipRequestCount);
 
