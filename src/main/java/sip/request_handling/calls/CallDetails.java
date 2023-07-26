@@ -14,7 +14,8 @@ public record CallDetails(
 		String callId,
 		Map<String, Set<Address>> addressesByMediaAddressType,
 		@Deprecated Set<SocketConnection> connectionsInvolved,
-		@Deprecated @Nullable SipURI callerContact
+		@Deprecated @Nullable SipURI callerContact,
+		CallState callState
 ) {
 	public void addMediaMapping(String mediaAddressType, Address address) {
 		addressesByMediaAddressType.computeIfAbsent(mediaAddressType, s -> new HashSet<>());
@@ -22,7 +23,7 @@ public record CallDetails(
 	}
 
 	public CallDetails setCallId(String newCallId) {
-		return new CallDetails(newCallId, addressesByMediaAddressType, connectionsInvolved, callerContact);
+		return new CallDetails(newCallId, addressesByMediaAddressType, connectionsInvolved, callerContact, callState);
 	}
 
 	public void addConnection(SocketConnection socketConnection) {
@@ -30,7 +31,12 @@ public record CallDetails(
 	}
 
 	public CallDetails setCallerContact(SipURI callerContact) {
-		return new CallDetails(callId, addressesByMediaAddressType, connectionsInvolved, callerContact);
+		return new CallDetails(callId, addressesByMediaAddressType, connectionsInvolved, callerContact, callState);
 	}
+
+	public CallDetails changeCallState(CallState newState) {
+		return new CallDetails(callId, addressesByMediaAddressType, connectionsInvolved, callerContact, newState);
+	}
+
 
 }

@@ -1,14 +1,13 @@
 package sip.request_handling;
 
 import sip.SipResponse;
-import sip.request_handling.calls.CallDetails;
 import sip.request_handling.calls.CallsRepository;
 import tcp.server.SocketConnection;
 
-public class BindingUpdateResponsePostProcessor implements SipResponsePostProcessor {
+public class BindingUpdateResponsePreProcessor implements SipResponsePreProcessor {
 	private final CallsRepository callsRepository;
 
-	public BindingUpdateResponsePostProcessor(CallsRepository callsRepository) {
+	public BindingUpdateResponsePreProcessor(CallsRepository callsRepository) {
 		this.callsRepository = callsRepository;
 	}
 

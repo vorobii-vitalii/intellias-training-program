@@ -21,4 +21,8 @@ public record SipStatusCode(int statusCode) implements Serializable {
 		return statusCode >= 400;
 	}
 
+	public boolean isSuccess() {
+		return statusCode >= 200 && statusCode < 300;
+	}
+
 }

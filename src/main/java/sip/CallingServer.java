@@ -31,16 +31,17 @@ import request_handler.RequestHandler;
 import request_handler.RequestProcessor;
 import rtcp.RTCPMessage;
 import rtcp.RTCPMessagesReader;
-import sip.request_handling.ProxyAttributesAppenderSipResponsePostProcessor;
+import sip.request_handling.AcceptingCallSipResponsePreProcessor;
+import sip.request_handling.DestroyingCallSipResponsePostProcessor;
+import sip.request_handling.ProxyAttributesAppenderSipResponsePreProcessor;
 import sip.request_handling.RTPMediaAddressProcessor;
-import sip.request_handling.BindingUpdateResponsePostProcessor;
+import sip.request_handling.BindingUpdateResponsePreProcessor;
 import sip.request_handling.SDPMediaAddressProcessor;
-import sip.request_handling.SDPReplacementSipResponsePostProcessor;
+import sip.request_handling.SDPReplacementSipResponsePreProcessor;
 import sip.request_handling.SIPConnectionPreparer;
 import sip.request_handling.SipMessageNetworkRequestHandler;
 import sip.request_handling.SipResponseHandler;
 import sip.request_handling.TCPConnectionsContext;
-import sip.request_handling.ViaCreator;
 import sip.request_handling.calls.InMemoryCallsRepository;
 import sip.request_handling.enricher.CompositeUpdater;
 import sip.request_handling.enricher.ContactListFixerSipRequestUpdater;
@@ -247,12 +248,14 @@ public class CallingServer {
 				),
 				new SipResponseHandler(
 						List.of(
-								new BindingUpdateResponsePostProcessor(callsRepository),
-								new SDPReplacementSipResponsePostProcessor(
+								new BindingUpdateResponsePreProcessor(callsRepository),
+								new AcceptingCallSipResponsePreProcessor(callsRepository),
+								new DestroyingCallSipResponsePostProcessor(callsRepository),
+								new SDPReplacementSipResponsePreProcessor(
 										callsRepository,
 										sdpMediaAddressProcessors
 								),
-								new ProxyAttributesAppenderSipResponsePostProcessor(
+								new ProxyAttributesAppenderSipResponsePreProcessor(
 										CURRENT_VIA,
 										sdpMediaAddressProcessors, new AddressOfRecord("", getCurrentSipURI(), Map.of()))
 						),

@@ -12,13 +12,13 @@ import sip.SipResponse;
 import sip.request_handling.calls.CallsRepository;
 import tcp.server.SocketConnection;
 
-public class SDPReplacementSipResponsePostProcessor implements SipResponsePostProcessor {
-	private static final Logger LOGGER = LoggerFactory.getLogger(SDPReplacementSipResponsePostProcessor.class);
+public class SDPReplacementSipResponsePreProcessor implements SipResponsePreProcessor {
+	private static final Logger LOGGER = LoggerFactory.getLogger(SDPReplacementSipResponsePreProcessor.class);
 
 	private final CallsRepository callsRepository;
 	private final Collection<SDPMediaAddressProcessor> sdpMediaAddressProcessors;
 
-	public SDPReplacementSipResponsePostProcessor(
+	public SDPReplacementSipResponsePreProcessor(
 			CallsRepository callsRepository,
 			Collection<SDPMediaAddressProcessor> sdpMediaAddressProcessors
 	) {

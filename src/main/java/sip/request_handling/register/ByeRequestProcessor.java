@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import sip.SipRequest;
 import sip.request_handling.SipRequestHandler;
 import sip.request_handling.Updater;
+import sip.request_handling.calls.CallState;
 import sip.request_handling.calls.CallsRepository;
 import tcp.MessageSerializer;
 import tcp.server.OperationType;
@@ -41,11 +42,11 @@ public class ByeRequestProcessor implements SipRequestHandler {
 		}
 		var callId = sipRequest.headers().getCallId();
 		var callDetails = callsRepository.upsert(callId);
-		callsRepository.update(callId, callDetails);
-		LOGGER.info("Sending invites");
+		LOGGER.info("Sending BYE messages...");
 		for (SocketConnection connection : connections) {
 			sendBye(sipRequest, connection);
 		}
+		callsRepository.update(callId, callDetails.changeCallState(CallState.CANCELLED));
 	}
 
 	private void sendBye(SipRequest originalRequest, SocketConnection clientToCall) {

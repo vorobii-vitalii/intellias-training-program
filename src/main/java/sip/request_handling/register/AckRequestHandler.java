@@ -11,6 +11,7 @@ import sip.ContactSet;
 import sip.SipRequest;
 import sip.request_handling.SipRequestHandler;
 import sip.request_handling.Updater;
+import sip.request_handling.calls.CallState;
 import sip.request_handling.calls.CallsRepository;
 import sip.request_handling.media.MediaCallInitiator;
 import tcp.MessageSerializer;
@@ -54,9 +55,11 @@ public class AckRequestHandler implements SipRequestHandler {
 			sendAck(sipRequest, connection);
 		}
 		// Create media mapping
-		var callDetails = callsRepository.upsert(sipRequest.headers().getCallId());
-		LOGGER.info("Initiating media sesssion for callDetails = {}", callDetails);
+		var callId = sipRequest.headers().getCallId();
+		var callDetails = callsRepository.upsert(callId);
+		LOGGER.info("Initiating media session for callDetails = {}", callDetails);
 		mediaCallInitiator.initiate(callDetails);
+		callsRepository.update(callId, callDetails.changeCallState(CallState.ACKED));
 	}
 
 	private void sendAck(SipRequest originalRequest, SocketConnection connection) {
