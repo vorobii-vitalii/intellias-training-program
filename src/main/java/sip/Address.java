@@ -17,7 +17,7 @@ public record Address(String host, Integer port) implements Serializable {
 
 	public static Address fromSocketAddress(SocketAddress socketAddress) {
 		var address = (InetSocketAddress) socketAddress;
-		return new Address(address.getHostName(), address.getPort());
+		return new Address(address.getAddress().getHostAddress(), address.getPort());
 	}
 
 	public static Address parse(String str) {

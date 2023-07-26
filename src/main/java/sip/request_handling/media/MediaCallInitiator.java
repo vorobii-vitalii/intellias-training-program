@@ -17,7 +17,7 @@ public class MediaCallInitiator {
 			var addresses = entry.getValue();
 			for (var sourceAddress : addresses) {
 				for (var destination : addresses) {
-					if (!sourceAddress.equals(destination)) {
+					if (sourceAddress.equals(destination)) {
 						continue;
 					}
 					mediaMappingStorage.addMapping(sourceAddress, destination, mediaType, sessionId);

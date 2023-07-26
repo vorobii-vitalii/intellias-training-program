@@ -174,7 +174,7 @@ public class CallingServer {
 						.setHost(getHost())
 						.setPort(getRTPServerPort())
 						.setProtocolFamily(StandardProtocolFamily.INET)
-						.setInterestOps(OP_READ)
+						.setInterestOps(OP_READ | OP_WRITE)
 						.onConnectionClose(connection -> {
 							LOGGER.info("Connection closed");
 						})

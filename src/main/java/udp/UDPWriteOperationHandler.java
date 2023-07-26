@@ -39,6 +39,7 @@ public class UDPWriteOperationHandler implements Consumer<SelectionKey> {
 						// Client cannot accept more...
 						break;
 					}
+					LOGGER.info("Written message to {}", socketAddress);
 					buffers.pollFirst();
 				}
 			}

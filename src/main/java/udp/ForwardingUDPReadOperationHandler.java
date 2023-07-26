@@ -62,9 +62,16 @@ public class ForwardingUDPReadOperationHandler implements Consumer<SelectionKey>
 							LOGGER.warn("Received packet from {} of unknown type...", socketAddress);
 							return null;
 						});
+				if (packetType == null) {
+					return;
+				}
+				selectionKey.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+				// Map<CodecType, Port (Integer)>
+				// UDP(CodecType)
 				LOGGER.info("Packet from {} has type = {}", socketAddress, packetType);
 				var address = Address.fromSocketAddress(socketAddress);
 				var receivers = mediaMappingStorage.getReceivers(address, packetType);
+				LOGGER.info("Replicating message from {} to receivers = {}", address, receivers);
 				for (var receiver : receivers) {
 					map.compute(receiver, (receivedAddr, byteBuffers) -> {
 						if (byteBuffers == null) {
