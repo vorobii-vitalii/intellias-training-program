@@ -29,7 +29,7 @@ import io.opentelemetry.api.trace.TracerProvider;
 import io.opentelemetry.context.Context;
 import io.reactivex.Single;
 import serialization.Serializer;
-import tcp.MessageSerializer;
+import tcp.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 
@@ -50,7 +50,7 @@ class TestEditDocumentsEventHandler {
 	@Mock
 	ClientConnectionsContext clientConnectionsContext;
 	@Mock
-	MessageSerializer messageSerializer;
+	MessageSerializerImpl messageSerializer;
 	@Mock
 	Serializer serializer;
 	EditEventHandler editEventHandler;

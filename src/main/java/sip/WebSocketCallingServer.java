@@ -1,5 +1,6 @@
 package sip;
 
+import static document_editor.HttpServer.WEBSOCKET_HANDSHAKE_REQUEST_PREDICATE;
 import static java.nio.channels.SelectionKey.OP_ACCEPT;
 import static java.nio.channels.SelectionKey.OP_READ;
 import static java.nio.channels.SelectionKey.OP_WRITE;
@@ -7,45 +8,49 @@ import static java.nio.channels.SelectionKey.OP_WRITE;
 import java.io.IOException;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
 import java.nio.channels.spi.SelectorProvider;
-import java.util.Deque;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.function.BiConsumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import http.domain.HTTPRequest;
+import http.handler.HTTPAcceptOperationHandler;
+import http.handler.HTTPNetworkRequestHandler;
+import http.post_processor.ProtocolChangerHTTPResponsePostProcessor;
+import http.reader.HTTPRequestMessageReader;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.api.trace.TracerProvider;
 import io.opentelemetry.context.Context;
 import message_passing.BlockingQueueMessageProducer;
 import request_handler.NetworkRequest;
 import request_handler.RequestHandler;
 import request_handler.RequestProcessor;
-import rtcp.RTCPMessage;
-import rtcp.RTCPMessagesReader;
 import sip.request_handling.AcceptingCallSipResponsePreProcessor;
+import sip.request_handling.BindingUpdateResponsePreProcessor;
 import sip.request_handling.DestroyingCallSipResponsePostProcessor;
 import sip.request_handling.ProxyAttributesAppenderSipResponsePreProcessor;
 import sip.request_handling.RTPMediaAddressProcessor;
-import sip.request_handling.BindingUpdateResponsePreProcessor;
 import sip.request_handling.SDPMediaAddressProcessor;
-import sip.request_handling.SDPReplacementSipResponsePreProcessor;
-import sip.request_handling.SIPConnectionPreparer;
 import sip.request_handling.SipMessageNetworkRequestHandler;
 import sip.request_handling.SipResponseHandler;
-import sip.request_handling.TCPConnectionsContext;
 import sip.request_handling.calls.InMemoryCallsRepository;
 import sip.request_handling.enricher.CompositeUpdater;
 import sip.request_handling.enricher.ContactListFixerSipRequestUpdater;
 import sip.request_handling.enricher.ProxyViaSipRequestUpdater;
+import sip.request_handling.invite.InviteRequestHandler;
 import sip.request_handling.media.InMemoryMediaMappingStorage;
 import sip.request_handling.media.MediaCallInitiator;
 import sip.request_handling.normalize.Normalizer;
@@ -53,29 +58,30 @@ import sip.request_handling.normalize.SipRequestViaParameterNormalizer;
 import sip.request_handling.register.AckRequestHandler;
 import sip.request_handling.register.ByeRequestProcessor;
 import sip.request_handling.register.InMemoryBindingStorage;
-import sip.request_handling.invite.InviteRequestHandler;
 import sip.request_handling.register.RegisterSipMessageHandler;
-import stun.StunMessage;
-import stun.StunMessageReader;
 import tcp.MessageSerializerImpl;
-import tcp.server.BufferCopier;
+import tcp.WebSocketFramerMessageSerializer;
 import tcp.server.ByteBufferPool;
 import tcp.server.GenericServer;
 import tcp.server.ServerConfig;
+import tcp.server.SocketConnection;
 import tcp.server.SocketMessageReaderImpl;
 import tcp.server.TCPServerConfigurer;
-import tcp.server.UDPServerConfigurer;
+import tcp.server.TimerSocketMessageReader;
+import tcp.server.handler.DelegatingReadOperationHandler;
 import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
-import udp.ForwardingUDPReadOperationHandler;
-import udp.RTPMessage;
-import udp.RTPPacketTypeRecognizer;
-import udp.UDPPacket;
-import udp.UDPReadOperationHandler;
-import udp.UDPWriteOperationHandler;
-import util.Pair;
+import udp.ByteBufferSource;
+import util.Constants;
+import websocket.domain.WebSocketMessage;
+import websocket.endpoint.WebSocketEndpoint;
+import websocket.endpoint.WebSocketEndpointProvider;
+import websocket.handler.WebSocketChangeProtocolHTTPHandlerStrategy;
+import websocket.handler.WebSocketNetworkRequestHandler;
+import websocket.handler.WebSocketProtocolChanger;
+import websocket.reader.WebSocketMessageReader;
 
-public class CallingServer {
+public class WebSocketCallingServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(CallingServer.class);
 	public static final int BUFFER_EXPIRATION_TIME_MILLIS = 10_000;
 	public static final int REQUEST_QUEUE_CAPACITY = 10_000;
@@ -85,6 +91,8 @@ public class CallingServer {
 	);
 	public static final SimpleMeterRegistry METER_REGISTRY = new SimpleMeterRegistry();
 	public static final InMemoryMediaMappingStorage MEDIA_MAPPING_STORAGE = new InMemoryMediaMappingStorage();
+	public static final Set<String> SUPPORTED_PROTOCOLS = Set.of("sip");
+	public static final Tracer TRACER = TracerProvider.noop().get("");
 
 	private static void startProcess(Runnable process, String processName) {
 		var thread = new Thread(process);
@@ -97,124 +105,22 @@ public class CallingServer {
 	private static final MessageSerializerImpl MESSAGE_SERIALIZER = new MessageSerializerImpl(BUFFER_POOL);
 
 	public static void main(String[] args) throws IOException {
-		startRTPServer();
-		startRTCPServer();
 		startSipServer();
 	}
 
-	private static void startRTCPServer() {
-		var rtpMessagesQueue = new ArrayBlockingQueue<UDPPacket<List<RTCPMessage>>>(REQUEST_QUEUE_CAPACITY);
-		var stunMessageQueue = new ArrayBlockingQueue<UDPPacket<StunMessage>>(REQUEST_QUEUE_CAPACITY);
-
-		RequestHandler<UDPPacket<List<RTCPMessage>>> rtpMessageHandler = request -> {
-//			LOGGER.info("UDP RTCP Packet: {}", request);
-		};
-
-		RequestHandler<UDPPacket<StunMessage>> stunMessageHandler = request -> {
-//			LOGGER.info("UDP Stun Packet: {}", request);
-		};
-
-		var rtcpRequestHandleTimer = Timer.builder("rtcp.request.time").register(METER_REGISTRY);
-		var rtcpRequestsCount = Counter.builder("rtcp.request.count").register(METER_REGISTRY);
-
-
-		RequestProcessor<UDPPacket<List<RTCPMessage>>> requestProcessor =
-				new RequestProcessor<>(rtpMessagesQueue, rtpMessageHandler, rtcpRequestHandleTimer, rtcpRequestsCount);
-
-		RequestProcessor<UDPPacket<StunMessage>> stunRequestProcessor =
-				new RequestProcessor<>(stunMessageQueue, stunMessageHandler, rtcpRequestHandleTimer, rtcpRequestsCount);
-
-		startProcess(requestProcessor, "RTCP request processor");
-		startProcess(stunRequestProcessor, "STUN request processor");
-
-		var server = new GenericServer(
-				ServerConfig.builder()
-						.setName("RTPC server")
-						.setHost(getHost())
-						.setPort(getRTCPServerPort())
-						.setProtocolFamily(StandardProtocolFamily.INET)
-						.setInterestOps(OP_READ)
-						.onConnectionClose(connection -> {
-							LOGGER.info("Connection closed");
-						})
-						.build(),
-				SelectorProvider.provider(),
-				System.err::println,
-				Map.of(
-						OP_READ, new UDPReadOperationHandler(
-								2_000,
-								List.of(
-										new Pair<>(
-												new StunMessageReader(),
-												new BlockingQueueMessageProducer<>(stunMessageQueue)
-										),
-										new Pair<>(
-												new RTCPMessagesReader(List.of()),
-												new BlockingQueueMessageProducer<>(rtpMessagesQueue)
-										)
-								)
-						)
-				),
-				new UDPServerConfigurer());
-		server.start();
-	}
-
-	//
-	private static void startRTPServer() {
-		Map<Address, Deque<ByteBuffer>> map = new ConcurrentHashMap<>();
-
-		var rtpMessagesQueue = new ArrayBlockingQueue<UDPPacket<RTPMessage>>(REQUEST_QUEUE_CAPACITY);
-
-		RequestHandler<UDPPacket<RTPMessage>> rtpMessageHandler = request -> {
-//			LOGGER.info("UDP RTP Packet: {}", request);
-		};
-
-		var server = new GenericServer(
-				ServerConfig.builder()
-						.setName("RTP server")
-						.setHost(getHost())
-						.setPort(getRTPServerPort())
-						.setProtocolFamily(StandardProtocolFamily.INET)
-						.setInterestOps(OP_READ | OP_WRITE)
-						.onConnectionClose(connection -> {
-							LOGGER.info("Connection closed");
-						})
-						.build(),
-				SelectorProvider.provider(),
-				System.err::println,
-				Map.of(
-						OP_READ, new ForwardingUDPReadOperationHandler(
-								2_000,
-								MEDIA_MAPPING_STORAGE,
-								new BufferCopier(BUFFER_POOL),
-								List.of(new RTPPacketTypeRecognizer()),
-								map
-						),
-						OP_WRITE, new UDPWriteOperationHandler(
-								map
-						)
-				),
-				new UDPServerConfigurer());
-		server.start();
-	}
-
 	private static void startSipServer() throws IOException {
+		var httpRequestsQueue = new ArrayBlockingQueue<NetworkRequest<HTTPRequest>>(REQUEST_QUEUE_CAPACITY);
+		var webSocketRequestsQueue = new ArrayBlockingQueue<NetworkRequest<WebSocketMessage>>(REQUEST_QUEUE_CAPACITY);
 		var requestQueue = new ArrayBlockingQueue<NetworkRequest<SipMessage>>(REQUEST_QUEUE_CAPACITY);
 
-		var sipRequestHandleTimer = Timer.builder("sip.request.time").register(METER_REGISTRY);
-		var sipWriteTimer = Timer.builder("sip.response.write.time").register(METER_REGISTRY);
-		var sipRequestCount = Counter.builder("sip.request.count").register(METER_REGISTRY);
-		var sipWriteCount = Counter.builder("sip.response.write.count").register(METER_REGISTRY);
+		var httpRequestHandleTimer = Timer.builder("http.request.time").register(METER_REGISTRY);
+		var httpRequestCount = Counter.builder("http.request.count").register(METER_REGISTRY);
 
 		var selectorProvider = SelectorProvider.provider();
-		var selector = selectorProvider.openSelector();
 
-		var tcpConnectionsContext = new TCPConnectionsContext(new SIPConnectionPreparer(BUFFER_POOL, selector));
 		var bindingStorage = new InMemoryBindingStorage();
 		var callsRepository = new InMemoryCallsRepository();
-		List<SDPMediaAddressProcessor> sdpMediaAddressProcessors = List.of(new RTPMediaAddressProcessor(
-				new Address(getHost(), getRTPServerPort())
-		));
+		List<SDPMediaAddressProcessor> sdpMediaAddressProcessors = List.of();
 		var mediaCallInitiator = new MediaCallInitiator(MEDIA_MAPPING_STORAGE);
 		final CompositeUpdater<SipRequest> sipRequestUpdater = new CompositeUpdater<>(
 				List.of(
@@ -222,19 +128,20 @@ public class CallingServer {
 								() -> new ContactSet(Set.of(new AddressOfRecord("", getCurrentSipURI(), Map.of())))),
 						new ProxyViaSipRequestUpdater(CURRENT_VIA))
 		);
+
 		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = new SipMessageNetworkRequestHandler(
 				List.of(
-						new RegisterSipMessageHandler(MESSAGE_SERIALIZER, bindingStorage),
+						new RegisterSipMessageHandler(new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER), bindingStorage),
 						new InviteRequestHandler(
 								bindingStorage,
-								MESSAGE_SERIALIZER,
+								new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER),
 								sdpMediaAddressProcessors,
 								callsRepository,
 								sipRequestUpdater
 						),
 						new AckRequestHandler(
 								bindingStorage,
-								MESSAGE_SERIALIZER,
+								new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER),
 								callsRepository,
 								mediaCallInitiator,
 								sipRequestUpdater
@@ -242,47 +149,92 @@ public class CallingServer {
 						new ByeRequestProcessor(
 								callsRepository,
 								bindingStorage,
-								MESSAGE_SERIALIZER,
+								new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER),
 								sipRequestUpdater
 						)
 				),
+
 				new SipResponseHandler(
 						List.of(
 								new BindingUpdateResponsePreProcessor(callsRepository),
 								new AcceptingCallSipResponsePreProcessor(callsRepository),
 								new DestroyingCallSipResponsePostProcessor(callsRepository),
-								new SDPReplacementSipResponsePreProcessor(
-										callsRepository,
-										sdpMediaAddressProcessors
-								),
 								new ProxyAttributesAppenderSipResponsePreProcessor(
 										CURRENT_VIA,
 										sdpMediaAddressProcessors, new AddressOfRecord("", getCurrentSipURI(), Map.of()))
 						),
-						MESSAGE_SERIALIZER,
+						new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER),
 						callsRepository
 				),
 				new Normalizer<>(List.of(new SipRequestViaParameterNormalizer())));
+
 		RequestProcessor<NetworkRequest<SipMessage>> requestProcessor =
-				new RequestProcessor<>(requestQueue, sipRequestHandler, sipRequestHandleTimer, sipRequestCount);
+				new RequestProcessor<>(requestQueue, sipRequestHandler, Timer.builder("124").register(METER_REGISTRY),
+						Counter.builder("123").register(METER_REGISTRY));
 
 		startProcess(requestProcessor, "SIP request processor");
 
-		var sipReadHandler = new GenericReadOperationHandler<>(
-				new BlockingQueueMessageProducer<>(requestQueue),
-				new SocketMessageReaderImpl<>(new SipMessageReader()),
-				(selectionKey, error) -> {
-					LOGGER.warn("Client error {}", selectionKey, error);
-				},
-				TracerProvider.noop().get(""),
+		var sipMessageReader = new SipMessageReader();
+
+
+		var webSocketEndpointProvider = new WebSocketEndpointProvider(Map.of(
+				"/", new WebSocketEndpoint() {
+					@Override
+					public void onHandshakeCompletion(SocketConnection connection) {
+
+					}
+
+					@Override
+					public void onMessage(SocketConnection connection, WebSocketMessage message) {
+						var bytesSource = new ByteBufferSource(ByteBuffer.wrap(message.getPayload()));
+						var readResult = sipMessageReader.read(bytesSource, e -> {
+						});
+						if (readResult == null) {
+							LOGGER.info("Message cannot be parser... {}", message);
+							return;
+						}
+						var msg = readResult.first();
+						try {
+							requestQueue.put(new NetworkRequest<>(msg, connection));
+						}
+						catch (InterruptedException e) {
+							throw new RuntimeException(e);
+						}
+					}
+				}
+		));
+		HTTPNetworkRequestHandler httpRequestHandler = new HTTPNetworkRequestHandler(
+				Executors.newFixedThreadPool(8),
+				List.of(
+						new WebSocketChangeProtocolHTTPHandlerStrategy(
+								WEBSOCKET_HANDSHAKE_REQUEST_PREDICATE,
+								webSocketEndpointProvider,
+								SUPPORTED_PROTOCOLS
+						)
+				),
+				List.of(new ProtocolChangerHTTPResponsePostProcessor(List.of(
+								new WebSocketProtocolChanger(webSocketEndpointProvider, SUPPORTED_PROTOCOLS)
+				))),
+				MESSAGE_SERIALIZER,
+				TRACER,
 				Context::current
 		);
+
+		final WebSocketNetworkRequestHandler webSocketNetworkRequestHandler = new WebSocketNetworkRequestHandler(webSocketEndpointProvider);
+
+		startProcess(new RequestProcessor<>(httpRequestsQueue, httpRequestHandler, httpRequestHandleTimer, httpRequestCount), "HTTP server");
+		startProcess(new RequestProcessor<>(webSocketRequestsQueue, webSocketNetworkRequestHandler, httpRequestHandleTimer, httpRequestCount), "WS server");
+
+		BiConsumer<SelectionKey, Throwable> onError = (selectionKey, throwable) -> LOGGER.error("Error {}", selectionKey, throwable);
+
+		// URL = file:///home/vitaliivorobii/workspace/sipjs-examples/demo-phone/index.html
 
 		var server = new GenericServer(
 				ServerConfig.builder()
 						.setHost(getHost())
 						.setPort(getSipServerPort())
 						.setProtocolFamily(StandardProtocolFamily.INET)
+						.setInterestOps(OP_ACCEPT)
 						.onConnectionClose(connection -> {
 							LOGGER.info("Connection closed");
 						})
@@ -290,20 +242,42 @@ public class CallingServer {
 				selectorProvider,
 				System.err::println,
 				Map.of(
-						OP_ACCEPT, new SipAcceptOperationHandler(tcpConnectionsContext),
-						OP_READ, sipReadHandler,
+						OP_ACCEPT, new HTTPAcceptOperationHandler(
+								SelectionKey::selector,
+								BUFFER_POOL,
+								TRACER
+						),
+						OP_READ, new DelegatingReadOperationHandler(Map.of(
+								Constants.Protocol.HTTP, new GenericReadOperationHandler<>(
+										new BlockingQueueMessageProducer<>(httpRequestsQueue),
+										new TimerSocketMessageReader<>(
+												Timer.builder("http.request.parse").register(METER_REGISTRY),
+												new SocketMessageReaderImpl<>(
+														new HTTPRequestMessageReader(
+																(name, val) -> Collections.singletonList(val.toString().trim()))
+												)),
+										onError,
+										TRACER,
+										Context::current
+								),
+								Constants.Protocol.WEB_SOCKET, new GenericReadOperationHandler<>(
+										new BlockingQueueMessageProducer<>(webSocketRequestsQueue),
+										new TimerSocketMessageReader<>(Timer.builder("ws.request.parse").register(METER_REGISTRY),
+												new SocketMessageReaderImpl<>(new WebSocketMessageReader())),
+										onError,
+										TRACER,
+										Context::current
+								))),
 						OP_WRITE, new WriteOperationHandler(
-								sipWriteTimer,
-								sipWriteCount,
-								(key, e) -> {
-//									LOGGER.warn("Error", e);
-								},
+								Timer.builder("msg.write").register(METER_REGISTRY),
+								Counter.builder("msg.count").register(METER_REGISTRY),
+								onError,
 								BUFFER_POOL,
 								OpenTelemetry.noop()
 						)
+
 				),
-				new TCPServerConfigurer(),
-				() -> selector);
+				new TCPServerConfigurer());
 		server.start();
 	}
 
@@ -316,19 +290,11 @@ public class CallingServer {
 				Map.of()
 		);
 	}
-	// SSL Engine, test using SSL engine
-	// max udp = 1536 - headers size
 
 	private static int getSipServerPort() {
 		return Optional.ofNullable(System.getenv("SIP_PORT"))
 				.map(Integer::parseInt)
 				.orElse(5068);
-	}
-
-	private static int getRTCPServerPort() {
-		return Optional.ofNullable(System.getenv("RTCP_PORT"))
-				.map(Integer::parseInt)
-				.orElse(54257);
 	}
 
 	private static int getRTPServerPort() {

@@ -2,7 +2,6 @@ package sip.request_handling.register;
 
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -19,13 +18,14 @@ import sip.SipStatusCode;
 import sip.Via;
 import sip.request_handling.SipRequestHandler;
 import tcp.MessageSerializer;
+import tcp.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 
 public class RegisterSipMessageHandler implements SipRequestHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RegisterSipMessageHandler.class);
 	// TODO: Create parameter instead
-	private static final int DEFAULT_EXPIRATION = 3600;
+	private static final int DEFAULT_EXPIRATION = 100_000;
 
 	public static final Integer REMOVE_BINDINGS = 0;
 	public static final String REGISTER = "REGISTER";

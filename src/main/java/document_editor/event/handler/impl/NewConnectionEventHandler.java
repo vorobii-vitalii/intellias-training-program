@@ -31,7 +31,7 @@ import io.opentelemetry.context.Context;
 import io.reactivex.Single;
 import reactor.core.CoreSubscriber;
 import serialization.Serializer;
-import tcp.MessageSerializer;
+import tcp.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 import websocket.domain.OpCode;
@@ -43,7 +43,7 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
     private final RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub service;
     private final Tracer tracer;
     private final ServiceDecorator serviceDecorator;
-    private final MessageSerializer messageSerializer;
+    private final MessageSerializerImpl messageSerializer;
     private final Serializer serializer;
 
     public NewConnectionEventHandler(
@@ -51,7 +51,7 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
             Supplier<Integer> connectionIdProvider,
             Tracer tracer,
             ServiceDecorator serviceDecorator,
-            MessageSerializer messageSerializer,
+            MessageSerializerImpl messageSerializer,
             Serializer serializer
     ) {
         this.service = service;

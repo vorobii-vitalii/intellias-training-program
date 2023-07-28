@@ -6,8 +6,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -25,9 +23,8 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes;
 import request_handler.NetworkRequest;
 import request_handler.NetworkRequestHandler;
-import tcp.MessageSerializer;
+import tcp.MessageSerializerImpl;
 import tcp.server.OperationType;
-import tcp.server.SocketConnection;
 import util.Constants;
 
 public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequest> {
@@ -36,14 +33,14 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 	private final List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies;
 	private final Collection<HTTPResponsePostProcessor> httpResponsePostProcessor;
 	private final Tracer httpRequestHandlerTracer;
-	private final MessageSerializer messageSerializer;
+	private final MessageSerializerImpl messageSerializer;
 	private final Supplier<Context> contextSupplier;
 
 	public HTTPNetworkRequestHandler(
 			Executor executorService,
 			List<HTTPRequestHandlerStrategy> httpRequestHandlerStrategies,
 			Collection<HTTPResponsePostProcessor> httpResponsePostProcessor,
-			MessageSerializer messageSerializer,
+			MessageSerializerImpl messageSerializer,
 			Tracer tracer,
 			Supplier<Context> contextSupplier
 	) {
@@ -61,7 +58,7 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 		executorService.execute(() -> {
 			var socketConnection = networkRequest.socketConnection();
 			var httpRequest = networkRequest.request();
-			LOGGER.debug("Handling HTTP request {}", httpRequest);
+			LOGGER.info("Handling HTTP request {}", httpRequest);
 			var requestSpan = httpRequestHandlerTracer.spanBuilder(httpRequest.getHttpRequestLine().toString())
 					.setAttribute(SemanticAttributes.HTTP_METHOD, httpRequest.getHttpRequestLine().httpMethod().toString())
 					.setSpanKind(SpanKind.SERVER)
@@ -78,6 +75,7 @@ public class HTTPNetworkRequestHandler implements NetworkRequestHandler<HTTPRequ
 						.findFirst()
 						.map(strategy -> strategy.handleRequest(httpRequest))
 						.orElseGet(getNotFoundRequestHandler(networkRequest));
+				LOGGER.info("Response {}", response);
 				requestSpan.addEvent("Response created");
 				httpResponsePostProcessor.forEach(handlerStrategy -> handlerStrategy.handle(networkRequest, response));
 				requestSpan.addEvent("Postprocessors finished");

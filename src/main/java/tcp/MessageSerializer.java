@@ -2,29 +2,15 @@ package tcp;
 
 import java.nio.ByteBuffer;
 
-import tcp.server.ByteBufferPool;
 import tcp.server.EventEmitter;
 import util.Serializable;
 
-public class MessageSerializer {
+public interface MessageSerializer {
 	public static final EventEmitter NOOP = e -> {
 	};
-	private final ByteBufferPool byteBufferPool;
+	ByteBuffer serialize(Serializable serializable, EventEmitter eventEmitter);
 
-	public MessageSerializer(ByteBufferPool byteBufferPool) {
-		this.byteBufferPool = byteBufferPool;
-	}
-
-	public ByteBuffer serialize(Serializable serializable, EventEmitter eventEmitter) {
-		var newBuffer = byteBufferPool.allocate(serializable.getSize());
-		eventEmitter.emit("Buffer allocated");
-		serializable.serialize(newBuffer);
-		eventEmitter.emit("Message serialized");
-		newBuffer.flip();
-		return newBuffer;
-	}
-
-	public ByteBuffer serialize(Serializable serializable) {
+	default ByteBuffer serialize(Serializable serializable) {
 		return serialize(serializable, NOOP);
 	}
 

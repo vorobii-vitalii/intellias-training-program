@@ -103,7 +103,7 @@ import request_handler.RequestHandler;
 import serialization.JacksonDeserializer;
 import serialization.Serializer;
 import message_passing.MessagePublishProcess;
-import tcp.MessageSerializer;
+import tcp.MessageSerializerImpl;
 import tcp.server.BufferCopier;
 import tcp.server.ByteBufferPool;
 import tcp.server.ConnectionImpl;
@@ -230,7 +230,7 @@ public class HttpServer {
 
 		schedulePeriodically(5000, byteBufferPool::performGarbageCollection);
 
-		var messageSerializer = new MessageSerializer(byteBufferPool);
+		var messageSerializer = new MessageSerializerImpl(byteBufferPool);
 
 		var resource = Resource.getDefault()
 				.merge(Resource.create(Attributes.of(ResourceAttributes.SERVICE_NAME, "documents-app")));

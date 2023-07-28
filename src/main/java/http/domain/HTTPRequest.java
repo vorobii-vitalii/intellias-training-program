@@ -1,7 +1,11 @@
 package http.domain;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
+
+import reactor.util.annotation.NonNull;
+import util.Constants;
 
 public class HTTPRequest {
 	private final HTTPRequestLine httpRequestLine;
@@ -16,6 +20,16 @@ public class HTTPRequest {
 
 	public HTTPRequest(HTTPRequestLine httpRequestLine) {
 		this(httpRequestLine, new HTTPHeaders(), null);
+	}
+
+	@NonNull
+	public List<String> getSupportedProtocols() {
+		return getHeaders()
+				.getHeaderValue(Constants.HTTPHeaders.WEBSOCKET_PROTOCOL)
+				.map(s -> s.trim().split(","))
+				.stream()
+				.flatMap(Arrays::stream)
+				.toList();
 	}
 
 	public HTTPHeaders getHeaders() {

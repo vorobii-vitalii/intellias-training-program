@@ -1,14 +1,21 @@
 package websocket.handler;
 
-import http.domain.*;
-import http.handler.HTTPRequestHandlerStrategy;
-import org.apache.commons.codec.digest.DigestUtils;
-import util.Constants;
-import websocket.endpoint.WebSocketEndpointProvider;
-
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.Set;
 import java.util.function.Predicate;
+
+import org.apache.commons.codec.digest.DigestUtils;
+
+import http.domain.HTTPHeaders;
+import http.domain.HTTPRequest;
+import http.domain.HTTPResponse;
+import http.domain.HTTPResponseLine;
+import http.domain.HTTPVersion;
+import http.handler.HTTPRequestHandlerStrategy;
+import util.Constants;
+import websocket.endpoint.WebSocketEndpointProvider;
 
 /*
 
@@ -31,13 +38,23 @@ public class WebSocketChangeProtocolHTTPHandlerStrategy implements HTTPRequestHa
 
 	private final Collection<Predicate<HTTPRequest>> requestValidators;
 	private final WebSocketEndpointProvider webSocketEndpointProvider;
+	private final Set<String> supportedProtocols;
 
 	public WebSocketChangeProtocolHTTPHandlerStrategy(
-					Collection<Predicate<HTTPRequest>> requestValidators,
-					WebSocketEndpointProvider webSocketEndpointProvider
+			Collection<Predicate<HTTPRequest>> requestValidators,
+			WebSocketEndpointProvider webSocketEndpointProvider
+	) {
+		this(requestValidators, webSocketEndpointProvider, Set.of());
+	}
+
+	public WebSocketChangeProtocolHTTPHandlerStrategy(
+			Collection<Predicate<HTTPRequest>> requestValidators,
+			WebSocketEndpointProvider webSocketEndpointProvider,
+			Set<String> supportedProtocols
 	) {
 		this.requestValidators = requestValidators;
 		this.webSocketEndpointProvider = webSocketEndpointProvider;
+		this.supportedProtocols = supportedProtocols;
 	}
 
 	@Override
@@ -50,27 +67,55 @@ public class WebSocketChangeProtocolHTTPHandlerStrategy implements HTTPRequestHa
 		var endpoint = request.getHttpRequestLine().path();
 		if (webSocketEndpointProvider.getEndpoint(endpoint) == null) {
 			return new HTTPResponse(
-							new HTTPResponseLine(
-											new HTTPVersion(1, 1),
-											Constants.HTTPStatusCode.NOT_FOUND,
-											"Server doesn't have mapping for " + endpoint + " endpoint"
-							),
-							new HTTPHeaders(),
-							new byte[]{}
+					new HTTPResponseLine(
+							new HTTPVersion(1, 1),
+							Constants.HTTPStatusCode.NOT_FOUND,
+							"Server doesn't have mapping for " + endpoint + " endpoint"
+					),
+					new HTTPHeaders(),
+					new byte[] {}
 			);
 		}
 		var webSocketKey = request.getHeaders().getHeaderValue(Constants.HTTPHeaders.WEBSOCKET_KEY).orElseThrow();
+		var httpHeaders = new HTTPHeaders()
+				.addSingleHeader(Constants.HTTPHeaders.UPGRADE, "websocket")
+				.addSingleHeader(Constants.HTTPHeaders.CONNECTION, "upgrade")
+				.addSingleHeader(Constants.HTTPHeaders.WEBSOCKET_ACCEPT, calculateSecWebSocketAccept(webSocketKey));
+		var requestedSubProtocols = request.getSupportedProtocols();
+		if (requestedSubProtocols.isEmpty()) {
+			return new HTTPResponse(
+					new HTTPResponseLine(
+							new HTTPVersion(1, 1),
+							Constants.HTTPStatusCode.SWITCHING_PROTOCOL,
+							"Switching protocol"
+					),
+					httpHeaders,
+					new byte[] {}
+			);
+		}
+		var firstSupportedSubProtocol = requestedSubProtocols.stream()
+				.filter(supportedProtocols::contains)
+				.findFirst()
+				.orElse(null);
+		if (firstSupportedSubProtocol == null) {
+			return new HTTPResponse(
+					new HTTPResponseLine(
+							new HTTPVersion(1, 1),
+							Constants.HTTPStatusCode.BAD_REQUEST,
+							"No protocol is supported... " + requestedSubProtocols
+					),
+					httpHeaders,
+					new byte[] {}
+			);
+		}
 		return new HTTPResponse(
-						new HTTPResponseLine(
-										new HTTPVersion(1, 1),
-										Constants.HTTPStatusCode.SWITCHING_PROTOCOL,
-										"Switching protocol"
-						),
-						new HTTPHeaders()
-										.addSingleHeader(Constants.HTTPHeaders.UPGRADE, "websocket")
-										.addSingleHeader(Constants.HTTPHeaders.CONNECTION, "upgrade")
-										.addSingleHeader(Constants.HTTPHeaders.WEBSOCKET_ACCEPT, calculateSecWebSocketAccept(webSocketKey)),
-						new byte[]{}
+				new HTTPResponseLine(
+						new HTTPVersion(1, 1),
+						Constants.HTTPStatusCode.SWITCHING_PROTOCOL,
+						"Switching protocol"
+				),
+				httpHeaders.addSingleHeader(Constants.HTTPHeaders.WEBSOCKET_PROTOCOL, firstSupportedSubProtocol),
+				new byte[] {}
 		);
 	}
 
@@ -81,6 +126,6 @@ public class WebSocketChangeProtocolHTTPHandlerStrategy implements HTTPRequestHa
 
 	private String calculateSecWebSocketAccept(String webSocketKey) {
 		return Base64.getEncoder()
-						.encodeToString(DigestUtils.sha1(webSocketKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"));
+				.encodeToString(DigestUtils.sha1(webSocketKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"));
 	}
 }

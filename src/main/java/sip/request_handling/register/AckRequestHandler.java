@@ -1,13 +1,10 @@
 package sip.request_handling.register;
 
-import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import sip.AddressOfRecord;
-import sip.ContactSet;
 import sip.SipRequest;
 import sip.request_handling.SipRequestHandler;
 import sip.request_handling.Updater;
@@ -15,6 +12,7 @@ import sip.request_handling.calls.CallState;
 import sip.request_handling.calls.CallsRepository;
 import sip.request_handling.media.MediaCallInitiator;
 import tcp.MessageSerializer;
+import tcp.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 

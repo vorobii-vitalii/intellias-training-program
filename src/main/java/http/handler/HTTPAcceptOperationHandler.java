@@ -46,7 +46,7 @@ public class HTTPAcceptOperationHandler implements Consumer<SelectionKey> {
 				return;
 			}
 			requestSpan.addEvent("Connection accepted");
-			LOGGER.debug("Accepted new connection {}", socketChannel);
+			LOGGER.info("Accepted new connection {}", socketChannel);
 			socketChannel.configureBlocking(false);
 			socketChannel.socket().setSoTimeout(1);
 			socketChannel.socket().setTcpNoDelay(true);

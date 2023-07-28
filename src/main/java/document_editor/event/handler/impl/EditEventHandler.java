@@ -24,7 +24,7 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import io.reactivex.Single;
 import serialization.Serializer;
-import tcp.MessageSerializer;
+import tcp.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 import websocket.domain.OpCode;
@@ -36,7 +36,7 @@ public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 	private final RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub service;
 	private final Tracer tracer;
 	private final ServiceDecorator serviceDecorator;
-	private final MessageSerializer messageSerializer;
+	private final MessageSerializerImpl messageSerializer;
 	private final Serializer serializer;
 	private final Supplier<Context> contextSupplier;
 
@@ -44,7 +44,7 @@ public class EditEventHandler implements EventHandler<EditDocumentsEvent> {
 			RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub service,
 			Tracer tracer,
 			ServiceDecorator serviceDecorator,
-			MessageSerializer messageSerializer,
+			MessageSerializerImpl messageSerializer,
 			Serializer serializer,
 			Supplier<Context> contextSupplier
 	) {

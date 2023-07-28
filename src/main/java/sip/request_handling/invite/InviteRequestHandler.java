@@ -2,7 +2,6 @@ package sip.request_handling.invite;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
-import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -11,21 +10,19 @@ import org.slf4j.LoggerFactory;
 import net.sourceforge.jsdp.SDPException;
 import net.sourceforge.jsdp.SDPFactory;
 import net.sourceforge.jsdp.SessionDescription;
-import sip.AddressOfRecord;
 import sip.ContactSet;
 import sip.SipRequest;
 import sip.SipResponse;
-import sip.SipResponseHeaders;
 import sip.SipResponseLine;
 import sip.SipStatusCode;
 import sip.SipURI;
-import sip.Via;
 import sip.request_handling.SDPMediaAddressProcessor;
 import sip.request_handling.SipRequestHandler;
 import sip.request_handling.Updater;
 import sip.request_handling.calls.CallsRepository;
 import sip.request_handling.register.BindingStorage;
 import tcp.MessageSerializer;
+import tcp.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 

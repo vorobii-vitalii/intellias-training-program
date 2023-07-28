@@ -1,7 +1,6 @@
 package websocket.handler;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.Set;
 
 import http.protocol_change.ProtocolChangeContext;
 import http.protocol_change.ProtocolChanger;
@@ -9,12 +8,16 @@ import util.Constants;
 import websocket.endpoint.WebSocketEndpointProvider;
 
 public class WebSocketProtocolChanger implements ProtocolChanger {
-	private static final Logger LOGGER = LoggerFactory.getLogger(WebSocketProtocolChanger.class);
-
 	private final WebSocketEndpointProvider webSocketEndpointProvider;
+	private final Set<String> supportedProtocols;
 
 	public WebSocketProtocolChanger(WebSocketEndpointProvider webSocketEndpointProvider) {
+		this(webSocketEndpointProvider, Set.of());
+	}
+
+	public WebSocketProtocolChanger(WebSocketEndpointProvider webSocketEndpointProvider, Set<String> supportedProtocols) {
 		this.webSocketEndpointProvider = webSocketEndpointProvider;
+		this.supportedProtocols = supportedProtocols;
 	}
 
 	@Override
@@ -22,9 +25,14 @@ public class WebSocketProtocolChanger implements ProtocolChanger {
 		var request = protocolChangeContext.request();
 		var endpoint = request.getHttpRequestLine().path();
 		var connection = protocolChangeContext.connection();
-//		LOGGER.info("Changing protocol of {} to websocket, endpoint = {}", connection, endpoint);
 		connection.setProtocol(Constants.Protocol.WEB_SOCKET);
 		connection.setMetadata(Constants.WebSocketMetadata.ENDPOINT, endpoint);
+
+		var protocol = request.getSupportedProtocols().stream()
+				.filter(supportedProtocols::contains)
+				.findFirst()
+				.orElse(null);
+		connection.setMetadata(Constants.WebSocketMetadata.SUB_PROTOCOL, protocol);
 		webSocketEndpointProvider.getEndpoint(endpoint).onHandshakeCompletion(connection);
 	}
 

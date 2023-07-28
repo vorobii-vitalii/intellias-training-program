@@ -3,11 +3,9 @@ package document_editor.event.context;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -15,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.jcip.annotations.NotThreadSafe;
-import tcp.MessageSerializer;
+import tcp.MessageSerializerImpl;
 import tcp.server.BufferCopier;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
@@ -27,13 +25,13 @@ public class ClientConnectionsContext {
 	private final Map<SocketConnection, Instant> connectionsMap = new ConcurrentHashMap<>();
 	private final int maxWaitMs;
 	private final Supplier<Instant> currentTimeProvider;
-	private final MessageSerializer messageSerializer;
+	private final MessageSerializerImpl messageSerializer;
 	private final BufferCopier bufferCopier;
 
 	public ClientConnectionsContext(
 			int maxWaitMs,
 			Supplier<Instant> currentTimeProvider,
-			MessageSerializer messageSerializer,
+			MessageSerializerImpl messageSerializer,
 			BufferCopier bufferCopier
 	) {
 		this.maxWaitMs = maxWaitMs;

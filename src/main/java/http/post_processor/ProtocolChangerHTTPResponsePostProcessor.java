@@ -1,17 +1,15 @@
 package http.post_processor;
 
+import java.util.Collection;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 import http.domain.HTTPRequest;
 import http.domain.HTTPResponse;
 import http.protocol_change.ProtocolChangeContext;
 import http.protocol_change.ProtocolChanger;
 import request_handler.NetworkRequest;
-
-import java.nio.channels.Selector;
-import java.util.Collection;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 public class ProtocolChangerHTTPResponsePostProcessor implements HTTPResponsePostProcessor {
 	private final Map<String, ProtocolChanger> protocolChangerMap;

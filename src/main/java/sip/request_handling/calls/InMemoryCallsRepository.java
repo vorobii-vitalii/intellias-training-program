@@ -14,6 +14,7 @@ import net.jcip.annotations.ThreadSafe;
 
 @ThreadSafe
 public class InMemoryCallsRepository implements CallsRepository {
+	// TODO: Jaeger, group calls, RTP packets translation,
 	private static final Logger LOGGER = LoggerFactory.getLogger(InMemoryCallsRepository.class);
 
 	private final Map<String, CallDetails> callDetailsMap = new ConcurrentHashMap<>();

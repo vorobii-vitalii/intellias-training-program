@@ -7,7 +7,8 @@ import org.slf4j.LoggerFactory;
 
 import tcp.server.BytesSource;
 
-public class RTPPacketTypeRecognizer implements PacketTypeRecognizer {
+public class
+RTPPacketTypeRecognizer implements PacketTypeRecognizer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RTPPacketTypeRecognizer.class);
 
 	private static final int FIRST_BIT = (1 << 7);

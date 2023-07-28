@@ -21,12 +21,14 @@ public interface Constants {
 		String WEBSOCKET_KEY = "Sec-WebSocket-Key".toLowerCase();
 		String WEBSOCKET_VERSION = "Sec-WebSocket-Version".toLowerCase();
 		String WEBSOCKET_ACCEPT = "Sec-WebSocket-Accept".toLowerCase();
+		String WEBSOCKET_PROTOCOL = "Sec-WebSocket-Protocol".toLowerCase();
 		String CONTENT_TYPE = "Content-Type".toLowerCase();
 		String CONTENT_LENGTH = "Content-Length".toLowerCase();
 	}
 
 	interface WebSocketMetadata {
 		String ENDPOINT = "endpoint";
+		String SUB_PROTOCOL = "subProtocol";
 	}
 
 	interface Protocol {
