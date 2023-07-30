@@ -49,6 +49,7 @@ import sip.request_handling.SipResponseHandler;
 import sip.request_handling.calls.InMemoryCallsRepository;
 import sip.request_handling.enricher.CompositeUpdater;
 import sip.request_handling.enricher.ContactListFixerSipRequestUpdater;
+import sip.request_handling.enricher.ContactUnknownAttributesRemover;
 import sip.request_handling.enricher.ProxyViaSipRequestUpdater;
 import sip.request_handling.invite.InviteRequestHandler;
 import sip.request_handling.media.InMemoryMediaMappingStorage;
@@ -122,11 +123,11 @@ public class WebSocketCallingServer {
 		var callsRepository = new InMemoryCallsRepository();
 		List<SDPMediaAddressProcessor> sdpMediaAddressProcessors = List.of();
 		var mediaCallInitiator = new MediaCallInitiator(MEDIA_MAPPING_STORAGE);
+		var contactUnknownAttributesRemover = new ContactUnknownAttributesRemover();
 		final CompositeUpdater<SipRequest> sipRequestUpdater = new CompositeUpdater<>(
 				List.of(
-						new ContactListFixerSipRequestUpdater(
-								() -> new ContactSet(Set.of(new AddressOfRecord("", getCurrentSipURI(), Map.of())))),
-						new ProxyViaSipRequestUpdater(CURRENT_VIA))
+						contactUnknownAttributesRemover
+				)
 		);
 
 		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = new SipMessageNetworkRequestHandler(
@@ -158,10 +159,7 @@ public class WebSocketCallingServer {
 						List.of(
 								new BindingUpdateResponsePreProcessor(callsRepository),
 								new AcceptingCallSipResponsePreProcessor(callsRepository),
-								new DestroyingCallSipResponsePostProcessor(callsRepository),
-								new ProxyAttributesAppenderSipResponsePreProcessor(
-										CURRENT_VIA,
-										sdpMediaAddressProcessors, new AddressOfRecord("", getCurrentSipURI(), Map.of()))
+								new DestroyingCallSipResponsePostProcessor(callsRepository)
 						),
 						new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER),
 						callsRepository
@@ -286,7 +284,7 @@ public class WebSocketCallingServer {
 				"sip",
 				new Credentials(null, null),
 				new Address(getHost(), getSipServerPort()),
-				Map.of("transport", "tcp"),
+				Map.of(),
 				Map.of()
 		);
 	}
@@ -295,12 +293,6 @@ public class WebSocketCallingServer {
 		return Optional.ofNullable(System.getenv("SIP_PORT"))
 				.map(Integer::parseInt)
 				.orElse(5068);
-	}
-
-	private static int getRTPServerPort() {
-		return Optional.ofNullable(System.getenv("RTP_PORT"))
-				.map(Integer::parseInt)
-				.orElse(54258);
 	}
 
 	private static String getHost() {

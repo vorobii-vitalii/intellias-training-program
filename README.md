@@ -27,3 +27,9 @@ https://medium.com/@pawilon/tuning-your-linux-kernel-and-haproxy-instance-for-hi
 https://www.linangran.com/?p=547
 
 sipp -sf uac-auth.xml  0.0.0.0:5068 -t tn -max_socket 20 -trace_err
+
+RFC:
+
+https://www.rfc-editor.org/rfc/rfc5626
+https://datatracker.ietf.org/doc/html/rfc3327
+https://datatracker.ietf.org/doc/html/rfc7118

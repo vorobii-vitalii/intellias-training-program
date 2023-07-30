@@ -39,7 +39,6 @@ public class ProxyAttributesAppenderSipResponsePreProcessor implements SipRespon
 			}
 		}
 		sipResponseCopy.headers().setContactList(new ContactSet(Set.of(proxyContact)));
-		sipResponseCopy.headers().setContentType(new SipMediaType("application", "sdp", Map.of()));
 		return sipResponseCopy;
 	}
 }

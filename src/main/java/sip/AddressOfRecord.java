@@ -9,6 +9,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -38,6 +39,17 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 
 	public AddressOfRecord toCanonicalForm() {
 		return new AddressOfRecord("", sipURI.toCanonicalForm(), Map.of());
+	}
+
+	public AddressOfRecord removeUnsetParameters() {
+		return this;
+//		var newParameters = new HashMap<String, String>();
+//		for (var e : parameters.entrySet()) {
+//			if (!e.getValue().isEmpty()) {
+//				newParameters.put(e.getKey(), e.getValue());
+//			}
+//		}
+//		return new AddressOfRecord(name, sipURI, newParameters);
 	}
 
 	public AddressOfRecord addParam(String param, String value) {
@@ -86,6 +98,9 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 		sipURI.serialize(dest);
 		dest.put((byte) RAQUOT);
 		for (var entry : parameters.entrySet()) {
+			if (entry.getValue().isEmpty()) {
+				continue;
+			}
 			dest.put(PARAMETERS_DELIMITER_CHAR);
 			dest.put(entry.getKey().getBytes(StandardCharsets.UTF_8));
 			dest.put((byte) PARAMETER_DELIMITER);
@@ -111,6 +126,9 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 	private int getParametersInBytes() {
 		int total = 0;
 		for (var entry : parameters.entrySet()) {
+			if (entry.getValue().isEmpty()) {
+				continue;
+			}
 			total += PARAMETER_LIST_DELIMITER_LENGTH;
 			total += entry.getKey().length();
 			total += PARAMETER_DELIMITER_LENGTH;

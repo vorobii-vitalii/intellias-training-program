@@ -1,18 +1,14 @@
 package sip;
 
-import javax.annotation.Nonnull;
+import static sip.SipParseUtils.parseParameters;
 
-import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static sip.SipParseUtils.parseParameters;
-
-import util.Serializable;
+import javax.annotation.Nonnull;
 
 /*
 SIP-URI          =  "sip:" [ userinfo ] hostport
@@ -127,6 +123,7 @@ public record FullSipURI(
 
 	private String serializeURIParameters() {
 		return uriParameters.entrySet().stream()
+				.filter(e -> !e.getValue().isEmpty())
 				.map(e -> ";" + e.getKey() + "=" + e.getValue())
 				.collect(Collectors.joining(""));
 	}
@@ -136,6 +133,7 @@ public record FullSipURI(
 			return "";
 		}
 		return queryParameters.entrySet().stream()
+				.filter(e -> !e.getValue().isEmpty())
 				.map(e -> e.getKey() + "=" + e.getValue())
 				.collect(Collectors.joining("&", "?", ""));
 	}
