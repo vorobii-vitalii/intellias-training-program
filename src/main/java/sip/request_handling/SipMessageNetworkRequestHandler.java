@@ -1,8 +1,11 @@
 package sip.request_handling;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +21,7 @@ import sip.request_handling.normalize.SipRequestNormalizeContext;
 public class SipMessageNetworkRequestHandler implements RequestHandler<NetworkRequest<SipMessage>> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SipMessageNetworkRequestHandler.class);
 
-	private final Map<String, SipMessageHandler<SipRequest>> requestHandlerMap = new HashMap<>();
+	private final Map<String, List<SipMessageHandler<SipRequest>>> requestHandlerMap = new HashMap<>();
 	private final SipMessageHandler<SipResponse> sipResponseHandler;
 	private final Normalizer<SipRequest, SipRequestNormalizeContext> sipRequestNormalizer;
 
@@ -29,7 +32,8 @@ public class SipMessageNetworkRequestHandler implements RequestHandler<NetworkRe
 	) {
 		for (var sipMessageHandler : sipMessageHandlers) {
 			for (var handledType : sipMessageHandler.getHandledTypes()) {
-				requestHandlerMap.put(handledType, sipMessageHandler);
+				requestHandlerMap.computeIfAbsent(handledType, s -> new ArrayList<>());
+				requestHandlerMap.get(handledType).add(sipMessageHandler);
 			}
 		}
 		this.sipResponseHandler = sipResponseHandler;
@@ -44,9 +48,14 @@ public class SipMessageNetworkRequestHandler implements RequestHandler<NetworkRe
 			var normalizerRequest = sipRequestNormalizer.normalize(sipRequest, context);
 			LOGGER.info("Received request {}", normalizerRequest);
 			var requestMethod = normalizerRequest.requestLine().method();
-			var requestHandler = requestHandlerMap.get(requestMethod);
-			if (requestHandler != null) {
-				requestHandler.process(normalizerRequest, request.socketConnection());
+			var requestHandlers = requestHandlerMap.get(requestMethod);
+			if (requestHandlers != null) {
+				requestHandlers.stream()
+					.filter(s -> s.canHandle(sipRequest))
+					.findFirst()
+					.ifPresentOrElse(
+							s -> s.process(normalizerRequest, request.socketConnection()),
+							() -> LOGGER.warn("Strategy for request {} not found...", sipRequest));
 			} else {
 				LOGGER.warn("Ignoring request {}", normalizerRequest);
 			}

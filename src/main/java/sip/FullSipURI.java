@@ -94,6 +94,16 @@ public record FullSipURI(
 	public static final String URI_PARAMETERS_DELIMITER = ";";
 	public static final String QUERY_PARAMETERS_DELIMITER = "&";
 
+	public SipURI updateCredentials(Credentials credentials) {
+		return new FullSipURI(
+				protocol,
+				credentials,
+				address,
+				uriParameters,
+				queryParameters
+		);
+	}
+
 	@Override
 	public SipURI addParam(String paramName, String value) {
 		var newParameters = new HashMap<>(uriParameters);

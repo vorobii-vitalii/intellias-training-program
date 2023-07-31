@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 
 import util.Serializable;
 
+// Remove usage...
 public interface SipURI extends Serializable {
 
 	String getURIAsString();
