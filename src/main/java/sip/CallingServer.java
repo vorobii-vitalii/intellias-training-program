@@ -246,21 +246,23 @@ public class CallingServer {
 								sipRequestUpdater
 						)
 				),
-				new SipResponseHandler(
-						List.of(
-								new BindingUpdateResponsePreProcessor(callsRepository),
-								new AcceptingCallSipResponsePreProcessor(callsRepository),
-								new DestroyingCallSipResponsePostProcessor(callsRepository),
-								new SDPReplacementSipResponsePreProcessor(
-										callsRepository,
-										sdpMediaAddressProcessors
+				List.of(
+						new SipResponseHandler(
+								List.of(
+										new BindingUpdateResponsePreProcessor(callsRepository),
+										new AcceptingCallSipResponsePreProcessor(callsRepository),
+										new DestroyingCallSipResponsePostProcessor(callsRepository),
+										new SDPReplacementSipResponsePreProcessor(
+												callsRepository,
+												sdpMediaAddressProcessors
+										),
+										new ProxyAttributesAppenderSipResponsePreProcessor(
+												CURRENT_VIA,
+												sdpMediaAddressProcessors, new AddressOfRecord("", getCurrentSipURI(), Map.of()))
 								),
-								new ProxyAttributesAppenderSipResponsePreProcessor(
-										CURRENT_VIA,
-										sdpMediaAddressProcessors, new AddressOfRecord("", getCurrentSipURI(), Map.of()))
-						),
-						MESSAGE_SERIALIZER,
-						callsRepository
+								MESSAGE_SERIALIZER,
+								callsRepository
+						)
 				),
 				new Normalizer<>(List.of(new SipRequestViaParameterNormalizer())));
 		RequestProcessor<NetworkRequest<SipMessage>> requestProcessor =

@@ -98,11 +98,11 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 		sipURI.serialize(dest);
 		dest.put((byte) RAQUOT);
 		for (var entry : parameters.entrySet()) {
+			dest.put(PARAMETERS_DELIMITER_CHAR);
+			dest.put(entry.getKey().getBytes(StandardCharsets.UTF_8));
 			if (entry.getValue().isEmpty()) {
 				continue;
 			}
-			dest.put(PARAMETERS_DELIMITER_CHAR);
-			dest.put(entry.getKey().getBytes(StandardCharsets.UTF_8));
 			dest.put((byte) PARAMETER_DELIMITER);
 			dest.put(entry.getValue().getBytes(StandardCharsets.UTF_8));
 		}
@@ -126,11 +126,11 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 	private int getParametersInBytes() {
 		int total = 0;
 		for (var entry : parameters.entrySet()) {
+			total += PARAMETER_LIST_DELIMITER_LENGTH;
+			total += entry.getKey().length();
 			if (entry.getValue().isEmpty()) {
 				continue;
 			}
-			total += PARAMETER_LIST_DELIMITER_LENGTH;
-			total += entry.getKey().length();
 			total += PARAMETER_DELIMITER_LENGTH;
 			total += entry.getValue().length();
 		}

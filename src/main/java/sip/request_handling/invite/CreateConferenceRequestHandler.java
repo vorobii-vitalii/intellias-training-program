@@ -30,20 +30,17 @@ public class CreateConferenceRequestHandler implements SipRequestHandler {
 	private static final String REDIRECT_REASON = "Redirecting...";
 
 	private final Predicate<AddressOfRecord> conferenceFactoryAddressOfRecord;
-	private final ConferencesStorage conferencesStorage;
 	private final Supplier<String> conferenceIdGenerator;
 	private final MessageSerializer messageSerializer;
 	private final MediaConferenceService mediaConferenceService;
 
 	public CreateConferenceRequestHandler(
 			Predicate<AddressOfRecord> conferenceFactoryAddressOfRecord,
-			ConferencesStorage conferencesStorage,
 			Supplier<String> conferenceIdGenerator,
 			MessageSerializer messageSerializer,
 			MediaConferenceService mediaConferenceService
 	) {
 		this.conferenceFactoryAddressOfRecord = conferenceFactoryAddressOfRecord;
-		this.conferencesStorage = conferencesStorage;
 		this.conferenceIdGenerator = conferenceIdGenerator;
 		this.messageSerializer = messageSerializer;
 		this.mediaConferenceService = mediaConferenceService;
@@ -53,7 +50,6 @@ public class CreateConferenceRequestHandler implements SipRequestHandler {
 	public void process(SipRequest sipRequest, SocketConnection socketConnection) {
 		LOGGER.info("Creating new conference...");
 		var conferenceId = conferenceIdGenerator.get();
-		conferencesStorage.createNewConference(conferenceId);
 		mediaConferenceService.createNewConference(conferenceId);
 		sendCallRedirect(sipRequest, socketConnection, conferenceId);
 	}
@@ -65,7 +61,7 @@ public class CreateConferenceRequestHandler implements SipRequestHandler {
 		var sipResponseHeaders = sipRequest.headers().toResponseHeaders();
 		var sipURI = ((FullSipURI) originalTo.sipURI()).updateCredentials(new Credentials(conferenceId, null));
 		sipResponseHeaders.setContactList(new ContactSet(Set.of(
-				new AddressOfRecord(originalTo.name(), sipURI, Map.of())
+				new AddressOfRecord(originalTo.name(), sipURI, Map.of("ifocus", ""))
 		)));
 		// TODO: Take into consideration "expire" value, if not provided set reasonable default because conference cannot last forever
 		var sipRedirectResponse = new SipResponse(sipResponseLine, sipResponseHeaders, new byte[] {});

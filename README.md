@@ -34,4 +34,6 @@ https://www.rfc-editor.org/rfc/rfc5626
 https://datatracker.ietf.org/doc/html/rfc3327
 https://datatracker.ietf.org/doc/html/rfc7118
 
-Kurento media server start: docker run -d --name kurento --network host     kurento/kurento-media-server:7.0.0
+Kurento media server start: docker run -d --network host     kurento/kurento-media-server:7.0.0
+
+UI: file:///home/vitaliivorobii/workspace/sipjs-examples/demo-phone/index.html

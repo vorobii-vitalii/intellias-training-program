@@ -13,6 +13,8 @@
 		<appender-ref ref="CONSOLE"/>
 	</appender>
 
+	<logger name="org.kurento" level="debug" />
+
 	<root level="info">
 		<appender-ref ref="ASYNC_CONSOLE"/>
 	</root>

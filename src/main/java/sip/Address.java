@@ -12,7 +12,8 @@ public record Address(String host, Integer port) implements Serializable {
 	private static final byte COLON = (byte) ':';
 
 	public Address toCanonicalForm() {
-		return new Address(host, null);
+		// remove
+		return new Address(host, port);
 	}
 
 	public static Address fromSocketAddress(SocketAddress socketAddress) {

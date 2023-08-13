@@ -10,6 +10,7 @@ import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.spi.SelectorProvider;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,9 @@ import java.util.function.BiConsumer;
 import org.kurento.client.KurentoClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
 
 import http.domain.HTTPRequest;
 import http.handler.HTTPAcceptOperationHandler;
@@ -40,8 +44,11 @@ import message_passing.BlockingQueueMessageProducer;
 import request_handler.NetworkRequest;
 import request_handler.RequestHandler;
 import request_handler.RequestProcessor;
+import serialization.JacksonDeserializer;
+import serialization.Serializer;
 import sip.request_handling.AcceptingCallSipResponsePreProcessor;
 import sip.request_handling.BindingUpdateResponsePreProcessor;
+import sip.request_handling.ConfirmParticipantOffersResponseHandler;
 import sip.request_handling.DestroyingCallSipResponsePostProcessor;
 import sip.request_handling.SDPMediaAddressProcessor;
 import sip.request_handling.SipMessageNetworkRequestHandler;
@@ -53,6 +60,8 @@ import sip.request_handling.invite.CreateConferenceRequestHandler;
 import sip.request_handling.invite.InviteRequestHandler;
 import sip.request_handling.invite.JoinConferenceRequestHandler;
 import sip.request_handling.invite.KurentoMediaConferenceService;
+import sip.request_handling.invite.ConferenceSubscribersContext;
+import sip.request_handling.invite.SubscribeRequestHandler;
 import sip.request_handling.media.InMemoryMediaMappingStorage;
 import sip.request_handling.media.MediaCallInitiator;
 import sip.request_handling.normalize.Normalizer;
@@ -60,7 +69,6 @@ import sip.request_handling.normalize.SipRequestViaParameterNormalizer;
 import sip.request_handling.register.AckRequestHandler;
 import sip.request_handling.register.ByeRequestProcessor;
 import sip.request_handling.register.InMemoryBindingStorage;
-import sip.request_handling.register.InMemoryConferencesStorage;
 import sip.request_handling.register.RegisterSipMessageHandler;
 import tcp.MessageSerializerImpl;
 import tcp.WebSocketFramerMessageSerializer;
@@ -131,35 +139,36 @@ public class WebSocketCallingServer {
 				List.of(contactUnknownAttributesRemover));
 
 		var kurentoClient = KurentoClient.create();
-
-		var conferenceStorage = new InMemoryConferencesStorage();
-
 		var mediaConferenceService = new KurentoMediaConferenceService(kurentoClient);
 
+		var messageSerializer = new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER);
+
+		final Serializer serializer = obj -> new Gson().toJson(obj).getBytes(StandardCharsets.UTF_8);
+		final ConferenceSubscribersContext conferenceSubscribersContext = new ConferenceSubscribersContext(messageSerializer,
+				mediaConferenceService, serializer);
 		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = new SipMessageNetworkRequestHandler(
 				List.of(
-						new RegisterSipMessageHandler(new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER), bindingStorage),
+						new RegisterSipMessageHandler(messageSerializer, bindingStorage),
 						new CreateConferenceRequestHandler(
 								addressOfRecord -> {
 									var sipURI = (FullSipURI) addressOfRecord.sipURI();
 									return sipURI.credentials().username().equals(CONFERENCE_FACTORY);
 								},
-								conferenceStorage,
 								() -> "conference-" + UUID.randomUUID(),
-								new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER),
+								messageSerializer,
 								mediaConferenceService
 						),
-						new JoinConferenceRequestHandler(conferenceStorage, mediaConferenceService, new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER)),
+						new JoinConferenceRequestHandler(mediaConferenceService, messageSerializer, conferenceSubscribersContext, serializer),
 						new InviteRequestHandler(
 								bindingStorage,
-								new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER),
+								messageSerializer,
 								sdpMediaAddressProcessors,
 								callsRepository,
 								sipRequestUpdater
 						),
 						new AckRequestHandler(
 								bindingStorage,
-								new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER),
+								messageSerializer,
 								callsRepository,
 								mediaCallInitiator,
 								sipRequestUpdater
@@ -167,19 +176,26 @@ public class WebSocketCallingServer {
 						new ByeRequestProcessor(
 								callsRepository,
 								bindingStorage,
-								new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER),
+								messageSerializer,
 								sipRequestUpdater
-						)
+						),
+						new SubscribeRequestHandler(
+								conferenceSubscribersContext,
+								messageSerializer,
+								mediaConferenceService, serializer)
 				),
 
-				new SipResponseHandler(
-						List.of(
-								new BindingUpdateResponsePreProcessor(callsRepository),
-								new AcceptingCallSipResponsePreProcessor(callsRepository),
-								new DestroyingCallSipResponsePostProcessor(callsRepository)
-						),
-						new WebSocketFramerMessageSerializer(MESSAGE_SERIALIZER),
-						callsRepository
+				List.of(
+						new ConfirmParticipantOffersResponseHandler(mediaConferenceService, new JacksonDeserializer(new ObjectMapper())),
+						new SipResponseHandler(
+								List.of(
+										new BindingUpdateResponsePreProcessor(callsRepository),
+										new AcceptingCallSipResponsePreProcessor(callsRepository),
+										new DestroyingCallSipResponsePostProcessor(callsRepository)
+								),
+								messageSerializer,
+								callsRepository
+						)
 				),
 				new Normalizer<>(List.of(new SipRequestViaParameterNormalizer())));
 

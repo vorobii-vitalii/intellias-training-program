@@ -22,12 +22,12 @@ public class SipMessageNetworkRequestHandler implements RequestHandler<NetworkRe
 	private static final Logger LOGGER = LoggerFactory.getLogger(SipMessageNetworkRequestHandler.class);
 
 	private final Map<String, List<SipMessageHandler<SipRequest>>> requestHandlerMap = new HashMap<>();
-	private final SipMessageHandler<SipResponse> sipResponseHandler;
 	private final Normalizer<SipRequest, SipRequestNormalizeContext> sipRequestNormalizer;
+	private final Collection<SipMessageHandler<SipResponse>> sipResponseHandlers;
 
 	public SipMessageNetworkRequestHandler(
 			Collection<SipRequestHandler> sipMessageHandlers,
-			SipMessageHandler<SipResponse> sipResponseHandler,
+			Collection<SipMessageHandler<SipResponse>> sipResponseHandlers,
 			Normalizer<SipRequest, SipRequestNormalizeContext> sipRequestNormalizer
 	) {
 		for (var sipMessageHandler : sipMessageHandlers) {
@@ -36,7 +36,7 @@ public class SipMessageNetworkRequestHandler implements RequestHandler<NetworkRe
 				requestHandlerMap.get(handledType).add(sipMessageHandler);
 			}
 		}
-		this.sipResponseHandler = sipResponseHandler;
+		this.sipResponseHandlers = sipResponseHandlers;
 		this.sipRequestNormalizer = sipRequestNormalizer;
 	}
 
@@ -62,7 +62,10 @@ public class SipMessageNetworkRequestHandler implements RequestHandler<NetworkRe
 		}
 		else if (sipMessage instanceof SipResponse response) {
 			LOGGER.info("Received response {}", response);
-			sipResponseHandler.process(response, request.socketConnection());
+			sipResponseHandlers.stream()
+					.filter(s -> s.canHandle(response))
+					.findFirst()
+					.ifPresent(v -> v.process(response, request.socketConnection()));
 		}
 	}
 }

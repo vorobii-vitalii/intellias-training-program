@@ -2,45 +2,69 @@ package sip.request_handling.invite;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import sip.AddressOfRecord;
+import serialization.Serializer;
+import sip.ContactSet;
 import sip.FullSipURI;
+import sip.SipMediaType;
 import sip.SipRequest;
+import sip.SipResponse;
+import sip.SipResponseLine;
+import sip.SipStatusCode;
 import sip.request_handling.SipRequestHandler;
-import sip.request_handling.register.ConferencesStorage;
 import tcp.MessageSerializer;
+import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 
 public class JoinConferenceRequestHandler implements SipRequestHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(JoinConferenceRequestHandler.class);
 
 	public static final String INVITE = "INVITE";
-	private final ConferencesStorage conferencesStorage;
+	public static final String APPLICATION_SDP = "application/sdp";
 	private final MediaConferenceService mediaConferenceService;
 	private final MessageSerializer messageSerializer;
+	private final ConferenceSubscribersContext conferenceSubscribersContext;
+	private final Serializer serializer;
 
 	public JoinConferenceRequestHandler(
-			ConferencesStorage conferencesStorage,
 			MediaConferenceService mediaConferenceService,
-			MessageSerializer messageSerializer
-	) {
-		this.conferencesStorage = conferencesStorage;
+			MessageSerializer messageSerializer,
+			ConferenceSubscribersContext conferenceSubscribersContext, Serializer serializer) {
 		this.mediaConferenceService = mediaConferenceService;
 		this.messageSerializer = messageSerializer;
+		this.conferenceSubscribersContext = conferenceSubscribersContext;
+		this.serializer = serializer;
 	}
 
 	@Override
 	public void process(SipRequest sipRequest, SocketConnection socketConnection) {
 		LOGGER.info("Received request to join conference {}", sipRequest);
 		var conferenceId = getConferenceId(sipRequest);
-		var fromAOR = sipRequest.headers().getFrom();
 		var sdpOffer = new String(sipRequest.payload(), StandardCharsets.UTF_8);
-		var sdpAnswer = mediaConferenceService.establishMediaSession(conferenceId, sdpOffer);
-		LOGGER.info("SDP offer = {}", sdpOffer);
-		LOGGER.info("SDP answer = {}", sdpAnswer);
+		LOGGER.info("ConferenceId = {} SDP offer = {}", conferenceId, sdpOffer);
+
+		var sdpAnswer = mediaConferenceService.connectToConference(
+				conferenceId,
+				sipRequest.headers().getFrom().toCanonicalForm().sipURI(),
+				sdpOffer
+		);
+		conferenceSubscribersContext.onParticipantsUpdate(conferenceId);
+		var responseHeaders = sipRequest.headers().toResponseHeaders();
+		var tag = UUID.nameUUIDFromBytes(responseHeaders.getTo().toString().getBytes(StandardCharsets.UTF_8)).toString();
+		responseHeaders.setTo(responseHeaders.getTo().addParam("tag", tag));
+		responseHeaders.setContentType(SipMediaType.parse(APPLICATION_SDP));
+		responseHeaders.setContactList(new ContactSet(Set.of(sipRequest.headers().getTo())));
+		socketConnection.appendResponse(messageSerializer.serialize(
+				new SipResponse(
+						new SipResponseLine(sipRequest.requestLine().version(), new SipStatusCode(200), "OK"),
+						responseHeaders,
+						sdpAnswer.getBytes(StandardCharsets.UTF_8)
+				)));
+		socketConnection.changeOperation(OperationType.WRITE);
 	}
 
 	@Override
@@ -50,7 +74,7 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 
 	@Override
 	public boolean canHandle(SipRequest sipRequest) {
-		return conferencesStorage.isConference(getConferenceId(sipRequest));
+		return mediaConferenceService.isConference(getConferenceId(sipRequest));
 	}
 
 	private String getConferenceId(SipRequest sipRequest) {

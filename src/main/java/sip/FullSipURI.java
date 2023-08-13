@@ -162,7 +162,7 @@ public record FullSipURI(
 		var host = matcher.group(HOST_INDEX);
 		var port = Optional.ofNullable(matcher.group(PORT_INDEX))
 				.map(Integer::parseInt)
-				.orElseGet(() -> DEFAULT_PORT_BY_PROTOCOL.get(protocol));
+				.orElse(null);
 		var uriParameters = parseParameters(matcher.group(SIP_URI_PARAMETERS_INDEX), URI_PARAMETERS_DELIMITER);
 		var queryParameters = parseParameters(matcher.group(SIP_QUERY_PARAMETERS_INDEX), QUERY_PARAMETERS_DELIMITER);
 
