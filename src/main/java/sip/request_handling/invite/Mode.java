@@ -1,6 +1,4 @@
 package sip.request_handling.invite;
 
-public enum Mode {
-	RECEIVE_ONLY,
-	SEND_RECEIVE
+public record Mode(boolean receive, boolean send) {
 }

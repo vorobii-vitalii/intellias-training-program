@@ -25,6 +25,7 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 
 	public static final String INVITE = "INVITE";
 	public static final String APPLICATION_SDP = "application/sdp";
+	public static final String DISAMBIGUATOR_HEADER = "X-Disambiguator";
 	private final MediaConferenceService mediaConferenceService;
 	private final MessageSerializer messageSerializer;
 	private final ConferenceSubscribersContext conferenceSubscribersContext;
@@ -48,10 +49,13 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 		LOGGER.info("ConferenceId = {} SDP offer = {}", conferenceId, sdpOffer);
 
 		var sdpAnswer = mediaConferenceService.connectToConference(
-				conferenceId,
-				sipRequest.headers().getFrom().toCanonicalForm().sipURI(),
-				sdpOffer
-		);
+				new ConferenceJoinRequest(
+					conferenceId,
+					sipRequest.headers().getFrom().toCanonicalForm().sipURI(),
+					sdpOffer,
+					getDisambiguator(sipRequest),
+					new Mode(true, true) // TODO: Fix
+			 	));
 		conferenceSubscribersContext.onParticipantsUpdate(conferenceId);
 		var responseHeaders = sipRequest.headers().toResponseHeaders();
 		var tag = UUID.nameUUIDFromBytes(responseHeaders.getTo().toString().getBytes(StandardCharsets.UTF_8)).toString();
@@ -65,6 +69,10 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 						sdpAnswer.getBytes(StandardCharsets.UTF_8)
 				)));
 		socketConnection.changeOperation(OperationType.WRITE);
+	}
+
+	private String getDisambiguator(SipRequest sipRequest) {
+		return sipRequest.headers().getExtensionHeaderValue(DISAMBIGUATOR_HEADER).map(v -> v.get(0)).orElse("");
 	}
 
 	@Override

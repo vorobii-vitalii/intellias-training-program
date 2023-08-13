@@ -2,56 +2,40 @@ package sip.request_handling.invite;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
-import org.kurento.client.Continuation;
 import org.kurento.client.EventListener;
 import org.kurento.client.IceCandidate;
 import org.kurento.client.IceCandidateFoundEvent;
-import org.kurento.client.IceComponentStateChangedEvent;
 import org.kurento.client.IceGatheringDoneEvent;
 import org.kurento.client.KurentoClient;
-import org.kurento.client.MediaFlowInStateChangedEvent;
-import org.kurento.client.MediaFlowOutStateChangedEvent;
 import org.kurento.client.MediaPipeline;
-import org.kurento.client.MediaProfileSpecType;
-import org.kurento.client.MediaState;
-import org.kurento.client.MediaStateChangedEvent;
 import org.kurento.client.MediaType;
 import org.kurento.client.OfferOptions;
-import org.kurento.client.PlayerEndpoint;
-import org.kurento.client.RecorderEndpoint;
 import org.kurento.client.WebRtcEndpoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.sourceforge.jsdp.Attribute;
-import net.sourceforge.jsdp.SDPException;
-import net.sourceforge.jsdp.SDPFactory;
-import net.sourceforge.jsdp.SDPParseException;
-import net.sourceforge.jsdp.SessionDescription;
 import sip.SipURI;
 
+// Screensharing, only view
+// Add Jaeger
+// Change approach for ICE gathering
+// Reactive streams
 public class KurentoMediaConferenceService implements MediaConferenceService {
 	private static final Logger LOGGER = LoggerFactory.getLogger(KurentoMediaConferenceService.class);
+	private static final int ICE_CANDIDATES_GATHER_TIMEOUT = 2000;
+	private static final String DELIMITER = "_";
 	private final Map<String, Conference> mediaPipelineByConferenceId = new ConcurrentHashMap<>();
 
 	private final KurentoClient kurentoClient;
-	private AtomicReference<RecorderEndpoint> recorderEndpoint = new AtomicReference<>();
-
 
 	public KurentoMediaConferenceService(KurentoClient kurentoClient) {
 		this.kurentoClient = kurentoClient;
@@ -60,14 +44,51 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 	@Override
 	public void createNewConference(String conferenceId) {
 		var mediaPipeline = kurentoClient.createMediaPipeline();
-		// TODO: Call this when conference ends
+		// TODO: Call this function when conference ends
 		// mediaPipeline.release();
 		mediaPipelineByConferenceId.put(conferenceId, new Conference(mediaPipeline, new ConcurrentHashMap<>()));
 	}
 
-	private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+	@Override
+	public String connectToConference(ConferenceJoinRequest conferenceJoinRequest) {
+		var conference = getConference(conferenceJoinRequest.conferenceId());
+		var webRtcEndpoint = create(conference.mediaPipeline);
+		webRtcEndpoint.gatherCandidates();
+		var sdpResponse = webRtcEndpoint.processOffer(conferenceJoinRequest.sdpOffer());
+		var participantKey = calculateParticipantKey(conferenceJoinRequest);
+		var isReceiving = conferenceJoinRequest.mode().receive();
+		var isSending = conferenceJoinRequest.mode().send();
+		var receiveConnectionBySipURI = new ConcurrentHashMap<String, ReceiveConnection>();
+		for (var entry : conference.webRtcEndpointMap().entrySet()) {
+			var sendEndpoint = entry.getValue().sendRTCEndpoint();
+			if (isSending) {
+				var receiveLeftEndpoint = createIntermediateEndpoint(sendEndpoint, conference.mediaPipeline);
+				entry.getValue().receiveConnectionBySipURI.put(
+						participantKey,
+						new ReceiveConnection(receiveLeftEndpoint, addIceCandidates(
+								receiveLeftEndpoint.generateOffer(createReceiveOnlyOfferOptions()),
+								gatherCandidates(receiveLeftEndpoint)
+						)));
+			}
+			if (isReceiving) {
+				var receiveRightEndpoint = createIntermediateEndpoint(webRtcEndpoint, conference.mediaPipeline);
+				receiveConnectionBySipURI.put(
+						entry.getKey(),
+						new ReceiveConnection(receiveRightEndpoint, addIceCandidates(
+								receiveRightEndpoint.generateOffer(createReceiveOnlyOfferOptions()),
+								gatherCandidates(receiveRightEndpoint)
+						)));
+			}
+		}
+		conference.webRtcEndpointMap().put(participantKey, new UserMediaContext(webRtcEndpoint, receiveConnectionBySipURI));
+		var sdpResponseWithCandidates = addIceCandidates(sdpResponse, gatherCandidates(webRtcEndpoint));
+		LOGGER.info("SDP with candidates = {}", sdpResponseWithCandidates);
+		return sdpResponseWithCandidates;
+	}
 
-
+	private String calculateParticipantKey(ConferenceJoinRequest conferenceJoinRequest) {
+		return conferenceJoinRequest.sipURI().getURIAsString() + DELIMITER + conferenceJoinRequest.disambiguator();
+	}
 
 	@Override
 	public String connectToConference(String conferenceId, SipURI sipURI, String sdpOffer) {
@@ -76,7 +97,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		webRtcEndpoint.gatherCandidates();
 		var sdpResponse = webRtcEndpoint.processOffer(sdpOffer);
 		LOGGER.info("Initial SDP response = {}", sdpResponse);
-		webRtcEndpoint.addMediaStateChangedListener(event -> LOGGER.info("Conference = {} sipURI = {} media state changed from {} to {}",
+		webRtcEndpoint.addMediaStateChangedListener(event -> LOGGER.info("Conference = {} participantKey = {} media state changed from {} to {}",
 				conference,
 				sipURI.getURIAsString(),
 				event.getOldState(),
@@ -84,17 +105,18 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		));
 
 		var receiveConnectionBySipURI = new ConcurrentHashMap<String, ReceiveConnection>();
+
 		// TODO: Add lock
 		for (var entry : conference.webRtcEndpointMap().entrySet()) {
 			var sendEndpoint = entry.getValue().sendRTCEndpoint();
 			var receiveLeftEndpoint = createIntermediateEndpoint(sendEndpoint, conference.mediaPipeline);
-			var receiveRightEndpoint = createIntermediateEndpoint(webRtcEndpoint, conference.mediaPipeline);
 			entry.getValue().receiveConnectionBySipURI.put(
 					sipURI.getURIAsString(),
 					new ReceiveConnection(receiveLeftEndpoint, addIceCandidates(
 							receiveLeftEndpoint.generateOffer(createReceiveOnlyOfferOptions()),
 							gatherCandidates(receiveLeftEndpoint)
 					)));
+			var receiveRightEndpoint = createIntermediateEndpoint(webRtcEndpoint, conference.mediaPipeline);
 			receiveConnectionBySipURI.put(
 					entry.getKey(),
 					new ReceiveConnection(receiveRightEndpoint, addIceCandidates(
@@ -102,10 +124,6 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 							gatherCandidates(receiveRightEndpoint)
 					)));
 		}
-		// Screensharing, only view
-		// Add Jaeger
-		// Change approach for ICE gathering
-		// Reactive streams
 		conference.webRtcEndpointMap().put(sipURI.getURIAsString(), new UserMediaContext(webRtcEndpoint, receiveConnectionBySipURI));
 		var sdpResponseWithCandidates = addIceCandidates(sdpResponse, gatherCandidates(webRtcEndpoint));
 		LOGGER.info("SDP with candidates = {}", sdpResponseWithCandidates);
@@ -114,27 +132,10 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 
 	private String addIceCandidates(String originalSDP, List<IceCandidate> iceCandidates) {
 		var rightPart = new ArrayList<>(iceCandidates).stream()
-				.map(s -> {
-					return "a=" + s.getCandidate();
-				})
+				.map(s -> "a=" + s.getCandidate())
 				.collect(Collectors.joining("\r\n", "", "\r\n"));
 
 		return originalSDP + rightPart;
-//		try {
-//
-////
-////			var sessionDescription = SDPFactory.parseSessionDescription(originalSDP);
-////			for (var iceCandidate : iceCandidates) {
-////				sessionDescription.addAttribute(new Attribute(
-////						"candidate",
-////						iceCandidate.getSdpMid() + ":" + iceCandidate.getSdpMLineIndex() + " " + iceCandidate.getCandidate()
-////				));
-////			}
-////			return sessionDescription.toString();
-//		}
-//		catch (SDPException e) {
-//			throw new RuntimeException(e);
-//		}
 	}
 
 	private List<IceCandidate> gatherCandidates(WebRtcEndpoint webRtcEndpoint) {
@@ -144,13 +145,13 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 			iceCandidates.add(event.getCandidate());
 		});
 		webRtcEndpoint.gatherCandidates();
-		CountDownLatch countDownLatch = new CountDownLatch(1);
+		var countDownLatch = new CountDownLatch(1);
 		webRtcEndpoint.addIceGatheringDoneListener(event -> {
 			LOGGER.info("Gathering done!");
 			countDownLatch.countDown();
 		});
 		try {
-			countDownLatch.await(2000, TimeUnit.MILLISECONDS);
+			countDownLatch.await(ICE_CANDIDATES_GATHER_TIMEOUT, TimeUnit.MILLISECONDS);
 		}
 		catch (InterruptedException e) {
 			throw new RuntimeException(e);

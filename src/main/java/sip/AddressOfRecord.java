@@ -49,7 +49,7 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 //				newParameters.put(e.getKey(), e.getValue());
 //			}
 //		}
-//		return new AddressOfRecord(name, sipURI, newParameters);
+//		return new AddressOfRecord(name, participantKey, newParameters);
 	}
 
 	public AddressOfRecord addParam(String param, String value) {
