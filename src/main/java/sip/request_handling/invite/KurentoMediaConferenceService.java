@@ -63,7 +63,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 			var sendEndpoint = entry.getValue().sendRTCEndpoint();
 			if (isSending) {
 				var receiveLeftEndpoint = createIntermediateEndpoint(sendEndpoint, conference.mediaPipeline);
-				entry.getValue().receiveConnectionBySipURI.put(
+				entry.getValue().receiveConnectionByParticipantKey.put(
 						participantKey,
 						new ReceiveConnection(receiveLeftEndpoint, addIceCandidates(
 								receiveLeftEndpoint.generateOffer(createReceiveOnlyOfferOptions()),
@@ -87,47 +87,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 	}
 
 	private String calculateParticipantKey(ConferenceJoinRequest conferenceJoinRequest) {
-		return conferenceJoinRequest.sipURI().getURIAsString() + DELIMITER + conferenceJoinRequest.disambiguator();
-	}
-
-	@Override
-	public String connectToConference(String conferenceId, SipURI sipURI, String sdpOffer) {
-		var conference = getConference(conferenceId);
-		var webRtcEndpoint = create(conference.mediaPipeline);
-		webRtcEndpoint.gatherCandidates();
-		var sdpResponse = webRtcEndpoint.processOffer(sdpOffer);
-		LOGGER.info("Initial SDP response = {}", sdpResponse);
-		webRtcEndpoint.addMediaStateChangedListener(event -> LOGGER.info("Conference = {} participantKey = {} media state changed from {} to {}",
-				conference,
-				sipURI.getURIAsString(),
-				event.getOldState(),
-				event.getNewState()
-		));
-
-		var receiveConnectionBySipURI = new ConcurrentHashMap<String, ReceiveConnection>();
-
-		// TODO: Add lock
-		for (var entry : conference.webRtcEndpointMap().entrySet()) {
-			var sendEndpoint = entry.getValue().sendRTCEndpoint();
-			var receiveLeftEndpoint = createIntermediateEndpoint(sendEndpoint, conference.mediaPipeline);
-			entry.getValue().receiveConnectionBySipURI.put(
-					sipURI.getURIAsString(),
-					new ReceiveConnection(receiveLeftEndpoint, addIceCandidates(
-							receiveLeftEndpoint.generateOffer(createReceiveOnlyOfferOptions()),
-							gatherCandidates(receiveLeftEndpoint)
-					)));
-			var receiveRightEndpoint = createIntermediateEndpoint(webRtcEndpoint, conference.mediaPipeline);
-			receiveConnectionBySipURI.put(
-					entry.getKey(),
-					new ReceiveConnection(receiveRightEndpoint, addIceCandidates(
-							receiveRightEndpoint.generateOffer(createReceiveOnlyOfferOptions()),
-							gatherCandidates(receiveRightEndpoint)
-					)));
-		}
-		conference.webRtcEndpointMap().put(sipURI.getURIAsString(), new UserMediaContext(webRtcEndpoint, receiveConnectionBySipURI));
-		var sdpResponseWithCandidates = addIceCandidates(sdpResponse, gatherCandidates(webRtcEndpoint));
-		LOGGER.info("SDP with candidates = {}", sdpResponseWithCandidates);
-		return sdpResponseWithCandidates;
+		return conferenceJoinRequest.sipURI().getURIAsString() + conferenceJoinRequest.disambiguator();
 	}
 
 	private String addIceCandidates(String originalSDP, List<IceCandidate> iceCandidates) {
@@ -201,27 +161,34 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 
 	@Override
 	public List<Participant> getParticipantsFromPerspectiveOf(String conferenceId, SipURI referenceURI) {
-		var conference = getConference(conferenceId);
+		var conference = mediaPipelineByConferenceId.get(conferenceId);
+		if (conference == null) {
+			return List.of();
+		}
 		LOGGER.info("Get participants from perspective {}", conference.webRtcEndpointMap());
-		return conference.webRtcEndpointMap()
-				.get(referenceURI.getURIAsString())
-				.receiveConnectionBySipURI()
+		UserMediaContext userMediaContext = conference.webRtcEndpointMap()
+				.get(referenceURI.getURIAsString());
+		if (userMediaContext == null) {
+			return List.of();
+		}
+		return userMediaContext
+				.receiveConnectionByParticipantKey()
 				.entrySet()
 				.stream()
 				.map(e -> {
 					var sdpOffer = e.getValue().sdpOffer();
-					var sipURI = e.getKey();
-					return new Participant(sipURI, sdpOffer);
+					var participantKey = e.getKey();
+					return new Participant(participantKey, sdpOffer);
 				})
 				.collect(Collectors.toList());
 	}
 
 	@Override
-	public void processAnswers(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerBySipURI) {
+	public void processAnswers(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerByParticipantKey) {
 		var conference = getConference(conferenceId);
 		var userMediaContext = conference.webRtcEndpointMap().get(referenceURI.getURIAsString());
-		for (var entry : sdpAnswerBySipURI.entrySet()) {
-			final ReceiveConnection receiveConnection = userMediaContext.receiveConnectionBySipURI().get(entry.getKey());
+		for (var entry : sdpAnswerByParticipantKey.entrySet()) {
+			final ReceiveConnection receiveConnection = userMediaContext.receiveConnectionByParticipantKey().get(entry.getKey());
 			if (receiveConnection == null) {
 				continue;
 			}
@@ -253,7 +220,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 	private record ReceiveConnection(WebRtcEndpoint endpoint, String sdpOffer) {
 	}
 
-	private record UserMediaContext(WebRtcEndpoint sendRTCEndpoint, Map<String, ReceiveConnection> receiveConnectionBySipURI) {
+	private record UserMediaContext(WebRtcEndpoint sendRTCEndpoint, Map<String, ReceiveConnection> receiveConnectionByParticipantKey) {
 	}
 
 

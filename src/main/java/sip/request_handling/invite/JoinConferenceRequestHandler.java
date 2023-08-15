@@ -7,7 +7,6 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import serialization.Serializer;
 import sip.ContactSet;
 import sip.FullSipURI;
 import sip.SipMediaType;
@@ -25,20 +24,20 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 
 	public static final String INVITE = "INVITE";
 	public static final String APPLICATION_SDP = "application/sdp";
-	public static final String DISAMBIGUATOR_HEADER = "X-Disambiguator";
+	public static final String DISAMBIGUATOR_HEADER = "X-Disambiguator".toLowerCase();
+	public static final String DEFAULT_DISAMBIGUATOR = "";
+	public static final String RECEIVING_HEADER = "X-Receiving".toLowerCase();
 	private final MediaConferenceService mediaConferenceService;
 	private final MessageSerializer messageSerializer;
 	private final ConferenceSubscribersContext conferenceSubscribersContext;
-	private final Serializer serializer;
 
 	public JoinConferenceRequestHandler(
 			MediaConferenceService mediaConferenceService,
 			MessageSerializer messageSerializer,
-			ConferenceSubscribersContext conferenceSubscribersContext, Serializer serializer) {
+			ConferenceSubscribersContext conferenceSubscribersContext) {
 		this.mediaConferenceService = mediaConferenceService;
 		this.messageSerializer = messageSerializer;
 		this.conferenceSubscribersContext = conferenceSubscribersContext;
-		this.serializer = serializer;
 	}
 
 	@Override
@@ -54,7 +53,7 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 					sipRequest.headers().getFrom().toCanonicalForm().sipURI(),
 					sdpOffer,
 					getDisambiguator(sipRequest),
-					new Mode(true, true) // TODO: Fix
+					new Mode(isReceiving(sipRequest), true)
 			 	));
 		conferenceSubscribersContext.onParticipantsUpdate(conferenceId);
 		var responseHeaders = sipRequest.headers().toResponseHeaders();
@@ -71,8 +70,15 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 		socketConnection.changeOperation(OperationType.WRITE);
 	}
 
+	private boolean isReceiving(SipRequest sipRequest) {
+		var v = sipRequest.headers().getBooleanExtensionHeader(RECEIVING_HEADER);
+		return v == null || v;
+	}
+
 	private String getDisambiguator(SipRequest sipRequest) {
-		return sipRequest.headers().getExtensionHeaderValue(DISAMBIGUATOR_HEADER).map(v -> v.get(0)).orElse("");
+		return sipRequest.headers()
+				.getExtensionHeaderValue(DISAMBIGUATOR_HEADER).map(v -> v.get(0))
+				.orElse(DEFAULT_DISAMBIGUATOR);
 	}
 
 	@Override

@@ -96,10 +96,6 @@ public class WebSocketCallingServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(CallingServer.class);
 	public static final int BUFFER_EXPIRATION_TIME_MILLIS = 10_000;
 	public static final int REQUEST_QUEUE_CAPACITY = 10_000;
-	public static final Via CURRENT_VIA = new Via(new SipSentProtocol("SIP", "2.0", "TCP"),
-			new Address(getHost(), getSipServerPort()),
-			Map.of("branch", "z9hG4bK25235636")
-	);
 	public static final SimpleMeterRegistry METER_REGISTRY = new SimpleMeterRegistry();
 	public static final InMemoryMediaMappingStorage MEDIA_MAPPING_STORAGE = new InMemoryMediaMappingStorage();
 	public static final Set<String> SUPPORTED_PROTOCOLS = Set.of("sip");
@@ -158,7 +154,7 @@ public class WebSocketCallingServer {
 								messageSerializer,
 								mediaConferenceService
 						),
-						new JoinConferenceRequestHandler(mediaConferenceService, messageSerializer, conferenceSubscribersContext, serializer),
+						new JoinConferenceRequestHandler(mediaConferenceService, messageSerializer, conferenceSubscribersContext),
 						new InviteRequestHandler(
 								bindingStorage,
 								messageSerializer,

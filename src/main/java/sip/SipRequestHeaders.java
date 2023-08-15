@@ -172,6 +172,13 @@ public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHead
 		}
 	}
 
+	public Boolean getBooleanExtensionHeader(String headerName) {
+		if (extensionHeaderMap.containsKey(headerName)) {
+			return Boolean.parseBoolean(extensionHeaderMap.get(headerName).get(0));
+		}
+		return null;
+	}
+
 	public Optional<List<String>> getExtensionHeaderValue(String headerName) {
 		return Optional.ofNullable(extensionHeaderMap.get(headerName));
 	}
