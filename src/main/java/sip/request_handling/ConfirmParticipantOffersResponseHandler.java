@@ -35,6 +35,7 @@ public class ConfirmParticipantOffersResponseHandler implements SipMessageHandle
 			mediaConferenceService.processAnswers(getConferenceId(sipResponse), referenceURI, onNotifyResponse.sdpAnswerBySipURI());
 		}
 		catch (IOException e) {
+			LOGGER.error("COULD NOT PARSE {}", new String(sipResponse.payload()));
 			throw new RuntimeException(e);
 		}
 	}

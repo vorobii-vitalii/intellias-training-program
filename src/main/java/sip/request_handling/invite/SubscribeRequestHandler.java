@@ -37,7 +37,8 @@ public class SubscribeRequestHandler implements SipRequestHandler {
 
 	@Override
 	public void process(SipRequest message, SocketConnection socketConnection) {
-		conferenceSubscribersContext.addSubscriber(getConferenceId(message), message, socketConnection);
+		var conferenceId = getConferenceId(message);
+		conferenceSubscribersContext.addSubscriber(conferenceId, message, socketConnection);
 		var responseLine = new SipResponseLine(new SipVersion(2, 0), new SipStatusCode(202), "OK");
 		var responseHeaders = new SipResponseHeaders();
 		for (Via via : message.headers().getViaList()) {
@@ -52,7 +53,7 @@ public class SubscribeRequestHandler implements SipRequestHandler {
 		var sipResponse = new SipResponse(responseLine, responseHeaders, new byte[] {});
 		socketConnection.appendResponse(messageSerializer.serialize(sipResponse));
 		socketConnection.changeOperation(OperationType.WRITE);
-		conferenceSubscribersContext.onParticipantsUpdate(getConferenceId(message));
+		conferenceSubscribersContext.onParticipantsUpdate(conferenceId);
 	}
 
 	@Override
