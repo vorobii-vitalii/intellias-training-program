@@ -53,6 +53,4 @@ public class ConfirmParticipantOffersResponseHandler implements SipMessageHandle
 
 	private record OnNotifyResponse(Map<String, String> sdpAnswerBySipURI) {
 	}
-
-
 }

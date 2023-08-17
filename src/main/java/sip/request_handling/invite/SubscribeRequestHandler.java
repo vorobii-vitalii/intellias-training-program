@@ -23,16 +23,10 @@ public class SubscribeRequestHandler implements SipRequestHandler {
 
 	private final ConferenceSubscribersContext conferenceSubscribersContext;
 	private final MessageSerializer messageSerializer;
-	// TODO: Create smth more generic like (Initial notify request creator?)
-	private final MediaConferenceService mediaConferenceService;
-	private final Serializer serializer;
 
-	public SubscribeRequestHandler(ConferenceSubscribersContext conferenceSubscribersContext, MessageSerializer messageSerializer,
-			MediaConferenceService mediaConferenceService, Serializer serializer) {
+	public SubscribeRequestHandler(ConferenceSubscribersContext conferenceSubscribersContext, MessageSerializer messageSerializer) {
 		this.conferenceSubscribersContext = conferenceSubscribersContext;
 		this.messageSerializer = messageSerializer;
-		this.mediaConferenceService = mediaConferenceService;
-		this.serializer = serializer;
 	}
 
 	@Override

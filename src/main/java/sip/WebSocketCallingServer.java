@@ -177,8 +177,8 @@ public class WebSocketCallingServer {
 						),
 						new SubscribeRequestHandler(
 								conferenceSubscribersContext,
-								messageSerializer,
-								mediaConferenceService, serializer)
+								messageSerializer
+						)
 				),
 
 				List.of(
