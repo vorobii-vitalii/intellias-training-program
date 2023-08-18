@@ -2,19 +2,18 @@ package sip.request_handling.invite;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
-import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import sip.ContactSet;
 import sip.FullSipURI;
 import sip.SipMediaType;
 import sip.SipRequest;
-import sip.SipResponse;
-import sip.SipResponseLine;
-import sip.SipStatusCode;
+import sip.SipRequestHeaders;
+import sip.request_handling.DialogRequest;
+import sip.request_handling.DialogService;
 import sip.request_handling.SipRequestHandler;
+import sip.request_handling.SipSessionDescription;
 import tcp.MessageSerializer;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
@@ -24,20 +23,26 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 
 	public static final String INVITE = "INVITE";
 	public static final String APPLICATION_SDP = "application/sdp";
+	public static final SipMediaType SDP_MEDIA_TYPE = SipMediaType.parse(APPLICATION_SDP);
 	public static final String DISAMBIGUATOR_HEADER = "X-Disambiguator".toLowerCase();
 	public static final String DEFAULT_DISAMBIGUATOR = "";
 	public static final String RECEIVING_HEADER = "X-Receiving".toLowerCase();
+	public static final String INFO_METHOD = "INFO";
 	private final MediaConferenceService mediaConferenceService;
 	private final MessageSerializer messageSerializer;
 	private final ConferenceSubscribersContext conferenceSubscribersContext;
+	private final DialogService dialogService;
 
 	public JoinConferenceRequestHandler(
 			MediaConferenceService mediaConferenceService,
 			MessageSerializer messageSerializer,
-			ConferenceSubscribersContext conferenceSubscribersContext) {
+			ConferenceSubscribersContext conferenceSubscribersContext,
+			DialogService dialogService
+	) {
 		this.mediaConferenceService = mediaConferenceService;
 		this.messageSerializer = messageSerializer;
 		this.conferenceSubscribersContext = conferenceSubscribersContext;
+		this.dialogService = dialogService;
 	}
 
 	@Override
@@ -45,9 +50,7 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 		LOGGER.info("Received request to join conference {}", sipRequest);
 		var conferenceId = getConferenceId(sipRequest);
 		var sdpOffer = new String(sipRequest.payload(), StandardCharsets.UTF_8);
-		LOGGER.info("ConferenceId = {} SDP offer = {}", conferenceId, sdpOffer);
-
-		var sdpAnswer = mediaConferenceService.connectToConference(
+		var joinResponse = mediaConferenceService.connectToConferenceReactive(
 				new ConferenceJoinRequest(
 					conferenceId,
 					sipRequest.headers().getFrom().toCanonicalForm().sipURI(),
@@ -56,18 +59,18 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 					new Mode(isReceiving(sipRequest), true)
 			 	));
 		conferenceSubscribersContext.onParticipantsUpdate(conferenceId);
-		var responseHeaders = sipRequest.headers().toResponseHeaders();
-		var tag = UUID.nameUUIDFromBytes(responseHeaders.getTo().toString().getBytes(StandardCharsets.UTF_8)).toString();
-		responseHeaders.setTo(responseHeaders.getTo().addParam("tag", tag));
-		responseHeaders.setContentType(SipMediaType.parse(APPLICATION_SDP));
-		responseHeaders.setContactList(new ContactSet(Set.of(sipRequest.headers().getTo())));
-		socketConnection.appendResponse(messageSerializer.serialize(
-				new SipResponse(
-						new SipResponseLine(sipRequest.requestLine().version(), new SipStatusCode(200), "OK"),
-						responseHeaders,
-						sdpAnswer.getBytes(StandardCharsets.UTF_8)
-				)));
+		var sipResponse = dialogService.establishDialog(sipRequest, new SipSessionDescription(joinResponse.sdpAnswer(), SDP_MEDIA_TYPE));
+		socketConnection.appendResponse(messageSerializer.serialize(sipResponse));
 		socketConnection.changeOperation(OperationType.WRITE);
+		var callId = sipRequest.headers().getCallId();
+		joinResponse.iceCandidates().subscribe(candidate -> {
+			var overrideHeaders = new SipRequestHeaders();
+			overrideHeaders.setContentType(SipMediaType.parse("application/json"));
+			var createdRequest = dialogService.makeDialogRequest(
+					new DialogRequest(callId, INFO_METHOD, overrideHeaders, candidate.getBytes(StandardCharsets.UTF_8)));
+			socketConnection.appendResponse(messageSerializer.serialize(createdRequest));
+			socketConnection.changeOperation(OperationType.WRITE);
+		});
 	}
 
 	private boolean isReceiving(SipRequest sipRequest) {

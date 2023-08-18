@@ -24,7 +24,7 @@ import tcp.server.SocketConnection;
 import util.Serializable;
 
 @ExtendWith(MockitoExtension.class)
-class TestClientConnectionsContext {
+class TestClientConnectionsDialogContext {
 
 	public static final byte[] ARRAY = {1, 2, 3};
 	public static final ByteBuffer BYTE_BUFFER = ByteBuffer.wrap(ARRAY);

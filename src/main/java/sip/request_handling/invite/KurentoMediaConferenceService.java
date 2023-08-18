@@ -6,29 +6,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
-import org.kurento.client.EventListener;
 import org.kurento.client.IceCandidate;
-import org.kurento.client.IceCandidateFoundEvent;
-import org.kurento.client.IceGatheringDoneEvent;
 import org.kurento.client.KurentoClient;
 import org.kurento.client.MediaPipeline;
 import org.kurento.client.MediaType;
 import org.kurento.client.OfferOptions;
-import org.kurento.client.RecorderEndpoint;
 import org.kurento.client.WebRtcEndpoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import reactor.core.publisher.Flux;
 import sip.SipURI;
 
-// Screensharing, only view
+// Screensharing, only view + 1
 // Add Jaeger
 // Change approach for ICE gathering
 // Reactive streams
@@ -51,21 +46,11 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		mediaPipelineByConferenceId.put(conferenceId, new Conference(mediaPipeline, new ConcurrentHashMap<>()));
 	}
 
-//	private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
-
 	@Override
 	public String connectToConference(ConferenceJoinRequest conferenceJoinRequest) {
 		var conference = getConference(conferenceJoinRequest.conferenceId());
 		var webRtcEndpoint = create(conference.mediaPipeline);
 		var participantKey = calculateParticipantKey(conferenceJoinRequest);
-//		var recorderEndpoint = new RecorderEndpoint.Builder(conference.mediaPipeline,
-//				"file:///home/vitaliivorobii/workspace/react-voip-client/" + conferenceJoinRequest.conferenceId() + "_" + participantKey +
-//						".mp4").build();
-//		webRtcEndpoint.connect(recorderEndpoint);
-//		recorderEndpoint.record();
-//		scheduledExecutorService.schedule(() -> {
-//			recorderEndpoint.stop();
-//		}, 20_000, TimeUnit.MILLISECONDS);
 		webRtcEndpoint.gatherCandidates();
 		var sdpResponse = webRtcEndpoint.processOffer(conferenceJoinRequest.sdpOffer());
 		var isReceiving = conferenceJoinRequest.mode().receive();
@@ -100,6 +85,42 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		return sdpResponseWithCandidates;
 	}
 
+	@Override
+	public ConferenceJoinResponse connectToConferenceReactive(ConferenceJoinRequest conferenceJoinRequest) {
+		var conference = getConference(conferenceJoinRequest.conferenceId());
+		var webRtcEndpoint = create(conference.mediaPipeline);
+		var participantKey = calculateParticipantKey(conferenceJoinRequest);
+		webRtcEndpoint.gatherCandidates();
+		var sdpResponse = webRtcEndpoint.processOffer(conferenceJoinRequest.sdpOffer());
+		var isReceiving = conferenceJoinRequest.mode().receive();
+		var isSending = conferenceJoinRequest.mode().send();
+		var receiveConnectionBySipURI = new ConcurrentHashMap<String, ReceiveConnection>();
+		for (var entry : conference.webRtcEndpointMap().entrySet()) {
+			var sendEndpoint = entry.getValue().sendRTCEndpoint();
+			if (isSending) {
+				// sendEndpoint
+				var receiveLeftEndpoint = createIntermediateEndpoint(webRtcEndpoint, conference.mediaPipeline);
+				entry.getValue().receiveConnectionByParticipantKey.put(
+						participantKey,
+						new ReceiveConnection(receiveLeftEndpoint, addIceCandidates(
+								receiveLeftEndpoint.generateOffer(createReceiveOnlyOfferOptions()),
+								gatherCandidates(receiveLeftEndpoint)
+						)));
+			}
+			if (isReceiving) {
+				var receiveRightEndpoint = createIntermediateEndpoint(sendEndpoint, conference.mediaPipeline);
+				receiveConnectionBySipURI.put(
+						entry.getKey(),
+						new ReceiveConnection(receiveRightEndpoint, addIceCandidates(
+								receiveRightEndpoint.generateOffer(createReceiveOnlyOfferOptions()),
+								gatherCandidates(receiveRightEndpoint)
+						)));
+			}
+		}
+		conference.webRtcEndpointMap().put(participantKey, new UserMediaContext(webRtcEndpoint, receiveConnectionBySipURI));
+		return new ConferenceJoinResponse(sdpResponse, gatherCandidatesReactive(webRtcEndpoint));
+	}
+
 	private String calculateParticipantKey(ConferenceJoinRequest conferenceJoinRequest) {
 		return conferenceJoinRequest.sipURI().getURIAsString() + conferenceJoinRequest.disambiguator();
 	}
@@ -110,6 +131,20 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 				.collect(Collectors.joining("\r\n", "", "\r\n"));
 
 		return originalSDP + rightPart;
+	}
+
+	private Flux<String> gatherCandidatesReactive(WebRtcEndpoint webRtcEndpoint) {
+		return Flux.create(sink -> {
+			webRtcEndpoint.addIceCandidateFoundListener(event -> {
+				LOGGER.debug("Ice candidate found {}", event.getCandidate());
+				sink.next(event.getCandidate().getCandidate());
+			});
+			webRtcEndpoint.gatherCandidates();
+			webRtcEndpoint.addIceGatheringDoneListener(event -> {
+				LOGGER.debug("Gathering completed!");
+				sink.complete();
+			});
+		});
 	}
 
 	private List<IceCandidate> gatherCandidates(WebRtcEndpoint webRtcEndpoint) {

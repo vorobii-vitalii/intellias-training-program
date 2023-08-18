@@ -96,6 +96,32 @@ public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHead
 	private Integer expires;
 	private final List<AddressOfRecord> recordRoutes = new ArrayList<>();
 
+	public SipRequestHeaders overrideWith(SipRequestHeaders overrideHeaders) {
+		var sipRequestHeaders = new SipRequestHeaders();
+		sipRequestHeaders.setFrom(Optional.ofNullable(overrideHeaders.getFrom()).orElse(from));
+		sipRequestHeaders.setTo(Optional.ofNullable(overrideHeaders.getTo()).orElse(to));
+		sipRequestHeaders.setReferTo(Optional.ofNullable(overrideHeaders.getReferTo()).orElse(referTo));
+		sipRequestHeaders.setCommandSequence(Optional.ofNullable(overrideHeaders.getCommandSequence()).orElse(commandSequence));
+		for (var via : viaList) {
+			sipRequestHeaders.addVia(via.normalize());
+		}
+		sipRequestHeaders.setContactList(Optional.ofNullable(overrideHeaders.getContactList()).orElse(contactList));
+		sipRequestHeaders.setContentType(Optional.ofNullable(overrideHeaders.getContentType()).orElse(contentType));
+		sipRequestHeaders.setCallId(Optional.ofNullable(overrideHeaders.getCallId()).orElse(callId));
+		sipRequestHeaders.setMaxForwards(Optional.ofNullable(overrideHeaders.getMaxForwards()).orElse(maxForwards));
+		for (var entry : extensionHeaderMap.entrySet()) {
+			for (var value : entry.getValue()) {
+				sipRequestHeaders.addSingleHeader(entry.getKey(), value);
+			}
+		}
+		for (var entry : overrideHeaders.extensionHeaderMap.entrySet()) {
+			for (var value : entry.getValue()) {
+				sipRequestHeaders.addSingleHeader(entry.getKey(), value);
+			}
+		}
+		return sipRequestHeaders;
+	}
+
 	@Override
 	public SipRequestHeaders replicate() {
 		var sipRequestHeaders = new SipRequestHeaders();

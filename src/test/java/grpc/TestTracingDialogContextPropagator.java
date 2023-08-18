@@ -26,7 +26,7 @@ import io.opentelemetry.context.propagation.TextMapSetter;
 import util.Constants;
 
 @ExtendWith(MockitoExtension.class)
-class TestTracingContextPropagator {
+class TestTracingDialogContextPropagator {
 	public static final String SERIALIZED_CONTEXT = "0A#T9se4hjy389th3";
 	@Mock
 	Context context;
