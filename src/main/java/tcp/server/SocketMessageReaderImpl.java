@@ -30,11 +30,12 @@ public class SocketMessageReaderImpl<Message> implements SocketMessageReader<Mes
 		}
 		eventEmitter.emit("Read from context");
 		var res = messageReader.read(bufferContext, eventEmitter);
+		LOGGER.info("Read result = {} context size = {}", res, bufferContext.size());
 		eventEmitter.emit("Read from context end");
 		if (res != null) {
-//			LOGGER.info("Context size = {}", bufferContext.size());
-//			LOGGER.info("Freeing {} bytes", res.second());
+			LOGGER.info("Clearing {} bytes", res.second());
 			bufferContext.free(res.second());
+			LOGGER.info("Bytes left = {}", bufferContext.size());
 			eventEmitter.emit("Buffer context clear");
 			return res.first();
 		}

@@ -2,12 +2,17 @@ package sip.request_handling.invite;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import reactor.core.publisher.BaseSubscriber;
+import reactor.core.scheduler.Schedulers;
 import serialization.Serializer;
 import sip.AddressOfRecord;
 import sip.CommandSequence;
@@ -21,6 +26,7 @@ import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 
 public class ConferenceSubscribersContext {
+	private static final Logger LOGGER = LoggerFactory.getLogger(ConferenceSubscribersContext.class);
 	public static final String NOTIFY = "NOTIFY";
 	public static final int MAX_FORWARDS = 70;
 	public static final String EVENT = "Event";
@@ -69,21 +75,37 @@ public class ConferenceSubscribersContext {
 			sipRequestHeaders.setContentType(SIP_MEDIA_TYPE);
 			sipRequestHeaders.addSingleHeader(EVENT, CONFERENCE_EVENT_TYPE);
 			sipRequestHeaders.addSingleHeader(SUBSCRIPTION_STATE, "active;expires=240");
-			var participants = mediaConferenceService.getParticipantsFromPerspectiveOf(conferenceId, request.headers().getFrom().toCanonicalForm().sipURI());
-			try {
-				var participantsSerialized = serializer.serialize(participants);
-				sipRequestHeaders.setContentLength(participantsSerialized.length);
-				var notifyRequest = new SipRequest(
-						new SipRequestLine(NOTIFY, request.headers().getFrom().sipURI(), request.requestLine().version()),
-						sipRequestHeaders,
-						participantsSerialized
-				);
-				socketConnection.appendResponse(messageSerializer.serialize(notifyRequest));
-				socketConnection.changeOperation(OperationType.WRITE);
-			}
-			catch (IOException e) {
-				throw new RuntimeException(e);
-			}
+			mediaConferenceService.getParticipantsFromPerspectiveOf(conferenceId, request.headers().getFrom().toCanonicalForm().sipURI())
+					.subscribeOn(Schedulers.parallel())
+					.flatMap(participant -> {
+						return participant.iceCandidates()
+								.buffer()
+								.map(candidates -> ParticipantDTO.create(participant.participantKey(), participant.sdpOffer(), candidates));
+					})
+					.buffer()
+					.subscribe(new BaseSubscriber<>() {
+
+						@Override
+						protected void hookOnNext(List<ParticipantDTO> participants) {
+							LOGGER.info("Participants from perspective of {} = {}", request.headers().getFrom().toCanonicalForm().sipURI(),
+									participants);
+
+							try {
+								var participantsSerialized = serializer.serialize(participants);
+								sipRequestHeaders.setContentLength(participantsSerialized.length);
+								var notifyRequest = new SipRequest(
+										new SipRequestLine(NOTIFY, request.headers().getFrom().sipURI(), request.requestLine().version()),
+										sipRequestHeaders,
+										participantsSerialized
+								);
+								socketConnection.appendResponse(messageSerializer.serialize(notifyRequest));
+								socketConnection.changeOperation(OperationType.WRITE);
+							}
+							catch (IOException e) {
+								throw new RuntimeException(e);
+							}
+						}
+					});
 		});
 	}
 

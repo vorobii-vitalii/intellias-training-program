@@ -50,7 +50,7 @@ import sip.request_handling.AcceptingCallSipResponsePreProcessor;
 import sip.request_handling.BindingUpdateResponsePreProcessor;
 import sip.request_handling.ConfirmParticipantOffersResponseHandler;
 import sip.request_handling.DestroyingCallSipResponsePostProcessor;
-import sip.request_handling.InMemoryDialogService;
+import sip.request_handling.InMemoryInviteDialogService;
 import sip.request_handling.SDPMediaAddressProcessor;
 import sip.request_handling.SipMessageNetworkRequestHandler;
 import sip.request_handling.SipResponseHandler;
@@ -143,7 +143,7 @@ public class WebSocketCallingServer {
 		final Serializer serializer = obj -> new Gson().toJson(obj).getBytes(StandardCharsets.UTF_8);
 		final ConferenceSubscribersContext conferenceSubscribersContext = new ConferenceSubscribersContext(messageSerializer,
 				mediaConferenceService, serializer);
-		var dialogService = new InMemoryDialogService();
+		var dialogService = new InMemoryInviteDialogService();
 		RequestHandler<NetworkRequest<SipMessage>> sipRequestHandler = new SipMessageNetworkRequestHandler(
 				List.of(
 						new RegisterSipMessageHandler(messageSerializer, bindingStorage),
@@ -308,16 +308,6 @@ public class WebSocketCallingServer {
 				),
 				new TCPServerConfigurer());
 		server.start();
-	}
-
-	private static FullSipURI getCurrentSipURI() {
-		return new FullSipURI(
-				"sip",
-				new Credentials(null, null),
-				new Address(getHost(), getSipServerPort()),
-				Map.of(),
-				Map.of()
-		);
 	}
 
 	private static int getSipServerPort() {

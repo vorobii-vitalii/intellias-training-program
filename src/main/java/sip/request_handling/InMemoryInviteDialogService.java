@@ -19,10 +19,12 @@ import sip.SipResponseLine;
 import sip.SipStatusCode;
 import sip.Via;
 
-public class InMemoryDialogService implements DialogService {
-	public static final SipStatusCode SUCCESS_STATUS_CODE = new SipStatusCode(200);
-	public static final String OK_REASON = "OK";
-	public static final int MAX_FORWARDS = 70;
+public class InMemoryInviteDialogService implements DialogService {
+	private static final SipStatusCode SUCCESS_STATUS_CODE = new SipStatusCode(200);
+	private static final String OK_REASON = "OK";
+	private static final int MAX_FORWARDS = 70;
+	private static final String TAG = "tag";
+
 	private final Map<String, DialogContext> dialogsMap = new ConcurrentHashMap<>();
 
 	@Override
@@ -39,7 +41,7 @@ public class InMemoryDialogService implements DialogService {
 		});
 		var responseHeaders = sessionEstablishmentRequest.headers().toResponseHeaders();
 		var tag = UUID.nameUUIDFromBytes(responseHeaders.getTo().toString().getBytes(StandardCharsets.UTF_8)).toString();
-		responseHeaders.setTo(responseHeaders.getTo().addParam("tag", tag));
+		responseHeaders.setTo(responseHeaders.getTo().addParam(TAG, tag));
 		responseHeaders.setContentType(sipSessionDescription.sipMediaType());
 		responseHeaders.setContactList(new ContactSet(Set.of(sessionEstablishmentRequest.headers().getTo())));
 		return new SipResponse(
@@ -57,7 +59,7 @@ public class InMemoryDialogService implements DialogService {
 			sipRequestHeaders.addVia(via);
 		}
 		var tag = UUID.nameUUIDFromBytes(request.headers().getTo().toString().getBytes(StandardCharsets.UTF_8)).toString();
-		sipRequestHeaders.setFrom(request.headers().getTo().addParam("tag", tag));
+		sipRequestHeaders.setFrom(request.headers().getTo().addParam(TAG, tag));
 		sipRequestHeaders.setTo(request.headers().getFrom());
 		sipRequestHeaders.setCommandSequence(new CommandSequence(dialogContext.sequenceNumber.incrementAndGet(), dialogRequest.methodName()));
 		sipRequestHeaders.setCallId(request.headers().getCallId());
@@ -80,7 +82,6 @@ public class InMemoryDialogService implements DialogService {
 	}
 
 	private record DialogContext(SipRequest sessionEstablishmentRequest, AtomicInteger sequenceNumber) {
-
 	}
 
 }

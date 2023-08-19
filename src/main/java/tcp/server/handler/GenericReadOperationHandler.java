@@ -16,6 +16,7 @@ import message_passing.MessageProducer;
 import request_handler.NetworkRequest;
 import tcp.server.ServerAttachment;
 import tcp.server.SocketMessageReader;
+import tcp.server.reader.exception.ParseException;
 
 public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(GenericReadOperationHandler.class);
@@ -47,16 +48,24 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 				return;
 			}
 			var requestSpan = createRequestSpan(serverAttachment);
-			var request = socketMessageReader.readMessage(
-					serverAttachment.bufferContext(),
-					serverAttachment.getChannel(),
-					requestSpan::addEvent
-			);
-			if (request == null) {
-				return;
+			while (true) {
+				try {
+					var request = socketMessageReader.readMessage(
+							serverAttachment.bufferContext(),
+							serverAttachment.getChannel(),
+							requestSpan::addEvent
+					);
+					if (request == null) {
+						break;
+					}
+					requestSpan.addEvent("Message read from socket");
+					messageProducer.produce(new NetworkRequest<>(request, serverAttachment.toSocketConnection()));
+				}
+				catch (ParseException parseException) {
+					LOGGER.warn("Parse exception", parseException);
+					break;
+				}
 			}
-			requestSpan.addEvent("Message read from socket");
-			messageProducer.produce(new NetworkRequest<>(request, serverAttachment.toSocketConnection()));
 			requestSpan.end();
 		} catch (CancelledKeyException cancelledKeyException) {
 			// Ignore
