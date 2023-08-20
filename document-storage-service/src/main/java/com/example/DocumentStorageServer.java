@@ -38,29 +38,6 @@ public class DocumentStorageServer {
     public static final int MAX_SIZE = 150;
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        var resource = Resource.getDefault()
-                .merge(Resource.create(Attributes.of(ResourceAttributes.SERVICE_NAME, "document-storage-service")));
-
-        var spanExporter = OtlpGrpcSpanExporter.builder()
-                .setEndpoint(System.getenv("JAEGER_ENDPOINT"))
-                .setTimeout(Duration.ofSeconds(15))
-                .build();
-
-        var sdkTracerProvider = SdkTracerProvider.builder()
-                .addSpanProcessor(BatchSpanProcessor.builder(spanExporter).build())
-                .setResource(resource)
-                .build();
-
-        var sdkMeterProvider = SdkMeterProvider.builder()
-                .registerMetricReader(PeriodicMetricReader.builder(OtlpGrpcMetricExporter.builder().build()).build())
-                .setResource(resource)
-                .build();
-
-        var openTelemetry = OpenTelemetrySdk.builder()
-                .setTracerProvider(sdkTracerProvider)
-                .setMeterProvider(sdkMeterProvider)
-                .setPropagators(ContextPropagators.create(W3CTraceContextPropagator.getInstance()))
-                .buildAndRegisterGlobal();
 
 
         var settings = MongoClientSettings.builder()
@@ -76,8 +53,8 @@ public class DocumentStorageServer {
         var mongoDocumentsDAO = new MongoDocumentsDAO(collection);
 
         var server = ServerBuilder.forPort(getServerPort())
-                .addService(new DocumentStorageServiceImpl(mongoDocumentsDAO, openTelemetry, ContextInterceptor.CONTEXT_KEY::get))
-                .intercept(new ContextInterceptor(new ContextExtractor(openTelemetry)))
+                .addService(new DocumentStorageServiceImpl(mongoDocumentsDAO))
+//                .intercept(new ContextInterceptor(new ContextExtractor(openTelemetry)))
                 .executor(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()))
                 .build()
                 .start();

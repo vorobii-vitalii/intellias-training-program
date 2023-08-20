@@ -48,7 +48,7 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 				return;
 			}
 			var requestSpan = createRequestSpan(serverAttachment);
-			while (true) {
+			do {
 				try {
 					var request = socketMessageReader.readMessage(
 							serverAttachment.bufferContext(),
@@ -66,6 +66,7 @@ public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 					break;
 				}
 			}
+			while (!serverAttachment.bufferContext().isEmpty());
 			requestSpan.end();
 		} catch (CancelledKeyException cancelledKeyException) {
 			// Ignore

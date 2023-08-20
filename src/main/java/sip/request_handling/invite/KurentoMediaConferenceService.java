@@ -21,8 +21,8 @@ import sip.SipURI;
 
 // Screensharing, only view + 1
 // Add Jaeger
-// Change approach for ICE gathering
-// Reactive streams
+// Change approach for ICE gathering + 1
+// Reactive streams + 1
 public class KurentoMediaConferenceService implements MediaConferenceService {
 	private static final Logger LOGGER = LoggerFactory.getLogger(KurentoMediaConferenceService.class);
 	private final Map<String, Conference> mediaPipelineByConferenceId = new ConcurrentHashMap<>();

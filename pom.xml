@@ -52,6 +52,21 @@
 
     <dependencies>
 
+        <!-- https://mvnrepository.com/artifact/io.opentelemetry.instrumentation/opentelemetry-netty-4.1 -->
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-netty-4.1</artifactId>
+            <version>1.29.0-alpha</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-grpc-1.6</artifactId>
+            <version>1.29.0-alpha</version>
+        </dependency>
+
+
         <!-- https://mvnrepository.com/artifact/io.projectreactor.addons/reactor-adapter -->
         <dependency>
             <groupId>io.projectreactor.addons</groupId>
