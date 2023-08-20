@@ -11,4 +11,4 @@ ENTRYPOINT java -Dcom.sun.management.jmxremote \
   -Dcom.sun.management.jmxremote.local.only=false \
   -XX:+UseG1GC \
   -XX:+TieredCompilation \
-  -agentlib:jdwp=transport=dt_socket,address=*:8005,server=y,suspend=n -cp app.jar document_editor.HttpServer
+  -agentlib:jdwp=transport=dt_socket,address=*:8005,server=y,suspend=n -cp app.jar document_editor.netty_reactor.DocumentEditingServer

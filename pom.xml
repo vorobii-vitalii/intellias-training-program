@@ -52,6 +52,13 @@
 
     <dependencies>
 
+        <!-- https://mvnrepository.com/artifact/io.projectreactor.addons/reactor-adapter -->
+        <dependency>
+            <groupId>io.projectreactor.addons</groupId>
+            <artifactId>reactor-adapter</artifactId>
+            <version>3.5.1</version>
+        </dependency>
+
         <!-- https://mvnrepository.com/artifact/io.projectreactor.netty/reactor-netty -->
         <dependency>
             <groupId>io.projectreactor.netty</groupId>
@@ -360,7 +367,7 @@
                             <tag>${project.version}</tag>
                             <buildArgs>
                                 <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>
-                                <MAIN_CLASS>document_editor.HttpServer</MAIN_CLASS>
+                                <MAIN_CLASS>document_editor.netty_reactor.DocumentEditingServer</MAIN_CLASS>
                             </buildArgs>
                         </configuration>
                     </execution>
