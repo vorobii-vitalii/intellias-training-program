@@ -16,6 +16,7 @@ import document_editor.dto.ConnectDocumentReply;
 import document_editor.dto.RequestType;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
+import document_editor.netty_reactor.ReactiveDocumentChangesPublisher;
 import document_editor.netty_reactor.request_handling.ReactiveRequestHandler;
 import reactor.adapter.rxjava.RxJava2Adapter;
 import reactor.core.publisher.Flux;
@@ -24,13 +25,16 @@ import reactor.core.publisher.Mono;
 public class ConnectReactiveRequestHandler implements ReactiveRequestHandler<RequestType, ClientRequest, Response, Object> {
 	private final Supplier<Integer> connectionIdProvider;
 	private final Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> service;
+	private final ReactiveDocumentChangesPublisher reactiveDocumentChangesPublisher;
 
 	public ConnectReactiveRequestHandler(
 			Supplier<Integer> connectionIdProvider,
-			Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> service
+			Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> service,
+			ReactiveDocumentChangesPublisher reactiveDocumentChangesPublisher
 	) {
 		this.connectionIdProvider = connectionIdProvider;
 		this.service = service;
+		this.reactiveDocumentChangesPublisher = reactiveDocumentChangesPublisher;
 	}
 
 	@Override
@@ -38,7 +42,9 @@ public class ConnectReactiveRequestHandler implements ReactiveRequestHandler<Req
 		return requestMono.flatMapMany(request -> Flux.concat(
 				Mono.just(new Response(ResponseType.ON_CONNECT, new ConnectDocumentReply(connectionIdProvider.get()))),
 				streamOfDocument(request),
-				Mono.just(new Response(ResponseType.CHANGES, new Changes(List.of(), true)))
+				Mono.just(new Response(ResponseType.CHANGES, new Changes(List.of(), true))),
+				reactiveDocumentChangesPublisher.listenForChanges(HttpServer.DOCUMENT_ID)
+						.map(change -> new Response(ResponseType.CHANGES, new Changes(List.of(change), false)))
 		));
 	}
 

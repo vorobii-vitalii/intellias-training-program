@@ -25,6 +25,7 @@ import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
+import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -52,14 +53,12 @@ public class DocumentEditingServer {
 
 		var connectionId = new AtomicInteger(1);
 
-		var documentStorageServiceChannel =
-				Grpc.newChannelBuilder(System.getenv("DOCUMENT_STORAGE_SERVICE_URL"), InsecureChannelCredentials.create())
-						.build();
-
-		var documentStorageService = RxDocumentStorageServiceGrpc.newRxStub(documentStorageServiceChannel);
+		var documentStorageService = RxDocumentStorageServiceGrpc.newRxStub(
+				Grpc.newChannelBuilder(System.getenv("DOCUMENT_STORAGE_SERVICE_URL"), InsecureChannelCredentials.create()).build());
 
 		var editDocumentReactiveRequestHandler = new EditDocumentReactiveRequestHandler(() -> documentStorageService);
-		var connectRequestHandler = new ConnectReactiveRequestHandler(connectionId::getAndIncrement, () -> documentStorageService);
+		var connectRequestHandler = new ConnectReactiveRequestHandler(connectionId::getAndIncrement, () -> documentStorageService,
+				new ReactiveDocumentChangesPublisher(() -> documentStorageService));
 
 		var eventHandlerByEventType = Stream.of(editDocumentReactiveRequestHandler, connectRequestHandler)
 				.collect(Collectors.toMap(ReactiveRequestHandler::getHandledRequestType, e -> e));
@@ -86,7 +85,18 @@ public class DocumentEditingServer {
 													.subscribeOn(Schedulers.parallel())
 													.subscribe(v -> {
 														try {
-															wsOutbound.sendByteArray(Mono.just(serializer.serialize(v)));
+															LOGGER.info("Sending PONG response");
+															wsOutbound.sendByteArray(Mono.just(serializer.serialize(v)))
+																	.subscribe(new BaseSubscriber<>() {
+																		@Override
+																		protected void hookOnError(Throwable throwable) {
+																			LOGGER.warn("Send of pong failed...", throwable);
+																		}
+																		@Override
+																		protected void hookOnComplete() {
+																			LOGGER.warn("Pong was sent successfully!");
+																		}
+																	});
 														}
 														catch (IOException e) {
 															throw new RuntimeException(e);
