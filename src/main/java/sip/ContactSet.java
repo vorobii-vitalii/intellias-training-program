@@ -1,9 +1,10 @@
 package sip;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Set;
 
-public record ContactSet(Set<AddressOfRecord> allowedAddressOfRecords) implements ContactList {
+public record ContactSet(Collection<AddressOfRecord> allowedAddressOfRecords) implements ContactList {
 
 	public static final byte DELIMITER = (byte) ',';
 

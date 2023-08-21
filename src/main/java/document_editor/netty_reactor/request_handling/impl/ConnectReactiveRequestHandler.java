@@ -38,8 +38,8 @@ public class ConnectReactiveRequestHandler implements ReactiveRequestHandler<Req
 	}
 
 	@Override
-	public Flux<Response> handleRequest(Mono<ClientRequest> requestMono, Object context) {
-		return requestMono.flatMapMany(request -> Flux.concat(
+	public Flux<Response> handleRequest(ClientRequest requestMono, Object context) {
+		return Mono.just(requestMono).flatMapMany(request -> Flux.concat(
 				Mono.just(new Response(ResponseType.ON_CONNECT, new ConnectDocumentReply(connectionIdProvider.get()))),
 				streamOfDocument(request),
 				Mono.just(new Response(ResponseType.CHANGES, new Changes(List.of(), true))),

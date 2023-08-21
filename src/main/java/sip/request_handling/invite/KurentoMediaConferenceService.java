@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import sip.SipURI;
 
 // Screensharing, only view + 1
@@ -38,6 +39,18 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		offerOptions.setOfferToReceiveAudio(true);
 		offerOptions.setOfferToReceiveVideo(true);
 		return offerOptions;
+	}
+
+	@Override
+	public Mono<Void> createNewConferenceReactive(String conferenceId) {
+		return Mono.create(sink -> {
+			LOGGER.info("Creating new media pipeline for new conference {}", conferenceId);
+			var mediaPipeline = kurentoClient.createMediaPipeline();
+			// TODO: Call this function when conference ends
+			// mediaPipeline.release();
+			mediaPipelineByConferenceId.put(conferenceId, new Conference(mediaPipeline, new ConcurrentHashMap<>()));
+			sink.success();
+		});
 	}
 
 	@Override

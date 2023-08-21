@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
@@ -54,6 +55,9 @@ public class ConferenceSubscribersContext {
 	}
 
 	public void addSubscriber(String conferenceId, SipRequest sipRequest, SocketConnection socketConnection) {
+		final Sinks.Many<Object> objectMany = Sinks.many().multicast().onBackpressureBuffer(100);
+		objectMany.emitNext(123, Sinks.EmitFailureHandler.FAIL_FAST);
+		objectMany.emitNext(2, Sinks.EmitFailureHandler.busyLooping(Du));
 		contextMap.computeIfAbsent(conferenceId, s -> new ConcurrentHashMap<>());
 		contextMap.get(conferenceId).put(sipRequest.headers().getFrom(), new Context(socketConnection, sipRequest));
 	}

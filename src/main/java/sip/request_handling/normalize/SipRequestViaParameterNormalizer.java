@@ -4,7 +4,8 @@ import java.net.InetSocketAddress;
 
 import sip.SipRequest;
 
-public class SipRequestViaParameterNormalizer implements ObjectNormalizer<SipRequest, SipRequestNormalizeContext> {
+public class
+SipRequestViaParameterNormalizer implements ObjectNormalizer<SipRequest, SipRequestNormalizeContext> {
 	private static final String RPORT = "rport";
 	public static final String RECEIVED = "received";
 	public static final String ALIAS = "alias";

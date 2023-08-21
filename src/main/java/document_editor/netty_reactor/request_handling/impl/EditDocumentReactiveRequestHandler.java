@@ -27,8 +27,8 @@ public class EditDocumentReactiveRequestHandler implements ReactiveRequestHandle
 	}
 
 	@Override
-	public Flux<Response> handleRequest(Mono<ClientRequest> requestMono, Object context) {
-		return requestMono.flatMapMany(request -> {
+	public Flux<Response> handleRequest(ClientRequest clientRequest, Object context) {
+		return Mono.just(clientRequest).flatMapMany(request -> {
 			var changes = request.payload().stream()
 					.map(this::calculateChanges)
 					.toList();

@@ -1,4 +1,6 @@
 package sip;
 
-public sealed interface SipMessage permits SipRequest, SipResponse {
+import util.Serializable;
+
+public sealed interface SipMessage extends Serializable permits SipRequest, SipResponse {
 }

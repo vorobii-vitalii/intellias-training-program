@@ -4,6 +4,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 public interface ReactiveRequestHandler<ReqType, Req, Res, Ctx> {
-	Flux<Res> handleRequest(Mono<Req> request, Ctx context);
+	Flux<? extends Res> handleRequest(Req request, Ctx context);
 	ReqType getHandledRequestType();
+
+	default boolean canHandle(Req canHandle) {
+		return true;
+	}
 }
