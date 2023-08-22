@@ -8,7 +8,7 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import document_editor.netty_reactor.request_handling.ReactiveRequestHandler;
+import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import sip.AddressOfRecord;
@@ -23,7 +23,7 @@ import sip.SipStatusCode;
 import sip.reactor_netty.WSOutbound;
 import sip.request_handling.invite.MediaConferenceService;
 
-public class CreateConferenceReactiveSipRequestHandler implements ReactiveRequestHandler<String, SipRequest, SipMessage, WSOutbound> {
+public class CreateConferenceReactiveSipRequestHandler implements ReactiveMessageHandler<String, SipRequest, SipMessage, WSOutbound> {
 	private static final int MOVED_PERMANENTLY = 301;
 	private static final String REDIRECT_REASON = "Redirecting...";
 	private static final String INVITE = "INVITE";
@@ -46,7 +46,7 @@ public class CreateConferenceReactiveSipRequestHandler implements ReactiveReques
 	}
 
 	@Override
-	public Flux<? extends SipMessage> handleRequest(SipRequest request, WSOutbound context) {
+	public Flux<? extends SipMessage> handleMessage(SipRequest request, WSOutbound context) {
 		var conferenceId = conferenceIdGenerator.get();
 		return mediaConferenceService.createNewConferenceReactive(conferenceId)
 				.thenMany(Mono.fromCallable(() -> {
@@ -56,7 +56,7 @@ public class CreateConferenceReactiveSipRequestHandler implements ReactiveReques
 	}
 
 	@Override
-	public String getHandledRequestType() {
+	public String getHandledMessageType() {
 		return INVITE;
 	}
 

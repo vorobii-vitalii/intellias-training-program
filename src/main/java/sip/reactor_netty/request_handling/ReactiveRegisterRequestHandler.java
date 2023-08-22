@@ -6,7 +6,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import document_editor.netty_reactor.request_handling.ReactiveRequestHandler;
+import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import sip.AddressOfRecord;
@@ -23,7 +23,7 @@ import sip.reactor_netty.WSOutbound;
 import sip.reactor_netty.service.ReactiveBindingStorage;
 import sip.request_handling.register.CreateBinding;
 
-public class ReactiveRegisterRequestHandler implements ReactiveRequestHandler<String, SipRequest, SipMessage, WSOutbound> {
+public class ReactiveRegisterRequestHandler implements ReactiveMessageHandler<String, SipRequest, SipMessage, WSOutbound> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ReactiveRegisterRequestHandler.class);
 	private static final Integer REMOVE_BINDINGS = 0;
 	// TODO: Create parameter instead
@@ -36,7 +36,7 @@ public class ReactiveRegisterRequestHandler implements ReactiveRequestHandler<St
 	}
 
 	@Override
-	public Flux<SipMessage> handleRequest(SipRequest sipRequestMono, WSOutbound outbound) {
+	public Flux<SipMessage> handleMessage(SipRequest sipRequestMono, WSOutbound outbound) {
 		return Mono.just(sipRequestMono).flatMapMany(sipRequest -> {
 			var addressOfRecord = sipRequest.headers().getTo().toCanonicalForm();
 			var contactList = sipRequest.headers().getContactList();
@@ -69,7 +69,7 @@ public class ReactiveRegisterRequestHandler implements ReactiveRequestHandler<St
 	}
 
 	@Override
-	public String getHandledRequestType() {
+	public String getHandledMessageType() {
 		return "REGISTER";
 	}
 

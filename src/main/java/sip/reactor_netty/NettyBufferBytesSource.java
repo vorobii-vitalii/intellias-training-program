@@ -13,7 +13,7 @@ public class NettyBufferBytesSource implements BytesSource {
 	@Override
 	public byte[] extract(int from, int end) {
 		var bytes = new byte[end - from];
-		byteBuf.getBytes(0, bytes, 0, end - from);
+		byteBuf.getBytes(from, bytes);
 		return bytes;
 	}
 

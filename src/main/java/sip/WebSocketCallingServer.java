@@ -54,6 +54,7 @@ import sip.request_handling.InMemoryInviteDialogService;
 import sip.request_handling.SDPMediaAddressProcessor;
 import sip.request_handling.SipMessageNetworkRequestHandler;
 import sip.request_handling.SipResponseHandler;
+import sip.request_handling.SipSessionDescription;
 import sip.request_handling.calls.InMemoryCallsRepository;
 import sip.request_handling.enricher.CompositeUpdater;
 import sip.request_handling.enricher.ContactUnknownAttributesRemover;

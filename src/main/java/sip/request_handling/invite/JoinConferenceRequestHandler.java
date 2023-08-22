@@ -32,13 +32,13 @@ public class JoinConferenceRequestHandler implements SipRequestHandler {
 	private final MediaConferenceService mediaConferenceService;
 	private final MessageSerializer messageSerializer;
 	private final ConferenceSubscribersContext conferenceSubscribersContext;
-	private final DialogService dialogService;
+	private final DialogService<SipSessionDescription> dialogService;
 
 	public JoinConferenceRequestHandler(
 			MediaConferenceService mediaConferenceService,
 			MessageSerializer messageSerializer,
 			ConferenceSubscribersContext conferenceSubscribersContext,
-			DialogService dialogService
+			DialogService<SipSessionDescription> dialogService
 	) {
 		this.mediaConferenceService = mediaConferenceService;
 		this.messageSerializer = messageSerializer;

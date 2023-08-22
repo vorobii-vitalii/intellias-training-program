@@ -1,10 +1,7 @@
 package sip.request_handling.invite;
 
-import java.io.IOException;
-import java.util.List;
 import java.util.Set;
 
-import serialization.Serializer;
 import sip.FullSipURI;
 import sip.SipRequest;
 import sip.SipResponse;

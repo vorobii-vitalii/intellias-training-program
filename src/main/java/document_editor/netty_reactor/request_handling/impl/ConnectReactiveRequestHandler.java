@@ -17,12 +17,12 @@ import document_editor.dto.RequestType;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
 import document_editor.netty_reactor.ReactiveDocumentChangesPublisher;
-import document_editor.netty_reactor.request_handling.ReactiveRequestHandler;
+import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
 import reactor.adapter.rxjava.RxJava2Adapter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-public class ConnectReactiveRequestHandler implements ReactiveRequestHandler<RequestType, ClientRequest, Response, Object> {
+public class ConnectReactiveRequestHandler implements ReactiveMessageHandler<RequestType, ClientRequest, Response, Object> {
 	private final Supplier<Integer> connectionIdProvider;
 	private final Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> service;
 	private final ReactiveDocumentChangesPublisher reactiveDocumentChangesPublisher;
@@ -38,7 +38,7 @@ public class ConnectReactiveRequestHandler implements ReactiveRequestHandler<Req
 	}
 
 	@Override
-	public Flux<Response> handleRequest(ClientRequest requestMono, Object context) {
+	public Flux<Response> handleMessage(ClientRequest requestMono, Object context) {
 		return Mono.just(requestMono).flatMapMany(request -> Flux.concat(
 				Mono.just(new Response(ResponseType.ON_CONNECT, new ConnectDocumentReply(connectionIdProvider.get()))),
 				streamOfDocument(request),
@@ -74,7 +74,7 @@ public class ConnectReactiveRequestHandler implements ReactiveRequestHandler<Req
 	}
 
 	@Override
-	public RequestType getHandledRequestType() {
+	public RequestType getHandledMessageType() {
 		return RequestType.CONNECT;
 	}
 }

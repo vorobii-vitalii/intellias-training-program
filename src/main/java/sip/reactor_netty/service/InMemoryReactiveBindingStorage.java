@@ -73,12 +73,10 @@ public class InMemoryReactiveBindingStorage implements ReactiveBindingStorage {
 
 	@Override
 	public Flux<AddressOfRecord> getAllBindingsByAddressOfRecord(AddressOfRecord addressOfRecord) {
-		return Flux.generate(sink -> {
-			Optional.ofNullable(bindings.get(addressOfRecord))
+		return Flux.fromStream(() -> {
+			return Optional.ofNullable(bindings.get(addressOfRecord))
 					.stream()
-					.flatMap(v -> v.keySet().stream())
-					.forEach(sink::next);
-			sink.complete();
+					.flatMap(v -> v.keySet().stream());
 		});
 	}
 

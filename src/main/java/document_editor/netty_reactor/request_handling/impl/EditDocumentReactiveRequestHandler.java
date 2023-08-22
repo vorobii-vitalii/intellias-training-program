@@ -13,13 +13,13 @@ import document_editor.dto.ClientRequest;
 import document_editor.dto.RequestType;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import document_editor.netty_reactor.request_handling.ReactiveRequestHandler;
+import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
 import io.reactivex.Single;
 import reactor.adapter.rxjava.RxJava2Adapter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-public class EditDocumentReactiveRequestHandler implements ReactiveRequestHandler<RequestType, ClientRequest, Response, Object> {
+public class EditDocumentReactiveRequestHandler implements ReactiveMessageHandler<RequestType, ClientRequest, Response, Object> {
 	private final Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> service;
 
 	public EditDocumentReactiveRequestHandler(Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> service) {
@@ -27,7 +27,7 @@ public class EditDocumentReactiveRequestHandler implements ReactiveRequestHandle
 	}
 
 	@Override
-	public Flux<Response> handleRequest(ClientRequest clientRequest, Object context) {
+	public Flux<Response> handleMessage(ClientRequest clientRequest, Object context) {
 		return Mono.just(clientRequest).flatMapMany(request -> {
 			var changes = request.payload().stream()
 					.map(this::calculateChanges)
@@ -63,7 +63,7 @@ public class EditDocumentReactiveRequestHandler implements ReactiveRequestHandle
 
 
 	@Override
-	public RequestType getHandledRequestType() {
+	public RequestType getHandledMessageType() {
 		return RequestType.CHANGES;
 	}
 }

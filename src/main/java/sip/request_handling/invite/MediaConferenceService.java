@@ -13,5 +13,6 @@ public interface MediaConferenceService {
 	ConferenceJoinResponse connectToConferenceReactive(ConferenceJoinRequest conferenceJoinRequest);
 	boolean isConference(String conferenceId);
 	Flux<Participant> getParticipantsFromPerspectiveOf(String conferenceId, SipURI referenceURI);
+	Mono<Void> processAnswersReactive(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerBySipURI);
 	void processAnswers(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerBySipURI);
 }

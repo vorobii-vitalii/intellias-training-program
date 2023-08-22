@@ -7,7 +7,7 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import document_editor.netty_reactor.request_handling.ReactiveRequestHandler;
+import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
 import reactor.core.publisher.Flux;
 import sip.SipMessage;
 import sip.SipRequest;
@@ -17,12 +17,12 @@ import sip.reactor_netty.WSOutbound;
 public class DelegatingReactiveSipMessageHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DelegatingReactiveSipMessageHandler.class);
 
-	private final Map<String, Collection<ReactiveRequestHandler<String, SipRequest, SipMessage, WSOutbound>>> requestHandlersMap;
-	private final Map<String, Collection<ReactiveRequestHandler<String, SipResponse, SipMessage, WSOutbound>>> responseHandlersMap;
+	private final Map<String, Collection<ReactiveMessageHandler<String, SipRequest, SipMessage, WSOutbound>>> requestHandlersMap;
+	private final Map<String, Collection<ReactiveMessageHandler<String, SipResponse, SipMessage, WSOutbound>>> responseHandlersMap;
 
 	public DelegatingReactiveSipMessageHandler(
-			Map<String, Collection<ReactiveRequestHandler<String, SipRequest, SipMessage, WSOutbound>>> requestHandlersMap,
-			Map<String, Collection<ReactiveRequestHandler<String, SipResponse, SipMessage, WSOutbound>>> responseHandlersMap
+			Map<String, Collection<ReactiveMessageHandler<String, SipRequest, SipMessage, WSOutbound>>> requestHandlersMap,
+			Map<String, Collection<ReactiveMessageHandler<String, SipResponse, SipMessage, WSOutbound>>> responseHandlersMap
 	) {
 		this.requestHandlersMap = requestHandlersMap;
 		this.responseHandlersMap = responseHandlersMap;
@@ -38,6 +38,7 @@ public class DelegatingReactiveSipMessageHandler {
 			);
 		}
 		else if (incomingMessage instanceof SipResponse sipResponse) {
+//			LOGGER.info("Handling response method = {} handlers = {}", sipResponse.headers().getCommandSequence().commandName(), responseHandlersMap);
 			return handle(
 					sipResponse,
 					wsOutbound,
@@ -55,10 +56,10 @@ public class DelegatingReactiveSipMessageHandler {
 			T message,
 			WSOutbound wsOutbound,
 			Function<T, String> methodExtractor,
-			Map<String, Collection<ReactiveRequestHandler<String, T, SipMessage, WSOutbound>>> handlers
+			Map<String, Collection<ReactiveMessageHandler<String, T, SipMessage, WSOutbound>>> handlers
 	) {
 		var method = methodExtractor.apply(message);
-		if (!requestHandlersMap.containsKey(method)) {
+		if (!handlers.containsKey(method)) {
 			LOGGER.warn("No handler for method {}", method);
 			return Flux.empty();
 		}
@@ -66,7 +67,7 @@ public class DelegatingReactiveSipMessageHandler {
 				.stream()
 				.filter(s -> s.canHandle(message))
 				.findFirst()
-				.map(v -> v.handleRequest(message, wsOutbound))
+				.map(v -> v.handleMessage(message, wsOutbound))
 				.orElseGet(() -> {
 					LOGGER.warn("No matching handler for method = {}", method);
 					return Flux.empty();

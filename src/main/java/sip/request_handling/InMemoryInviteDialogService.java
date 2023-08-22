@@ -19,7 +19,7 @@ import sip.SipResponseLine;
 import sip.SipStatusCode;
 import sip.Via;
 
-public class InMemoryInviteDialogService implements DialogService {
+public class InMemoryInviteDialogService implements DialogService<SipSessionDescription> {
 	private static final SipStatusCode SUCCESS_STATUS_CODE = new SipStatusCode(200);
 	private static final String OK_REASON = "OK";
 	private static final int MAX_FORWARDS = 70;

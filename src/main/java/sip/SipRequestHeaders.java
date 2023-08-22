@@ -109,6 +109,7 @@ public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHead
 		sipRequestHeaders.setContentType(Optional.ofNullable(overrideHeaders.getContentType()).orElse(contentType));
 		sipRequestHeaders.setCallId(Optional.ofNullable(overrideHeaders.getCallId()).orElse(callId));
 		sipRequestHeaders.setMaxForwards(Optional.ofNullable(overrideHeaders.getMaxForwards()).orElse(maxForwards));
+		sipRequestHeaders.setContentLength(overrideHeaders.getContentLength() > 0 ? overrideHeaders.getContentLength() : contentLength);
 		for (var entry : extensionHeaderMap.entrySet()) {
 			for (var value : entry.getValue()) {
 				sipRequestHeaders.addSingleHeader(entry.getKey(), value);

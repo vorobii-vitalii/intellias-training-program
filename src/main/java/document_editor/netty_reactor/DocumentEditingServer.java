@@ -18,7 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import document_editor.dto.ClientRequest;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import document_editor.netty_reactor.request_handling.ReactiveRequestHandler;
+import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
 import document_editor.netty_reactor.request_handling.impl.ConnectReactiveRequestHandler;
 import document_editor.netty_reactor.request_handling.impl.EditDocumentReactiveRequestHandler;
 import io.grpc.Grpc;
@@ -61,7 +61,7 @@ public class DocumentEditingServer {
 				new ReactiveDocumentChangesPublisher(() -> documentStorageService));
 
 		var eventHandlerByEventType = Stream.of(editDocumentReactiveRequestHandler, connectRequestHandler)
-				.collect(Collectors.toMap(ReactiveRequestHandler::getHandledRequestType, e -> e));
+				.collect(Collectors.toMap(ReactiveMessageHandler::getHandledMessageType, e -> e));
 
 
 		var deserializer = new JacksonDeserializer(objectMapper);
@@ -130,7 +130,7 @@ public class DocumentEditingServer {
 															LOGGER.info("No handler for {} event type found...", request.type());
 															return Flux.empty();
 														} else {
-															return wsOutbound.send(eventHandler.handleRequest(Mono.just(request), null)
+															return wsOutbound.send(eventHandler.handleMessage(request, null)
 																	.<byte[]> handle((response, sink) -> {
 																		try {
 																			sink.next(serializer.serialize(response));

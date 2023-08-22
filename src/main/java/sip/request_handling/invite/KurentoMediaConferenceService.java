@@ -8,6 +8,7 @@ import java.util.stream.Stream;
 
 import javax.annotation.Nonnull;
 
+import org.kurento.client.Continuation;
 import org.kurento.client.KurentoClient;
 import org.kurento.client.MediaPipeline;
 import org.kurento.client.MediaType;
@@ -143,21 +144,41 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		if (conference == null) {
 			return Flux.empty();
 		}
-		LOGGER.info("Get participants from perspective {}", referenceURI);
 		UserMediaContext userMediaContext = conference.webRtcEndpointMap()
 				.get(referenceURI.getURIAsString());
-		if (userMediaContext == null) {
-			return Flux.empty();
-		}
-		return Flux.fromStream(userMediaContext
-				.receiveConnectionByParticipantKey()
-				.entrySet()
-				.stream()
-				.map(e -> {
-					var sdpOffer = e.getValue().sdpOffer();
-					var participantKey = e.getKey();
-					return new Participant(participantKey, sdpOffer, e.getValue().iceCandidates());
-				}));
+		LOGGER.info("Get participants from perspective {} = {}", referenceURI, userMediaContext
+				.receiveConnectionByParticipantKey());
+		return Flux.fromStream(() -> {
+			LOGGER.info("Participants are now requested");
+			return userMediaContext
+					.receiveConnectionByParticipantKey()
+					.entrySet()
+					.stream()
+					.map(e -> {
+						var sdpOffer = e.getValue().sdpOffer();
+						var participantKey = e.getKey();
+						return new Participant(participantKey, sdpOffer, e.getValue().iceCandidates());
+					});
+		});
+	}
+
+	@Override
+	public Mono<Void> processAnswersReactive(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerByParticipantKey) {
+		return Mono.fromCallable(() -> {
+			LOGGER.info("Processing answer reactive...");
+			var conference = getConference(conferenceId);
+			var userMediaContext = conference.webRtcEndpointMap().get(referenceURI.getURIAsString());
+			for (var entry : sdpAnswerByParticipantKey.entrySet()) {
+				var receiveConnection = userMediaContext.receiveConnectionByParticipantKey().get(entry.getKey());
+				if (receiveConnection == null) {
+					continue;
+				}
+				LOGGER.info("Processing answer for {}", entry.getKey());
+				final String processAnswer = receiveConnection.endpoint().processAnswer(entry.getValue());
+				LOGGER.info("Process answer result = {}", processAnswer);
+			}
+			return null;
+		});
 	}
 
 	@Override

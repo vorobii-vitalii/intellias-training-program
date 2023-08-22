@@ -57,7 +57,6 @@ public class ConferenceSubscribersContext {
 	public void addSubscriber(String conferenceId, SipRequest sipRequest, SocketConnection socketConnection) {
 		final Sinks.Many<Object> objectMany = Sinks.many().multicast().onBackpressureBuffer(100);
 		objectMany.emitNext(123, Sinks.EmitFailureHandler.FAIL_FAST);
-		objectMany.emitNext(2, Sinks.EmitFailureHandler.busyLooping(Du));
 		contextMap.computeIfAbsent(conferenceId, s -> new ConcurrentHashMap<>());
 		contextMap.get(conferenceId).put(sipRequest.headers().getFrom(), new Context(socketConnection, sipRequest));
 	}
