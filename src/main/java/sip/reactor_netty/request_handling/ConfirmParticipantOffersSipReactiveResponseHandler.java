@@ -46,6 +46,11 @@ public class ConfirmParticipantOffersSipReactiveResponseHandler implements React
 		return NOTIFY;
 	}
 
+	@Override
+	public boolean canHandle(SipResponse sipResponse) {
+		return sipResponse.payload().length > 0;
+	}
+
 	private String getConferenceId(SipResponse sipResponse) {
 		var sipURI = (FullSipURI) sipResponse.headers().getFrom().sipURI();
 		return sipURI.credentials().username();

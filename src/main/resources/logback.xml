@@ -13,9 +13,9 @@
 		<appender-ref ref="CONSOLE"/>
 	</appender>
 
-	<logger name="org.kurento" level="debug" />
-
-	<logger name="reactor.netty" level="debug" />
+<!--	<logger name="org.kurento" level="debug" />-->
+<!---->
+<!--	<logger name="reactor.netty" level="debug" />-->
 
 	<root level="info">
 		<appender-ref ref="ASYNC_CONSOLE"/>

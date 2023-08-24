@@ -1,15 +1,19 @@
 package sip.reactor_netty.service;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 import serialization.Serializer;
 import sip.FullSipURI;
 import sip.SipMediaType;
@@ -17,6 +21,7 @@ import sip.SipMessage;
 import sip.SipRequest;
 import sip.SipRequestHeaders;
 import sip.request_handling.DialogRequest;
+import sip.request_handling.NewEventRequest;
 import sip.request_handling.invite.MediaConferenceService;
 import sip.request_handling.invite.ParticipantDTO;
 
@@ -24,7 +29,6 @@ public class ReactiveConferenceSubscribersContext {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ReactiveConferenceSubscribersContext.class);
 	private static final int BACKPRESSURE_BUFFER_SIZE = 1000;
 	private static final String EVENT = "Event";
-	private static final String SUBSCRIPTION_STATE = "Subscription-State";
 	private static final SipMediaType SIP_MEDIA_TYPE = SipMediaType.parse("application/json");
 	private static final String CONFERENCE_EVENT_TYPE = "conference";
 	private static final String NOTIFY_METHOD = "NOTIFY";
@@ -32,7 +36,7 @@ public class ReactiveConferenceSubscribersContext {
 	private final ConferenceEventDialogService conferenceEventDialogService;
 	private final MediaConferenceService mediaConferenceService;
 	private final Serializer serializer;
-	private final Map<String, Sinks.Many<ParticipantsChanged>> conferenceSinkByConferenceId = new ConcurrentHashMap<>();
+	private final Map<String, Sinks.Many<ConferenceEvent>> conferenceSinkByConferenceId = new ConcurrentHashMap<>();
 
 	public ReactiveConferenceSubscribersContext(
 			ConferenceEventDialogService conferenceEventDialogService,
@@ -46,18 +50,56 @@ public class ReactiveConferenceSubscribersContext {
 
 	public void notifyParticipantsChanged(String conferenceId) {
 		// TODO: Check result of emit next
-		createConferenceSinkIfNeeded(conferenceId).tryEmitNext(new ParticipantsChanged());
+		createConferenceSinkIfNeeded(conferenceId).tryEmitNext(new ParticipantsChangedEvent());
+	}
+
+	public Flux<SipMessage> unsubscribeFromConferenceUpdates(SipRequest unsubscribeRequest) {
+		var conferenceId = getConferenceId(unsubscribeRequest);
+		var callId = unsubscribeRequest.headers().getCallId();
+		var participantKey = calculateParticipantKey(unsubscribeRequest);
+		LOGGER.info("Unsubscribing {} from conference {}", participantKey, conferenceId);
+		createConferenceSinkIfNeeded(conferenceId)
+				.tryEmitNext(new ParticipantDisconnectedEvent(participantKey));
+
+		var unsubscribeEvent = conferenceEventDialogService.createNewEvent(new NewEventRequest(
+				callId,
+				NOTIFY_METHOD,
+				new SipRequestHeaders(),
+				new byte[] {},
+				NewEventRequest.SubscriptionState.DESTROYED
+		));
+		conferenceEventDialogService.cancelSubscription(unsubscribeRequest);
+		return Flux.just(unsubscribeEvent);
 	}
 
 	public Flux<SipMessage> subscribeToConferenceUpdates(SipRequest conferenceSubscribeRequest) {
 		var subscriptionResponse = conferenceEventDialogService.createSubscription(conferenceSubscribeRequest);
 		var conferenceId = getConferenceId(conferenceSubscribeRequest);
-		// TODO: Handle BYE
+		var participantKey = calculateParticipantKey(conferenceSubscribeRequest);
 		return Flux.<SipMessage>just(subscriptionResponse)
 				.concatWith(getCurrentParticipantsMessage(conferenceSubscribeRequest))
 				.concatWith(createConferenceSinkIfNeeded(conferenceId)
 						.asFlux()
-						.flatMap(conferenceEvent -> getCurrentParticipantsMessage(conferenceSubscribeRequest))) ;
+						.publishOn(Schedulers.boundedElastic())
+						.takeUntil(event -> {
+							if (event instanceof ParticipantDisconnectedEvent disconnect) {
+								LOGGER.info("Received disconnect event in context of conference {}", conferenceId);
+								if (disconnect.participantKey.equals(participantKey)) {
+									LOGGER.info("Participant {} unsubscribed from Conference events... Wont send updates to him anymore...",
+											participantKey);
+									return true;
+								}
+							}
+							return false;
+						})
+						.filter(event -> event instanceof ParticipantsChangedEvent)
+						.doOnComplete(() -> {
+							LOGGER.info("Completed stream subscribeToConferenceUpdates()");
+						})
+						.flatMap(conferenceEvent -> {
+							LOGGER.info("Going to get participants in conference {} from perspective of {}", conferenceId, participantKey);
+							return getCurrentParticipantsMessage(conferenceSubscribeRequest);
+						})) ;
 	}
 
 	private Flux<SipMessage> getCurrentParticipantsMessage(SipRequest conferenceSubscribeRequest) {
@@ -68,29 +110,40 @@ public class ReactiveConferenceSubscribersContext {
 		return mediaConferenceService.getParticipantsFromPerspectiveOf(conferenceId, subscriptionRequester)
 				.log()
 				.flatMap(participant -> {
-					LOGGER.info("Found participant = {}", participant);
+					LOGGER.info("Found participant = {}", participant.participantKey());
 					return participant.iceCandidates()
 							.buffer()
-							.map(candidates -> ParticipantDTO.create(
-									participant.participantKey(), participant.sdpOffer(), candidates
-							));
+							.defaultIfEmpty(List.of())
+							.map(candidates -> {
+								LOGGER.info("All ICE candidates {} for candidate {} from  {} found!", candidates, participant.participantKey()
+										, subscriptionRequester);
+								return ParticipantDTO.create(
+										participant.participantKey(), participant.sdpOffer(), candidates
+								);
+							});
 				})
 				.buffer()
 				.defaultIfEmpty(List.of())
+				.timed()
+				.doOnComplete(() -> {
+					LOGGER.info("Completed getting participants in getCurrentParticipantsMessage()...");
+				})
 				.handle((participants, sink) -> {
+					LOGGER.info("ICE gathering process took {} ms", participants.elapsed().toMillis());
 					try {
-						var participantsSerialized = serializer.serialize(participants);
+						var participantsSerialized = serializer.serialize(participants.get());
 						var overrideHeaders = new SipRequestHeaders();
 						overrideHeaders.setContentType(SIP_MEDIA_TYPE);
 						overrideHeaders.addSingleHeader(EVENT, CONFERENCE_EVENT_TYPE);
-						overrideHeaders.addSingleHeader(SUBSCRIPTION_STATE, "active;expires=240");
 						overrideHeaders.setContentLength(participantsSerialized.length);
-						LOGGER.info("Participants serialized and sent...");
-						sink.next(conferenceEventDialogService.makeDialogRequest(new DialogRequest(
+						LOGGER.info("Participants serialized and sent {}",
+								participants.get().stream().map(ParticipantDTO::participantKey).collect(Collectors.toList()));
+						sink.next(conferenceEventDialogService.createNewEvent(new NewEventRequest(
 								callId,
 								NOTIFY_METHOD,
 								overrideHeaders,
-								participantsSerialized
+								participantsSerialized,
+								NewEventRequest.SubscriptionState.ACTIVE
 						)));
 					}
 					catch (IOException e) {
@@ -100,10 +153,16 @@ public class ReactiveConferenceSubscribersContext {
 
 	}
 
-	private record ParticipantsChanged() {
+	private sealed interface ConferenceEvent permits ParticipantsChangedEvent, ParticipantDisconnectedEvent {
 	}
 
-	private Sinks.Many<ParticipantsChanged> createConferenceSinkIfNeeded(String conferenceId) {
+	private record ParticipantsChangedEvent() implements ConferenceEvent {
+	}
+
+	private record ParticipantDisconnectedEvent(String participantKey) implements ConferenceEvent {
+	}
+
+	private Sinks.Many<ConferenceEvent> createConferenceSinkIfNeeded(String conferenceId) {
 		return conferenceSinkByConferenceId.computeIfAbsent(conferenceId,
 				s -> Sinks.many().multicast().onBackpressureBuffer(BACKPRESSURE_BUFFER_SIZE));
 	}
@@ -111,6 +170,10 @@ public class ReactiveConferenceSubscribersContext {
 	private String getConferenceId(SipRequest sipRequest) {
 		var sipURI = (FullSipURI) sipRequest.requestLine().requestURI();
 		return sipURI.credentials().username();
+	}
+
+	private String calculateParticipantKey(SipRequest unsubscribeRequest) {
+		return unsubscribeRequest.headers().getFrom().toCanonicalForm().sipURI().getURIAsString();
 	}
 
 }

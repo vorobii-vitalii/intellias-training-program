@@ -1,14 +1,13 @@
 package sip.request_handling.invite;
 
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.annotation.Nonnull;
 
-import org.kurento.client.Continuation;
+import org.kurento.client.IceCandidatePair;
 import org.kurento.client.KurentoClient;
 import org.kurento.client.MediaPipeline;
 import org.kurento.client.MediaType;
@@ -49,7 +48,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 			var mediaPipeline = kurentoClient.createMediaPipeline();
 			// TODO: Call this function when conference ends
 			// mediaPipeline.release();
-			mediaPipelineByConferenceId.put(conferenceId, new Conference(mediaPipeline, new ConcurrentHashMap<>()));
+			mediaPipelineByConferenceId.put(conferenceId, new Conference(mediaPipeline, new ConcurrentHashMap<>(), new ReentrantLock(true)));
 			sink.success();
 		});
 	}
@@ -59,7 +58,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		var mediaPipeline = kurentoClient.createMediaPipeline();
 		// TODO: Call this function when conference ends
 		// mediaPipeline.release();
-		mediaPipelineByConferenceId.put(conferenceId, new Conference(mediaPipeline, new ConcurrentHashMap<>()));
+		mediaPipelineByConferenceId.put(conferenceId, new Conference(mediaPipeline, new ConcurrentHashMap<>(), new ReentrantLock(true)));
 	}
 
 	@Override
@@ -67,55 +66,86 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		var conference = getConference(conferenceJoinRequest.conferenceId());
 		var webRtcEndpoint = create(conference.mediaPipeline);
 		var participantKey = calculateParticipantKey(conferenceJoinRequest);
-//		webRtcEndpoint.gatherCandidates();
 		var sdpResponse = webRtcEndpoint.processOffer(conferenceJoinRequest.sdpOffer());
 		var isReceiving = conferenceJoinRequest.mode().receive();
 		var isSending = conferenceJoinRequest.mode().send();
 		var receiveConnectionBySipURI = new ConcurrentHashMap<String, ReceiveConnection>();
-		for (var entry : conference.webRtcEndpointMap().entrySet()) {
-			var sendEndpoint = entry.getValue().sendRTCEndpoint();
-			if (isSending) {
-				var receiveLeftEndpoint = createIntermediateEndpoint(webRtcEndpoint, conference.mediaPipeline);
-				var sdpOffer = receiveLeftEndpoint.generateOffer(createReceiveOnlyOfferOptions());
-				entry.getValue().receiveConnectionByParticipantKey.put(
-						participantKey,
-						new ReceiveConnection(receiveLeftEndpoint, sdpOffer, gatherCandidatesReactive(receiveLeftEndpoint)));
+		try {
+			conference.consistencyLock().lock();
+			for (var entry : conference.webRtcEndpointMap().entrySet()) {
+				var sendEndpoint = entry.getValue().sendRTCEndpoint();
+				if (isSending) {
+					var receiveLeftEndpoint = createIntermediateEndpoint(webRtcEndpoint, conference.mediaPipeline);
+					var sdpOffer = receiveLeftEndpoint.generateOffer(createReceiveOnlyOfferOptions());
+					entry.getValue().receiveConnectionByParticipantKey.put(
+							participantKey,
+							new ReceiveConnection(receiveLeftEndpoint, sdpOffer, gatherCandidatesReactive(receiveLeftEndpoint,
+									participantKey + " -> " + entry.getKey())));
+				}
+				if (isReceiving) {
+					var receiveRightEndpoint = createIntermediateEndpoint(sendEndpoint, conference.mediaPipeline);
+					var sdpOffer = receiveRightEndpoint.generateOffer(createReceiveOnlyOfferOptions());
+					receiveConnectionBySipURI.put(
+							entry.getKey(),
+							new ReceiveConnection(receiveRightEndpoint, sdpOffer, gatherCandidatesReactive(receiveRightEndpoint,
+									entry.getKey() + " -> " + participantKey)));
+				}
 			}
-			if (isReceiving) {
-				var receiveRightEndpoint = createIntermediateEndpoint(sendEndpoint, conference.mediaPipeline);
-				var sdpOffer = receiveRightEndpoint.generateOffer(createReceiveOnlyOfferOptions());
-				receiveConnectionBySipURI.put(
-						entry.getKey(),
-						new ReceiveConnection(receiveRightEndpoint, sdpOffer, gatherCandidatesReactive(receiveRightEndpoint)));
-			}
+			conference.webRtcEndpointMap().put(participantKey, new UserMediaContext(webRtcEndpoint, receiveConnectionBySipURI));
 		}
-		conference.webRtcEndpointMap().put(participantKey, new UserMediaContext(webRtcEndpoint, receiveConnectionBySipURI));
-		return new ConferenceJoinResponse(sdpResponse, gatherCandidatesReactive(webRtcEndpoint));
+		finally {
+			conference.consistencyLock.unlock();
+		}
+		return new ConferenceJoinResponse(sdpResponse, gatherCandidatesReactive(webRtcEndpoint, "client -> " + participantKey));
+	}
+
+	@Override
+	public Mono<Void> disconnectFromConference(ConferenceDisconnectRequest conferenceDisconnectRequest) {
+		return Mono.fromCallable(() -> {
+			var conference = getConference(conferenceDisconnectRequest.conferenceId());
+			try {
+				conference.consistencyLock().lock();
+				var participantKey = calculateParticipantKey(conferenceDisconnectRequest);
+				for (var entry : conference.webRtcEndpointMap().entrySet()) {
+					if (entry.getKey().equals(participantKey)) {
+						continue;
+					}
+					entry.getValue().receiveConnectionByParticipantKey().remove(participantKey);
+				}
+				conference.webRtcEndpointMap().remove(participantKey);
+			}
+			finally {
+				conference.consistencyLock().unlock();
+			}
+			return null;
+		});
+	}
+
+	private String calculateParticipantKey(ConferenceDisconnectRequest conferenceDisconnectRequest) {
+		return conferenceDisconnectRequest.sipURI().getURIAsString() + conferenceDisconnectRequest.disambiguator();
 	}
 
 	private String calculateParticipantKey(ConferenceJoinRequest conferenceJoinRequest) {
 		return conferenceJoinRequest.sipURI().getURIAsString() + conferenceJoinRequest.disambiguator();
 	}
 
-	private Flux<String> gatherCandidatesReactive(WebRtcEndpoint webRtcEndpoint) {
-		return Flux.create(sink -> {
+	private Flux<String> gatherCandidatesReactive(WebRtcEndpoint webRtcEndpoint, String endpointName) {
+		return Flux.<String> create(sink -> {
+			LOGGER.info("Gathering ICE candidates... endpoint = {}", endpointName);
 			webRtcEndpoint.addIceCandidateFoundListener(event -> {
-				LOGGER.debug("Ice candidate found {}", event.getCandidate());
+				LOGGER.info("Ice candidate found: endpoint = {} candidate {}", endpointName, event.getCandidate());
 				sink.next(event.getCandidate().getCandidate());
 			});
 			webRtcEndpoint.addIceGatheringDoneListener(event -> {
-				LOGGER.debug("Gathering completed!");
+				LOGGER.info("Gathering completed endpoint = {}", endpointName);
 				sink.complete();
 			});
 			webRtcEndpoint.gatherCandidates();
-		});
+		}).cache();
 	}
 
 	private WebRtcEndpoint create(MediaPipeline mediaPipeline) {
-		var webRtcEndpoint = new WebRtcEndpoint.Builder(mediaPipeline).build();
-		webRtcEndpoint.setStunServerAddress("stun.l.google.com");
-		webRtcEndpoint.setStunServerPort(19302);
-		return webRtcEndpoint;
+		return new WebRtcEndpoint.Builder(mediaPipeline).build();
 	}
 
 	private WebRtcEndpoint createIntermediateEndpoint(WebRtcEndpoint source, MediaPipeline mediaPipeline) {
@@ -126,11 +156,10 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 	}
 
 	private WebRtcEndpoint createEndpointInConference(MediaPipeline mediaPipeline) {
-		var webRtcEndpoint = new WebRtcEndpoint.Builder(mediaPipeline).build();
-		webRtcEndpoint.setStunServerAddress("stun.l.google.com");
-		webRtcEndpoint.setStunServerPort(19302);
-		webRtcEndpoint.gatherCandidates();
-		return webRtcEndpoint;
+		//		webRtcEndpoint.setStunServerAddress("stun.l.google.com");
+//		webRtcEndpoint.setStunServerPort(19302);
+//		webRtcEndpoint.gatherCandidates();
+		return new WebRtcEndpoint.Builder(mediaPipeline).build();
 	}
 
 	@Override
@@ -146,8 +175,10 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		}
 		UserMediaContext userMediaContext = conference.webRtcEndpointMap()
 				.get(referenceURI.getURIAsString());
-		LOGGER.info("Get participants from perspective {} = {}", referenceURI, userMediaContext
-				.receiveConnectionByParticipantKey());
+		if (userMediaContext == null) {
+			return Flux.empty();
+		}
+		LOGGER.info("Get participants from perspective {}", referenceURI);
 		return Flux.fromStream(() -> {
 			LOGGER.info("Participants are now requested");
 			return userMediaContext
@@ -173,9 +204,9 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 				if (receiveConnection == null) {
 					continue;
 				}
-				LOGGER.info("Processing answer for {}", entry.getKey());
-				final String processAnswer = receiveConnection.endpoint().processAnswer(entry.getValue());
-				LOGGER.info("Process answer result = {}", processAnswer);
+//				LOGGER.info("Processing answer for {}", entry.getKey());
+				receiveConnection.endpoint().processAnswer(entry.getValue());
+//				LOGGER.info("Process answer result = {}", processAnswer);
 			}
 			return null;
 		});
@@ -190,9 +221,9 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 			if (receiveConnection == null) {
 				continue;
 			}
-			LOGGER.info("Processing answer for {}", entry.getKey());
-			final String processAnswer = receiveConnection.endpoint().processAnswer(entry.getValue());
-			LOGGER.info("Process answer result = {}", processAnswer);
+//			LOGGER.info("Processing answer for {}", entry.getKey());
+			receiveConnection.endpoint().processAnswer(entry.getValue());
+//			LOGGER.info("Process answer result = {}", processAnswer);
 		}
 	}
 
@@ -205,7 +236,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		return conference;
 	}
 
-	private record Conference(MediaPipeline mediaPipeline, Map<String, UserMediaContext> webRtcEndpointMap) {
+	private record Conference(MediaPipeline mediaPipeline, Map<String, UserMediaContext> webRtcEndpointMap, Lock consistencyLock) {
 	}
 
 	private record ReceiveConnection(WebRtcEndpoint endpoint, String sdpOffer, Flux<String> iceCandidates) {

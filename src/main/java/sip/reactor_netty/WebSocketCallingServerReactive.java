@@ -30,8 +30,10 @@ import sip.reactor_netty.request_handling.ConfirmParticipantOffersSipReactiveRes
 import sip.reactor_netty.request_handling.CreateConferenceReactiveSipRequestHandler;
 import sip.reactor_netty.request_handling.DelegatingReactiveSipMessageHandler;
 import sip.reactor_netty.request_handling.JoinConferenceReactiveSipRequestHandler;
+import sip.reactor_netty.request_handling.LeaveConferenceReactiveSipRequestHandler;
 import sip.reactor_netty.request_handling.ReactiveRegisterRequestHandler;
 import sip.reactor_netty.request_handling.SubscribeToConferenceUpdatesReactiveSipRequestHandler;
+import sip.reactor_netty.request_handling.UnsubscribeToConferenceUpdatesReactiveSipRequestHandler;
 import sip.reactor_netty.service.ConferenceEventDialogService;
 import sip.reactor_netty.service.InMemoryReactiveBindingStorage;
 import sip.reactor_netty.service.ReactiveConferenceSubscribersContext;
@@ -45,6 +47,7 @@ public class WebSocketCallingServerReactive {
 	private static final String REGISTER = "REGISTER";
 	private static final String INVITE = "INVITE";
 	private static final String SUBSCRIBE = "SUBSCRIBE";
+	private static final String BYE = "BYE";
 	private static final String CONFERENCE_FACTORY = "conference-factory";
 	private static final String CONFERENCE_ID_PREFIX = "conference-";
 	private static final Gson GSON = new Gson();
@@ -84,10 +87,20 @@ public class WebSocketCallingServerReactive {
 										dialogService
 								)
 						),
-						SUBSCRIBE, List.of(new SubscribeToConferenceUpdatesReactiveSipRequestHandler(reactiveConferenceSubscribersContext))
+						SUBSCRIBE, List.of(
+								new SubscribeToConferenceUpdatesReactiveSipRequestHandler(reactiveConferenceSubscribersContext),
+								new UnsubscribeToConferenceUpdatesReactiveSipRequestHandler(reactiveConferenceSubscribersContext)
+						),
+						BYE, List.of(
+								new LeaveConferenceReactiveSipRequestHandler(
+										mediaConferenceService,
+										reactiveConferenceSubscribersContext
+								))
 				),
 				Map.of(
-						NOTIFY, List.of(new ConfirmParticipantOffersSipReactiveResponseHandler(mediaConferenceService, deserializer))
+						NOTIFY, List.of(
+								new ConfirmParticipantOffersSipReactiveResponseHandler(mediaConferenceService, deserializer)
+						)
 				)
 		);
 
@@ -108,13 +121,11 @@ public class WebSocketCallingServerReactive {
 										.get("/path/{param}",
 												(request, response) -> response.sendString(Mono.just(request.param("param"))))
 										.ws("/", (wsInbound, wsOutbound) -> {
-
 											wsInbound.receiveCloseStatus()
 													.subscribeOn(Schedulers.parallel())
 													.subscribe(closeStatus ->
 															LOGGER.info("Connection closed with code = {} reason = {}",
 																	closeStatus.code(), closeStatus.reasonText()));
-
 											return wsInbound
 													.aggregateFrames()
 													.receiveFrames()

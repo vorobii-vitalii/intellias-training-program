@@ -1,8 +1,5 @@
 package sip.reactor_netty.request_handling;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
 import reactor.core.publisher.Flux;
 import sip.SipMessage;
@@ -10,13 +7,12 @@ import sip.SipRequest;
 import sip.reactor_netty.WSOutbound;
 import sip.reactor_netty.service.ReactiveConferenceSubscribersContext;
 
-public class SubscribeToConferenceUpdatesReactiveSipRequestHandler implements ReactiveMessageHandler<String, SipRequest, SipMessage, WSOutbound> {
-	private static final Logger LOGGER = LoggerFactory.getLogger(SubscribeToConferenceUpdatesReactiveSipRequestHandler.class);
+public class UnsubscribeToConferenceUpdatesReactiveSipRequestHandler implements ReactiveMessageHandler<String, SipRequest, SipMessage, WSOutbound> {
 	private static final String SUBSCRIBE = "SUBSCRIBE";
 
 	private final ReactiveConferenceSubscribersContext reactiveConferenceSubscribersContext;
 
-	public SubscribeToConferenceUpdatesReactiveSipRequestHandler(
+	public UnsubscribeToConferenceUpdatesReactiveSipRequestHandler(
 			ReactiveConferenceSubscribersContext reactiveConferenceSubscribersContext
 	) {
 		this.reactiveConferenceSubscribersContext = reactiveConferenceSubscribersContext;
@@ -24,10 +20,7 @@ public class SubscribeToConferenceUpdatesReactiveSipRequestHandler implements Re
 
 	@Override
 	public Flux<? extends SipMessage> handleMessage(SipRequest request, WSOutbound context) {
-		return reactiveConferenceSubscribersContext.subscribeToConferenceUpdates(request)
-				.doOnComplete(() -> {
-					LOGGER.info("Consumer wont receive updates for conference any more...");
-				});
+		return reactiveConferenceSubscribersContext.unsubscribeFromConferenceUpdates(request);
 	}
 
 	@Override
@@ -37,6 +30,6 @@ public class SubscribeToConferenceUpdatesReactiveSipRequestHandler implements Re
 
 	@Override
 	public boolean canHandle(SipRequest sipRequest) {
-		return sipRequest.headers().getExpires() > 0;
+		return sipRequest.headers().getExpires() == 0;
 	}
 }
