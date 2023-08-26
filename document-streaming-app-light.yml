@@ -53,7 +53,33 @@ services:
       - "COLLECTOR_ZIPKIN_HTTP_PORT=9411"
       - "COLLECTOR_OTLP_ENABLED=true"
 
-  ## WebSocket servers
+  ## WebSocket server
+  documents-app-rsocket:
+    image: my-repo/document-editing-server-rsocket:1.0-SNAPSHOT
+    ports:
+      - "8002:8000"
+      - "8007:8005"
+      - "9012:9010"
+    restart: always
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://0.0.0.0:12201"
+        tag: "document-streaming-app-rsocket"
+    depends_on:
+      - mongo1
+      - document-storage-service
+      - jaeger
+    networks:
+      - net
+    environment:
+      - "MONGO_URL=mongodb://mongo1:30001/?replicaSet=my-replica-set"
+      - "DOCUMENT_STORAGE_SERVICE_URL=document-storage-service:9000"
+      - "PORT=8000"
+      - "JAEGER_ENDPOINT=http://jaeger:4317"
+      - "HOST=0.0.0.0"
+
+  ## WebSocket server
   http-server:
     image: my-repo/http-server:1.0-SNAPSHOT
     ports:
