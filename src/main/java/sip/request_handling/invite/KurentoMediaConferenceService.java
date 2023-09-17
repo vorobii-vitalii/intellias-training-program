@@ -16,6 +16,8 @@ import org.kurento.client.WebRtcEndpoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import sip.SipURI;
@@ -41,8 +43,9 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		return offerOptions;
 	}
 
+	@WithSpan
 	@Override
-	public Mono<Void> createNewConferenceReactive(String conferenceId) {
+	public Mono<Void> createNewConferenceReactive(@SpanAttribute("conferenceId") String conferenceId) {
 		return Mono.create(sink -> {
 			LOGGER.info("Creating new media pipeline for new conference {}", conferenceId);
 			var mediaPipeline = kurentoClient.createMediaPipeline();
@@ -53,14 +56,16 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		});
 	}
 
+	@WithSpan
 	@Override
-	public void createNewConference(String conferenceId) {
+	public void createNewConference(@SpanAttribute("conferenceId") String conferenceId) {
 		var mediaPipeline = kurentoClient.createMediaPipeline();
 		// TODO: Call this function when conference ends
 		// mediaPipeline.release();
 		mediaPipelineByConferenceId.put(conferenceId, new Conference(mediaPipeline, new ConcurrentHashMap<>(), new ReentrantLock(true)));
 	}
 
+	@WithSpan
 	@Override
 	public ConferenceJoinResponse connectToConferenceReactive(ConferenceJoinRequest conferenceJoinRequest) {
 		var conference = getConference(conferenceJoinRequest.conferenceId());
@@ -99,6 +104,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		return new ConferenceJoinResponse(sdpResponse, gatherCandidatesReactive(webRtcEndpoint, "client -> " + participantKey));
 	}
 
+	@WithSpan
 	@Override
 	public Mono<Void> disconnectFromConference(ConferenceDisconnectRequest conferenceDisconnectRequest) {
 		return Mono.fromCallable(() -> {
@@ -167,8 +173,12 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		return mediaPipelineByConferenceId.containsKey(conferenceId);
 	}
 
+	@WithSpan
 	@Override
-	public Flux<Participant> getParticipantsFromPerspectiveOf(String conferenceId, SipURI referenceURI) {
+	public Flux<Participant> getParticipantsFromPerspectiveOf(
+			@SpanAttribute("conferenceId") String conferenceId,
+			@SpanAttribute("sipURI") SipURI referenceURI
+	) {
 		var conference = mediaPipelineByConferenceId.get(conferenceId);
 		if (conference == null) {
 			return Flux.empty();
@@ -193,6 +203,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		});
 	}
 
+	@WithSpan
 	@Override
 	public Mono<Void> processAnswersReactive(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerByParticipantKey) {
 		return Mono.fromCallable(() -> {
@@ -212,6 +223,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 		});
 	}
 
+	@WithSpan
 	@Override
 	public void processAnswers(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerByParticipantKey) {
 		var conference = getConference(conferenceId);
@@ -221,9 +233,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 			if (receiveConnection == null) {
 				continue;
 			}
-//			LOGGER.info("Processing answer for {}", entry.getKey());
 			receiveConnection.endpoint().processAnswer(entry.getValue());
-//			LOGGER.info("Process answer result = {}", processAnswer);
 		}
 	}
 

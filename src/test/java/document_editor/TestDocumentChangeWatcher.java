@@ -111,7 +111,7 @@ class TestDocumentChangeWatcher {
 						'b'
 				)
 
-		), false)));
+		), false, "event")));
 		verifyNoMoreInteractions(serializer);
 	}
 

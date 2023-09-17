@@ -3,6 +3,9 @@ package document_editor.netty_reactor.request_handling.impl;
 import java.util.List;
 import java.util.function.Supplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.example.document.storage.Change;
 import com.example.document.storage.ChangesRequest;
 import com.example.document.storage.ChangesResponse;
@@ -20,6 +23,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 public class EditDocumentReactiveRequestHandler implements ReactiveMessageHandler<RequestType, ClientRequest, Response, Object> {
+	private static final Logger LOGGER = LoggerFactory.getLogger(EditDocumentReactiveRequestHandler.class);
 	private final Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> service;
 
 	public EditDocumentReactiveRequestHandler(Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> service) {
@@ -32,7 +36,7 @@ public class EditDocumentReactiveRequestHandler implements ReactiveMessageHandle
 			var changes = request.payload().stream()
 					.map(this::calculateChanges)
 					.toList();
-
+			LOGGER.info("Applying changes {}", changes);
 			return RxJava2Adapter.singleToMono(applyChanges(changes))
 					.map(List::of)
 					.flatMapMany(Flux::fromIterable)

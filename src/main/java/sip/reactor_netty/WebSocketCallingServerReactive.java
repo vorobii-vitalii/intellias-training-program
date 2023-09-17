@@ -57,7 +57,7 @@ public class WebSocketCallingServerReactive {
 		var sipMessageReader = new SipMessageReader();
 
 		var reactiveBindingStorage = new InMemoryReactiveBindingStorage();
-		var kurentoClient = KurentoClient.create();
+		var kurentoClient = KurentoClient.create(System.getenv("KURENTO_URI"));
 		var mediaConferenceService = new KurentoMediaConferenceService(kurentoClient);
 		var dialogService = new InMemoryInviteDialogService();
 

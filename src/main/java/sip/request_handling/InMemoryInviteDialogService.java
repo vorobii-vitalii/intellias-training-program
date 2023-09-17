@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.Nonnull;
 
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import sip.CommandSequence;
 import sip.ContactSet;
 import sip.SipRequest;
@@ -27,6 +28,7 @@ public class InMemoryInviteDialogService implements DialogService<SipSessionDesc
 
 	private final Map<String, DialogContext> dialogsMap = new ConcurrentHashMap<>();
 
+	@WithSpan
 	@Override
 	public SipResponse establishDialog(SipRequest sessionEstablishmentRequest, SipSessionDescription sipSessionDescription) {
 		var callId = sessionEstablishmentRequest.headers().getCallId();
@@ -50,6 +52,7 @@ public class InMemoryInviteDialogService implements DialogService<SipSessionDesc
 				sipSessionDescription.description().getBytes(StandardCharsets.UTF_8));
 	}
 
+	@WithSpan
 	@Override
 	public SipRequest makeDialogRequest(DialogRequest dialogRequest) {
 		var dialogContext = getDialogContext(dialogRequest.callId());

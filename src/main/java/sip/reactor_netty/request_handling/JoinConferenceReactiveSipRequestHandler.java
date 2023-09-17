@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import reactor.core.publisher.Flux;
 import sip.FullSipURI;
 import sip.SipMediaType;
@@ -46,6 +47,7 @@ public class JoinConferenceReactiveSipRequestHandler implements ReactiveMessageH
 		this.dialogService = dialogService;
 	}
 
+	@WithSpan
 	@Override
 	public Flux<? extends SipMessage> handleMessage(SipRequest sipRequest, WSOutbound context) {
 		LOGGER.info("Received request to join conference {}", sipRequest);

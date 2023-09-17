@@ -66,6 +66,12 @@
             <version>${rsocket.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-instrumentation-annotations</artifactId>
+            <version>1.29.0</version>
+        </dependency>
+
 
         <!-- https://mvnrepository.com/artifact/io.opentelemetry.instrumentation/opentelemetry-netty-4.1 -->
         <dependency>
@@ -386,6 +392,21 @@
                 <artifactId>dockerfile-maven-plugin</artifactId>
                 <version>1.4.13</version>
                 <executions>
+                    <execution>
+                        <id>websocket-calling-server</id>
+                        <goals>
+                            <goal>build</goal>
+                            <goal>push</goal>
+                        </goals>
+                        <configuration>
+                            <repository>my-repo/websocket-calling-server</repository>
+                            <dockerfile>WebSocketCallingServerDockerfile</dockerfile>
+                            <tag>${project.version}</tag>
+                            <buildArgs>
+                                <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>
+                            </buildArgs>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>http-server</id>
                         <goals>

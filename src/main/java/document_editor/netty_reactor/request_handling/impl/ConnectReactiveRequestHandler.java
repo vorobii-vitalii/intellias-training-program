@@ -41,10 +41,11 @@ public class ConnectReactiveRequestHandler implements ReactiveMessageHandler<Req
 	public Flux<Response> handleMessage(ClientRequest requestMono, Object context) {
 		return Mono.just(requestMono).flatMapMany(request -> Flux.concat(
 				Mono.just(new Response(ResponseType.ON_CONNECT, new ConnectDocumentReply(connectionIdProvider.get()))),
-				streamOfDocument(request),
-				Mono.just(new Response(ResponseType.CHANGES, new Changes(List.of(), true))),
-				reactiveDocumentChangesPublisher.listenForChanges(HttpServer.DOCUMENT_ID)
-						.map(change -> new Response(ResponseType.CHANGES, new Changes(List.of(change), false)))
+				(streamOfDocument(request).concatWith(Mono.just(new Response(ResponseType.CHANGES, new Changes(List.of(), true, "snapshot")))))
+						.mergeWith(
+								reactiveDocumentChangesPublisher
+										.listenForChanges(HttpServer.DOCUMENT_ID)
+										.map(change -> new Response(ResponseType.CHANGES, new Changes(List.of(change), false, "event"))))
 		));
 	}
 
@@ -56,7 +57,7 @@ public class ConnectReactiveRequestHandler implements ReactiveMessageHandler<Req
 		return RxJava2Adapter.flowableToFlux(service.get().fetchDocumentContent(fetchDocumentContentRequest))
 				.map(v -> new Response(
 						ResponseType.CHANGES,
-						new Changes(computeChanges(v), false)
+						new Changes(computeChanges(v), false, "snapshot")
 				));
 	}
 

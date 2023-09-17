@@ -105,7 +105,7 @@ public class DocumentChangeWatcher implements Runnable {
 	}
 
 	private Response getResponse(DocumentChangedEvents documentChangedEvents) {
-		return new Response(ResponseType.CHANGES, new Changes(calculateChanges(documentChangedEvents), false));
+		return new Response(ResponseType.CHANGES, new Changes(calculateChanges(documentChangedEvents), false, "event"));
 	}
 
 	private List<Change> calculateChanges(DocumentChangedEvents documentChangedEvents) {

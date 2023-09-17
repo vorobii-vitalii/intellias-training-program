@@ -10,6 +10,8 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
@@ -48,11 +50,13 @@ public class ReactiveConferenceSubscribersContext {
 		this.serializer = serializer;
 	}
 
-	public void notifyParticipantsChanged(String conferenceId) {
+	@WithSpan
+	public void notifyParticipantsChanged(@SpanAttribute("conferenceId") String conferenceId) {
 		// TODO: Check result of emit next
 		createConferenceSinkIfNeeded(conferenceId).tryEmitNext(new ParticipantsChangedEvent());
 	}
 
+	@WithSpan
 	public Flux<SipMessage> unsubscribeFromConferenceUpdates(SipRequest unsubscribeRequest) {
 		var conferenceId = getConferenceId(unsubscribeRequest);
 		var callId = unsubscribeRequest.headers().getCallId();
@@ -102,6 +106,7 @@ public class ReactiveConferenceSubscribersContext {
 						})) ;
 	}
 
+	@WithSpan
 	private Flux<SipMessage> getCurrentParticipantsMessage(SipRequest conferenceSubscribeRequest) {
 		var subscriptionRequester = conferenceSubscribeRequest.headers().getFrom().toCanonicalForm().sipURI();
 		LOGGER.info("Participants changed from perspective of {}", subscriptionRequester);

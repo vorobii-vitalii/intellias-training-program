@@ -165,7 +165,7 @@ public class NewConnectionEventHandler implements EventHandler<NewConnectionDocu
                                 try {
                                     message.setPayload(serializer.serialize(new Response(
                                             ResponseType.CHANGES,
-                                            new Changes(changes, isEnd)
+                                            new Changes(changes, isEnd, "snapshot")
                                     )));
                                 }
                                 catch (IOException e) {

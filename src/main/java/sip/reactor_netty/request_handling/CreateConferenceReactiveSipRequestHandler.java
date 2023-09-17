@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import sip.AddressOfRecord;
@@ -45,6 +46,7 @@ public class CreateConferenceReactiveSipRequestHandler implements ReactiveMessag
 		this.mediaConferenceService = mediaConferenceService;
 	}
 
+	@WithSpan
 	@Override
 	public Flux<? extends SipMessage> handleMessage(SipRequest request, WSOutbound context) {
 		var conferenceId = conferenceIdGenerator.get();
@@ -65,6 +67,7 @@ public class CreateConferenceReactiveSipRequestHandler implements ReactiveMessag
 		return conferenceFactoryAddressOfRecord.test(sipRequest.headers().getTo());
 	}
 
+	@WithSpan
 	private SipResponse createRedirectResponse(SipRequest sipRequest, String conferenceId) {
 		var originalTo = sipRequest.headers().getTo();
 		var sipResponseLine =
