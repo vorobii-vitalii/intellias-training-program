@@ -36,7 +36,7 @@ class TestFullSipURI {
 						new FullSipURI(
 								"sip",
 								new Credentials("alice", null),
-								new Address("example.com", 5060),
+								new Address("example.com", null),
 								Map.of("transport", "tcp", "user", "phone"),
 								Map.of()
 						)
@@ -46,7 +46,7 @@ class TestFullSipURI {
 						new FullSipURI(
 								"sip",
 								new Credentials("alice", "password"),
-								new Address("example.com", 5060),
+								new Address("example.com", null),
 								Map.of("transport", "tcp", "user", "phone"),
 								Map.of()
 						)

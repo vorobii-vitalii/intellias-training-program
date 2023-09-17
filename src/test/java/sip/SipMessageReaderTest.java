@@ -45,7 +45,7 @@ class SipMessageReaderTest {
 						new FullSipURI(
 										"sip",
 										new Credentials("alice", null),
-										new Address("atlanta.com", 5060),
+										new Address("atlanta.com", null),
 										Map.of(),
 										Map.of()
 						),
@@ -56,7 +56,7 @@ class SipMessageReaderTest {
 						new FullSipURI(
 										"sip",
 										new Credentials("bob", null),
-										new Address("biloxi.com", 5060),
+										new Address("biloxi.com", null),
 										Map.of(),
 										Map.of()
 						),
@@ -67,11 +67,11 @@ class SipMessageReaderTest {
 		sipRequestHeaders.setCommandSequence(new CommandSequence(314159, "INVITE"));
 		sipRequestHeaders.setContactList(new ContactSet(Set.of(
 				new AddressOfRecord(
-						"Anonymous",
+						"",
 						new FullSipURI(
 								"sip",
 								new Credentials("alice", null),
-								new Address("pc33.atlanta.com", 5060),
+								new Address("pc33.atlanta.com", null),
 								Map.of(),
 								Map.of()
 						),
@@ -86,7 +86,7 @@ class SipMessageReaderTest {
 														new FullSipURI(
 																		"sip",
 																		new Credentials("bob", null),
-																		new Address("biloxi.com", 5060),
+																		new Address("biloxi.com", null),
 																		Map.of(),
 																		Map.of()
 														),

@@ -11,18 +11,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class TestAddressOfRecord {
-	private static final String ANONYMOUS = "Anonymous";
 
 	public static Object[][] parseTestParameters() {
 		return new Object[][] {
 				{
 						"<sip:c8oqz84zk7z@privacy.org>;tag=hyh8",
 						new AddressOfRecord(
-								ANONYMOUS,
+								"",
 								new FullSipURI(
 										"sip",
 										new Credentials("c8oqz84zk7z", null),
-										new Address("privacy.org", 5060),
+										new Address("privacy.org", null),
 										Map.of(),
 										Map.of()),
 								Map.of("tag", "hyh8")
@@ -35,7 +34,7 @@ class TestAddressOfRecord {
 								new FullSipURI(
 										"sip",
 										new Credentials("c8oqz84zk7z", null),
-										new Address("privacy.org", 5060),
+										new Address("privacy.org", null),
 										Map.of("param", "val"),
 										Map.of("querParam", "val")),
 								Map.of("tag", "hyh8")
@@ -48,7 +47,7 @@ class TestAddressOfRecord {
 								new FullSipURI(
 										"sip",
 										new Credentials("c8oqz84zk7z", null),
-										new Address("privacy.org", 5060),
+										new Address("privacy.org", null),
 										Map.of("param", "val"),
 										Map.of("queryParam", "val")
 								),

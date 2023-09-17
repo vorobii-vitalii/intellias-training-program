@@ -1,24 +1,25 @@
 package websocket.handler;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import http.domain.HTTPMethod;
 import http.domain.HTTPRequest;
 import http.domain.HTTPRequestLine;
 import http.domain.HTTPVersion;
 import http.protocol_change.ProtocolChangeContext;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import tcp.server.SocketConnection;
 import util.Constants;
 import websocket.endpoint.WebSocketEndpoint;
 import websocket.endpoint.WebSocketEndpointProvider;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class WebSocketProtocolChangerTest {
@@ -27,8 +28,12 @@ class WebSocketProtocolChangerTest {
 	@Mock
 	WebSocketEndpointProvider webSocketEndpointProvider;
 
-	@InjectMocks
 	WebSocketProtocolChanger webSocketProtocolChanger;
+
+	@BeforeEach
+	void init() {
+		webSocketProtocolChanger = new WebSocketProtocolChanger(webSocketEndpointProvider);
+	}
 
 	@Test
 	void changeProtocol() {

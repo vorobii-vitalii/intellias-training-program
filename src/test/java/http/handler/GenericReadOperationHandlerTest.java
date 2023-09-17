@@ -84,7 +84,7 @@ class GenericReadOperationHandlerTest {
 		when(serverAttachment.bufferContext()).thenReturn(bufferContext);
 		when(serverAttachment.getChannel()).thenReturn(socketChannel);
 		when(socketMessageReader.readMessage(eq(bufferContext), eq(socketChannel), any()))
-				.thenReturn(HTTP_REQUEST);
+				.thenReturn(HTTP_REQUEST).thenReturn(null);
 		httpReadOperationHandler.accept(selectionKey);
 		verify(messageProducer).produce(argThat(request -> request.request().equals(HTTP_REQUEST)));
 	}
