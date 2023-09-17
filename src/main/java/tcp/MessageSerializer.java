@@ -6,8 +6,8 @@ import tcp.server.EventEmitter;
 import util.Serializable;
 
 public interface MessageSerializer {
-	public static final EventEmitter NOOP = e -> {
-	};
+	EventEmitter NOOP = e -> {};
+
 	ByteBuffer serialize(Serializable serializable, EventEmitter eventEmitter);
 
 	default ByteBuffer serialize(Serializable serializable) {

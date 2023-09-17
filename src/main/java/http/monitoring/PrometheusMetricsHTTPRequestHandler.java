@@ -1,4 +1,4 @@
-package monitoring;
+package http.monitoring;
 
 import java.nio.charset.StandardCharsets;
 
@@ -20,11 +20,6 @@ public class PrometheusMetricsHTTPRequestHandler implements HTTPRequestHandlerSt
 	private final PrometheusMeterRegistry prometheusRegistry;
 	private final String prometheusEndpoint;
 
-	@Override
-	public boolean supports(HTTPRequest httpRequest) {
-		return httpRequest.getHttpRequestLine().path().equals(prometheusEndpoint);
-	}
-
 	public PrometheusMetricsHTTPRequestHandler(PrometheusMeterRegistry prometheusRegistry, String prometheusEndpoint) {
 		this.prometheusRegistry = prometheusRegistry;
 		this.prometheusEndpoint = prometheusEndpoint;
@@ -39,6 +34,11 @@ public class PrometheusMetricsHTTPRequestHandler implements HTTPRequestHandlerSt
 				new HTTPHeaders().addSingleHeader(Constants.HTTPHeaders.CONTENT_LENGTH, String.valueOf(scrapeBytes.length)),
 				scrapeBytes
 		);
+	}
+
+	@Override
+	public boolean supports(HTTPRequest httpRequest) {
+		return httpRequest.getHttpRequestLine().path().equals(prometheusEndpoint);
 	}
 
 	@Override

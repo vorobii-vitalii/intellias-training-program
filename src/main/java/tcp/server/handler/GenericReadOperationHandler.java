@@ -20,6 +20,7 @@ import tcp.server.reader.exception.ParseException;
 
 public class GenericReadOperationHandler<T> implements Consumer<SelectionKey> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(GenericReadOperationHandler.class);
+
 	private final SocketMessageReader<T> socketMessageReader;
 	private final MessageProducer<NetworkRequest<T>> messageProducer;
 	private final BiConsumer<SelectionKey, Throwable> onError;

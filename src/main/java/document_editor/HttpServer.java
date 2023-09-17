@@ -95,7 +95,7 @@ import io.opentelemetry.semconv.resource.attributes.ResourceAttributes;
 import message_passing.DisruptorMessageProducer;
 import message_passing.MessageProducer;
 import message_passing.QueueMessageProducer;
-import monitoring.PrometheusMetricsHTTPRequestHandler;
+import http.monitoring.PrometheusMetricsHTTPRequestHandler;
 import request_handler.HashBasedLoadBalancer;
 import request_handler.NetworkRequest;
 import request_handler.RequestProcessor;

@@ -95,7 +95,7 @@ import websocket.handler.WebSocketProtocolChanger;
 import websocket.reader.WebSocketMessageReader;
 
 public class WebSocketCallingServer {
-	private static final Logger LOGGER = LoggerFactory.getLogger(CallingServer.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(WebSocketCallingServer.class);
 	public static final int BUFFER_EXPIRATION_TIME_MILLIS = 10_000;
 	public static final int REQUEST_QUEUE_CAPACITY = 10_000;
 	public static final SimpleMeterRegistry METER_REGISTRY = new SimpleMeterRegistry();
