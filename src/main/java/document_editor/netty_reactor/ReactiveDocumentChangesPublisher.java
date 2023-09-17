@@ -26,7 +26,8 @@ public class ReactiveDocumentChangesPublisher {
 	public ReactiveDocumentChangesPublisher(Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> documentStorageService) {
 		this.documentStorageService = documentStorageService;
 		documentChangedEventFlux = createDocumentChangedEventPublisher(
-				SubscribeForDocumentChangesRequest.newBuilder().setBatchSize(BATCH_SIZE).setBatchTimeout(BATCH_TIMEOUT).build());
+				SubscribeForDocumentChangesRequest.newBuilder().setBatchSize(BATCH_SIZE).setBatchTimeout(BATCH_TIMEOUT).build())
+				.share();
 	}
 
 	private Flux<DocumentChangedEvent> createDocumentChangedEventPublisher(SubscribeForDocumentChangesRequest request) {
@@ -44,7 +45,6 @@ public class ReactiveDocumentChangesPublisher {
 							.setResumeToken(lastToken.get())
 							.build());
 				});
-
 	}
 
 	public Flux<Change> listenForChanges(int documentId) {

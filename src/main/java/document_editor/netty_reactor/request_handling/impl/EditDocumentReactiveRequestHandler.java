@@ -65,7 +65,6 @@ public class EditDocumentReactiveRequestHandler implements ReactiveMessageHandle
 		return builder.build();
 	}
 
-
 	@Override
 	public RequestType getHandledMessageType() {
 		return RequestType.CHANGES;

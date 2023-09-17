@@ -24,28 +24,32 @@ import reactor.core.publisher.Mono;
 
 public class ConnectReactiveRequestHandler implements ReactiveMessageHandler<RequestType, ClientRequest, Response, Object> {
 	private final Supplier<Integer> connectionIdProvider;
-	private final Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> service;
+	private final Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> documentStorageServiceProvider;
 	private final ReactiveDocumentChangesPublisher reactiveDocumentChangesPublisher;
 
 	public ConnectReactiveRequestHandler(
 			Supplier<Integer> connectionIdProvider,
-			Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> service,
+			Supplier<RxDocumentStorageServiceGrpc.RxDocumentStorageServiceStub> documentStorageServiceProvider,
 			ReactiveDocumentChangesPublisher reactiveDocumentChangesPublisher
 	) {
 		this.connectionIdProvider = connectionIdProvider;
-		this.service = service;
+		this.documentStorageServiceProvider = documentStorageServiceProvider;
 		this.reactiveDocumentChangesPublisher = reactiveDocumentChangesPublisher;
 	}
 
 	@Override
-	public Flux<Response> handleMessage(ClientRequest requestMono, Object context) {
-		return Mono.just(requestMono).flatMapMany(request -> Flux.concat(
-				Mono.just(new Response(ResponseType.ON_CONNECT, new ConnectDocumentReply(connectionIdProvider.get()))),
-				(streamOfDocument(request).concatWith(Mono.just(new Response(ResponseType.CHANGES, new Changes(List.of(), true, "snapshot")))))
-						.mergeWith(
-								reactiveDocumentChangesPublisher
-										.listenForChanges(HttpServer.DOCUMENT_ID)
-										.map(change -> new Response(ResponseType.CHANGES, new Changes(List.of(change), false, "event"))))
+	public Flux<Response> handleMessage(ClientRequest clientRequest, Object context) {
+		return Mono.just(clientRequest).flatMapMany(request -> Flux.concat(
+				Mono.just(new Response(
+						ResponseType.ON_CONNECT,
+						new ConnectDocumentReply(connectionIdProvider.get())
+				)),
+				(streamOfDocument(request).concatWith(Mono.just(
+						new Response(ResponseType.CHANGES, new Changes(List.of(), true, "snapshot"))
+				))).mergeWith(
+						reactiveDocumentChangesPublisher
+								.listenForChanges(HttpServer.DOCUMENT_ID)
+								.map(change -> new Response(ResponseType.CHANGES, new Changes(List.of(change), false, "event"))))
 		));
 	}
 
@@ -54,7 +58,7 @@ public class ConnectReactiveRequestHandler implements ReactiveMessageHandler<Req
 				.setDocumentId(HttpServer.DOCUMENT_ID)
 				.setBatchSize(clientRequest.batchSize())
 				.build();
-		return RxJava2Adapter.flowableToFlux(service.get().fetchDocumentContent(fetchDocumentContentRequest))
+		return RxJava2Adapter.flowableToFlux(documentStorageServiceProvider.get().fetchDocumentContent(fetchDocumentContentRequest))
 				.map(v -> new Response(
 						ResponseType.CHANGES,
 						new Changes(computeChanges(v), false, "snapshot")
@@ -66,7 +70,7 @@ public class ConnectReactiveRequestHandler implements ReactiveMessageHandler<Req
 				.stream()
 				.map(doc -> new Change(
 						doc.getCharId(),
-						doc.getParentCharId(),
+						doc.hasParentCharId() ? doc.getParentCharId() : null,
 						doc.getIsRight(),
 						doc.getDisambiguator(),
 						doc.hasCharacter() ? ((char) doc.getCharacter()) : null
