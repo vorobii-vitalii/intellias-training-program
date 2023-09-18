@@ -8,14 +8,13 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
+import request_handler.ReactiveMessageHandler;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import sip.AddressOfRecord;
 import sip.ContactSet;
 import sip.Credentials;
-import sip.FullSipURI;
 import sip.SipMessage;
 import sip.SipRequest;
 import sip.SipResponse;
@@ -48,7 +47,7 @@ public class CreateConferenceReactiveSipRequestHandler implements ReactiveMessag
 
 	@WithSpan
 	@Override
-	public Flux<? extends SipMessage> handleMessage(SipRequest request, WSOutbound context) {
+	public Flux<SipResponse> handleMessage(SipRequest request, WSOutbound context) {
 		var conferenceId = conferenceIdGenerator.get();
 		return mediaConferenceService.createNewConferenceReactive(conferenceId)
 				.thenMany(Mono.fromCallable(() -> {

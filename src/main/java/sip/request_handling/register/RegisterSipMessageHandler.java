@@ -18,7 +18,6 @@ import sip.SipStatusCode;
 import sip.Via;
 import sip.request_handling.SipRequestHandler;
 import tcp.MessageSerializer;
-import tcp.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 

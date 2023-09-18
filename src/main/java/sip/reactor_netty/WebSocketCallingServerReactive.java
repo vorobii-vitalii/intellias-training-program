@@ -24,7 +24,6 @@ import reactor.netty.http.server.HttpServer;
 import reactor.netty.http.server.WebsocketServerSpec;
 import serialization.JacksonDeserializer;
 import serialization.Serializer;
-import sip.FullSipURI;
 import sip.SipMessageReader;
 import sip.reactor_netty.request_handling.ConfirmParticipantOffersSipReactiveResponseHandler;
 import sip.reactor_netty.request_handling.CreateConferenceReactiveSipRequestHandler;
@@ -33,10 +32,10 @@ import sip.reactor_netty.request_handling.JoinConferenceReactiveSipRequestHandle
 import sip.reactor_netty.request_handling.LeaveConferenceReactiveSipRequestHandler;
 import sip.reactor_netty.request_handling.ReactiveRegisterRequestHandler;
 import sip.reactor_netty.request_handling.SubscribeToConferenceUpdatesReactiveSipRequestHandler;
-import sip.reactor_netty.request_handling.UnsubscribeToConferenceUpdatesReactiveSipRequestHandler;
-import sip.reactor_netty.service.ConferenceEventDialogService;
-import sip.reactor_netty.service.InMemoryReactiveBindingStorage;
-import sip.reactor_netty.service.ReactiveConferenceSubscribersContext;
+import sip.reactor_netty.request_handling.UnsubscribeFromConferenceUpdatesReactiveSipRequestHandler;
+import sip.reactor_netty.service.impl.ConferenceEventDialogService;
+import sip.reactor_netty.service.impl.InMemoryReactiveBindingStorage;
+import sip.reactor_netty.service.impl.ReactiveConferenceSubscribersContext;
 import sip.request_handling.InMemoryInviteDialogService;
 import sip.request_handling.invite.KurentoMediaConferenceService;
 import util.Pair;
@@ -89,7 +88,7 @@ public class WebSocketCallingServerReactive {
 						),
 						SUBSCRIBE, List.of(
 								new SubscribeToConferenceUpdatesReactiveSipRequestHandler(reactiveConferenceSubscribersContext),
-								new UnsubscribeToConferenceUpdatesReactiveSipRequestHandler(reactiveConferenceSubscribersContext)
+								new UnsubscribeFromConferenceUpdatesReactiveSipRequestHandler(reactiveConferenceSubscribersContext)
 						),
 						BYE, List.of(
 								new LeaveConferenceReactiveSipRequestHandler(

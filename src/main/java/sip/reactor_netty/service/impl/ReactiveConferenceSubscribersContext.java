@@ -1,7 +1,6 @@
-package sip.reactor_netty.service;
+package sip.reactor_netty.service.impl;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,17 +11,14 @@ import org.slf4j.LoggerFactory;
 
 import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
-import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 import serialization.Serializer;
-import sip.FullSipURI;
 import sip.SipMediaType;
 import sip.SipMessage;
 import sip.SipRequest;
 import sip.SipRequestHeaders;
-import sip.request_handling.DialogRequest;
 import sip.request_handling.NewEventRequest;
 import sip.request_handling.invite.MediaConferenceService;
 import sip.request_handling.invite.ParticipantDTO;

@@ -307,8 +307,9 @@ public class SipRequestHeaders implements Serializable, Cloneable<SipRequestHead
 		return expires;
 	}
 
-	public void setExpires(Integer expires) {
+	public SipRequestHeaders setExpires(Integer expires) {
 		this.expires = expires;
+		return this;
 	}
 
 	public void setCallId(String callId) {

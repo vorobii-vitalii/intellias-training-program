@@ -1,7 +1,6 @@
 package sip;
 
-import tcp.CharSequenceImpl;
-import tcp.server.BufferContext;
+import tcp.server.impl.CharSequenceImpl;
 import tcp.server.BytesSource;
 import tcp.server.EventEmitter;
 import tcp.server.reader.MessageReader;

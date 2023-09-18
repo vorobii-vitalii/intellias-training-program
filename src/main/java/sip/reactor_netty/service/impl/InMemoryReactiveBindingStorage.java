@@ -1,4 +1,4 @@
-package sip.reactor_netty.service;
+package sip.reactor_netty.service.impl;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -14,6 +14,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import sip.AddressOfRecord;
 import sip.reactor_netty.WSOutbound;
+import sip.reactor_netty.service.ReactiveBindingStorage;
 import sip.request_handling.register.CreateBinding;
 
 public class InMemoryReactiveBindingStorage implements ReactiveBindingStorage {
@@ -73,11 +74,9 @@ public class InMemoryReactiveBindingStorage implements ReactiveBindingStorage {
 
 	@Override
 	public Flux<AddressOfRecord> getAllBindingsByAddressOfRecord(AddressOfRecord addressOfRecord) {
-		return Flux.fromStream(() -> {
-			return Optional.ofNullable(bindings.get(addressOfRecord))
-					.stream()
-					.flatMap(v -> v.keySet().stream());
-		});
+		return Flux.fromStream(() -> Optional.ofNullable(bindings.get(addressOfRecord))
+				.stream()
+				.flatMap(v -> v.keySet().stream()));
 	}
 
 	private BindingInfo calculateBindingInfo(CreateBinding createBinding, int defaultExpiration, WSOutbound wsOutbound) {

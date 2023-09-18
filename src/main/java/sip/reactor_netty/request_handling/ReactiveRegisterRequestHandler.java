@@ -6,7 +6,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
+import request_handler.ReactiveMessageHandler;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import sip.AddressOfRecord;
@@ -24,6 +24,7 @@ import sip.reactor_netty.service.ReactiveBindingStorage;
 import sip.request_handling.register.CreateBinding;
 
 public class ReactiveRegisterRequestHandler implements ReactiveMessageHandler<String, SipRequest, SipMessage, WSOutbound> {
+	public static final SipStatusCode BAD_REQUEST = new SipStatusCode(400);
 	private static final Logger LOGGER = LoggerFactory.getLogger(ReactiveRegisterRequestHandler.class);
 	private static final Integer REMOVE_BINDINGS = 0;
 	// TODO: Create parameter instead
@@ -36,34 +37,34 @@ public class ReactiveRegisterRequestHandler implements ReactiveMessageHandler<St
 	}
 
 	@Override
-	public Flux<SipMessage> handleMessage(SipRequest sipRequestMono, WSOutbound outbound) {
-		return Mono.just(sipRequestMono).flatMapMany(sipRequest -> {
-			var addressOfRecord = sipRequest.headers().getTo().toCanonicalForm();
-			var contactList = sipRequest.headers().getContactList();
+	public Flux<SipResponse> handleMessage(SipRequest sipRequest, WSOutbound outbound) {
+		return Mono.just(sipRequest).flatMapMany(request -> {
+			var addressOfRecord = request.headers().getTo().toCanonicalForm();
+			var contactList = request.headers().getContactList();
 			if (contactList == null) {
 				return Flux.empty();
 			}
 			// Unintuitive but REGISTER request with Contact = * means unregister...
 			if (contactList instanceof ContactAny) {
-				var expiresValue = sipRequest.headers().getExpires();
+				var expiresValue = request.headers().getExpires();
 				if (!REMOVE_BINDINGS.equals(expiresValue)) {
 					LOGGER.error("""
 							If the request has additional Contact
 							         fields or an expiration time other than zero, the request is
 							         invalid, and the server MUST return a 400 (Invalid Request)""");
-					return Flux.just(createBadRequestResponse(sipRequest));
+					return Flux.just(createBadRequestResponse(request));
 				}
 				return reactiveBindingStorage.removeBindingsByAddressOfRecord(addressOfRecord)
 						.thenMany(Flux.empty());
 			} else {
 				var newBindings = ((ContactSet) contactList).allowedAddressOfRecords()
 						.stream()
-						.map(r -> new CreateBinding(r, sipRequest.headers().getCallId(),
-								sipRequest.headers().getCommandSequence().sequenceNumber()))
+						.map(r -> new CreateBinding(r, request.headers().getCallId(),
+								request.headers().getCommandSequence().sequenceNumber()))
 						.collect(Collectors.toList());
-				var expiration = Optional.ofNullable(sipRequest.headers().getExpires()).orElse(DEFAULT_EXPIRATION);
+				var expiration = Optional.ofNullable(request.headers().getExpires()).orElse(DEFAULT_EXPIRATION);
 				return reactiveBindingStorage.addBindings(outbound, addressOfRecord, newBindings, expiration)
-						.thenMany(createOKResponse(sipRequest, addressOfRecord));
+						.thenMany(createOKResponse(request, addressOfRecord));
 			}
 		});
 	}
@@ -100,7 +101,7 @@ public class ReactiveRegisterRequestHandler implements ReactiveMessageHandler<St
 
 	private SipResponse createBadRequestResponse(SipRequest sipRequest) {
 		return new SipResponse(
-				new SipResponseLine(sipRequest.requestLine().version(), new SipStatusCode(400), "Invalid request"),
+				new SipResponseLine(sipRequest.requestLine().version(), BAD_REQUEST, "Invalid request"),
 				new SipResponseHeaders(),
 				new byte[] {}
 		);

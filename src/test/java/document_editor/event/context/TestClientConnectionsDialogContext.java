@@ -17,7 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import tcp.MessageSerializerImpl;
+import tcp.server.impl.MessageSerializerImpl;
 import tcp.server.BufferCopier;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;

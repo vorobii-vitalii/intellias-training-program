@@ -17,7 +17,6 @@ import sip.SipResponse;
 import sip.SipResponseLine;
 import sip.SipStatusCode;
 import sip.request_handling.SipRequestHandler;
-import sip.request_handling.register.ConferencesStorage;
 import tcp.MessageSerializer;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;

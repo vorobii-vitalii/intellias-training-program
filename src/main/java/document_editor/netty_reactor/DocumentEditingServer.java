@@ -18,7 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import document_editor.dto.ClientRequest;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
+import request_handler.ReactiveMessageHandler;
 import document_editor.netty_reactor.request_handling.impl.ConnectReactiveRequestHandler;
 import document_editor.netty_reactor.request_handling.impl.EditDocumentReactiveRequestHandler;
 import io.grpc.Grpc;

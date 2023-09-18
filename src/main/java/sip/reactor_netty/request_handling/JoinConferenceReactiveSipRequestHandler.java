@@ -5,16 +5,15 @@ import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
+import request_handler.ReactiveMessageHandler;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import reactor.core.publisher.Flux;
-import sip.FullSipURI;
 import sip.SipMediaType;
 import sip.SipMessage;
 import sip.SipRequest;
 import sip.SipRequestHeaders;
 import sip.reactor_netty.WSOutbound;
-import sip.reactor_netty.service.ReactiveConferenceSubscribersContext;
+import sip.reactor_netty.service.impl.ReactiveConferenceSubscribersContext;
 import sip.request_handling.DialogRequest;
 import sip.request_handling.DialogService;
 import sip.request_handling.SipSessionDescription;

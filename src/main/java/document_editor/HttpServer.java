@@ -103,7 +103,7 @@ import request_handler.RequestHandler;
 import serialization.JacksonDeserializer;
 import serialization.Serializer;
 import message_passing.MessagePublishProcess;
-import tcp.MessageSerializerImpl;
+import tcp.server.impl.MessageSerializerImpl;
 import tcp.server.BufferCopier;
 import tcp.server.ByteBufferPool;
 import tcp.server.ConnectionImpl;

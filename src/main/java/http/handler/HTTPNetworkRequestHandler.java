@@ -23,7 +23,7 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes;
 import request_handler.NetworkRequest;
 import request_handler.NetworkRequestHandler;
-import tcp.MessageSerializerImpl;
+import tcp.server.impl.MessageSerializerImpl;
 import tcp.server.OperationType;
 import util.Constants;
 

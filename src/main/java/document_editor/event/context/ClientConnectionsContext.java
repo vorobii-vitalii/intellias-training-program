@@ -13,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.jcip.annotations.NotThreadSafe;
-import tcp.MessageSerializerImpl;
+import tcp.server.impl.MessageSerializerImpl;
 import tcp.server.BufferCopier;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;

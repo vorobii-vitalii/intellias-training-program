@@ -22,7 +22,6 @@ import sip.request_handling.Updater;
 import sip.request_handling.calls.CallsRepository;
 import sip.request_handling.register.BindingStorage;
 import tcp.MessageSerializer;
-import tcp.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 

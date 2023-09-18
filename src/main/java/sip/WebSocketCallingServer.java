@@ -54,7 +54,6 @@ import sip.request_handling.InMemoryInviteDialogService;
 import sip.request_handling.SDPMediaAddressProcessor;
 import sip.request_handling.SipMessageNetworkRequestHandler;
 import sip.request_handling.SipResponseHandler;
-import sip.request_handling.SipSessionDescription;
 import sip.request_handling.calls.InMemoryCallsRepository;
 import sip.request_handling.enricher.CompositeUpdater;
 import sip.request_handling.enricher.ContactUnknownAttributesRemover;
@@ -72,8 +71,8 @@ import sip.request_handling.register.AckRequestHandler;
 import sip.request_handling.register.ByeRequestProcessor;
 import sip.request_handling.register.InMemoryBindingStorage;
 import sip.request_handling.register.RegisterSipMessageHandler;
-import tcp.MessageSerializerImpl;
-import tcp.WebSocketFramerMessageSerializer;
+import tcp.server.impl.MessageSerializerImpl;
+import websocket.WebSocketFramerMessageSerializer;
 import tcp.server.ByteBufferPool;
 import tcp.server.GenericServer;
 import tcp.server.ServerConfig;
@@ -256,8 +255,6 @@ public class WebSocketCallingServer {
 		startProcess(new RequestProcessor<>(webSocketRequestsQueue, webSocketNetworkRequestHandler, httpRequestHandleTimer, httpRequestCount), "WS server");
 
 		BiConsumer<SelectionKey, Throwable> onError = (selectionKey, throwable) -> LOGGER.error("Error {}", selectionKey, throwable);
-
-		// URL = file:///home/vitaliivorobii/workspace/sipjs-examples/demo-phone/index.html
 
 		var server = new GenericServer(
 				ServerConfig.builder()

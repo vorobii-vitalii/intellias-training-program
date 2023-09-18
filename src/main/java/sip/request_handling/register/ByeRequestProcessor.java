@@ -11,7 +11,6 @@ import sip.request_handling.Updater;
 import sip.request_handling.calls.CallState;
 import sip.request_handling.calls.CallsRepository;
 import tcp.MessageSerializer;
-import tcp.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 

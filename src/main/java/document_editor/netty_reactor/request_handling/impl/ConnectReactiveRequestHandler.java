@@ -17,7 +17,7 @@ import document_editor.dto.RequestType;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
 import document_editor.netty_reactor.ReactiveDocumentChangesPublisher;
-import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
+import request_handler.ReactiveMessageHandler;
 import reactor.adapter.rxjava.RxJava2Adapter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;

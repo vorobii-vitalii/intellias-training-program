@@ -1,4 +1,4 @@
-package document_editor.netty_reactor.request_handling;
+package request_handler;
 
 import reactor.core.publisher.Flux;
 

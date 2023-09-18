@@ -3,12 +3,12 @@ package sip.reactor_netty.request_handling;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
+import request_handler.ReactiveMessageHandler;
 import reactor.core.publisher.Flux;
 import sip.SipMessage;
 import sip.SipRequest;
 import sip.reactor_netty.WSOutbound;
-import sip.reactor_netty.service.ReactiveConferenceSubscribersContext;
+import sip.reactor_netty.service.impl.ReactiveConferenceSubscribersContext;
 
 public class SubscribeToConferenceUpdatesReactiveSipRequestHandler implements ReactiveMessageHandler<String, SipRequest, SipMessage, WSOutbound> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SubscribeToConferenceUpdatesReactiveSipRequestHandler.class);

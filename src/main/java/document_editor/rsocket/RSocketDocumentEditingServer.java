@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.zip.GZIPOutputStream;
 
 import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.reactivestreams.Publisher;
@@ -18,7 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import document_editor.dto.ClientRequest;
 import document_editor.netty_reactor.ReactiveDocumentChangesPublisher;
-import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
+import request_handler.ReactiveMessageHandler;
 import document_editor.netty_reactor.request_handling.impl.ConnectReactiveRequestHandler;
 import document_editor.netty_reactor.request_handling.impl.EditDocumentReactiveRequestHandler;
 import io.grpc.Grpc;

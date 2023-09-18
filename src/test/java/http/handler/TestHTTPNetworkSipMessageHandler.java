@@ -26,7 +26,7 @@ import http.post_processor.HTTPResponsePostProcessor;
 import io.opentelemetry.api.trace.TracerProvider;
 import io.opentelemetry.context.Context;
 import request_handler.NetworkRequest;
-import tcp.MessageSerializerImpl;
+import tcp.server.impl.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 import util.Constants;

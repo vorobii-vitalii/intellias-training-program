@@ -31,7 +31,7 @@ import io.opentelemetry.context.Context;
 import io.reactivex.Single;
 import reactor.core.CoreSubscriber;
 import serialization.Serializer;
-import tcp.MessageSerializerImpl;
+import tcp.server.impl.MessageSerializerImpl;
 import tcp.server.OperationType;
 import tcp.server.SocketConnection;
 import websocket.domain.OpCode;

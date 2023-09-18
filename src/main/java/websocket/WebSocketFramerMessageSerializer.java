@@ -1,7 +1,8 @@
-package tcp;
+package websocket;
 
 import java.nio.ByteBuffer;
 
+import tcp.MessageSerializer;
 import tcp.server.EventEmitter;
 import util.Serializable;
 import websocket.domain.OpCode;

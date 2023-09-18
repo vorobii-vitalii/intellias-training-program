@@ -1,7 +1,8 @@
-package tcp;
+package tcp.server.impl;
 
 import java.nio.ByteBuffer;
 
+import tcp.MessageSerializer;
 import tcp.server.ByteBufferPool;
 import tcp.server.EventEmitter;
 import util.Serializable;
