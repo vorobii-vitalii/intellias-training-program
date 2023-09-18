@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import serialization.Deserializer;
 import sip.FullSipURI;
 import sip.SipResponse;
-import sip.SipURI;
 import sip.request_handling.invite.MediaConferenceService;
 import tcp.server.SocketConnection;
 
@@ -31,7 +30,7 @@ public class ConfirmParticipantOffersResponseHandler implements SipMessageHandle
 			LOGGER.info("Confirming participants offers");
 			var onNotifyResponse = deserializer.deserialize(new ByteArrayInputStream(sipResponse.payload()), OnNotifyResponse.class);
 			LOGGER.info("Response = {}", onNotifyResponse);
-			final SipURI referenceURI = sipResponse.headers().getTo().toCanonicalForm().sipURI();
+			var referenceURI = sipResponse.headers().getTo().toCanonicalForm().sipURI();
 			mediaConferenceService.processAnswers(getConferenceId(sipResponse), referenceURI, onNotifyResponse.sdpAnswerBySipURI());
 		}
 		catch (IOException e) {

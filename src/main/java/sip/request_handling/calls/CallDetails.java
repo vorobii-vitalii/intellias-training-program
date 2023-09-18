@@ -7,14 +7,14 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 import sip.Address;
-import sip.SipURI;
+import sip.FullSipURI;
 import tcp.server.SocketConnection;
 
 public record CallDetails(
 		String callId,
 		Map<String, Set<Address>> addressesByMediaAddressType,
 		@Deprecated Set<SocketConnection> connectionsInvolved,
-		@Deprecated @Nullable SipURI callerContact,
+		@Deprecated @Nullable FullSipURI callerContact,
 		CallState callState
 ) {
 	public void addMediaMapping(String mediaAddressType, Address address) {
@@ -30,7 +30,7 @@ public record CallDetails(
 		connectionsInvolved.add(socketConnection);
 	}
 
-	public CallDetails setCallerContact(SipURI callerContact) {
+	public CallDetails setCallerContact(FullSipURI callerContact) {
 		return new CallDetails(callId, addressesByMediaAddressType, connectionsInvolved, callerContact, callState);
 	}
 

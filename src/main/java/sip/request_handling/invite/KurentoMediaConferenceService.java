@@ -20,7 +20,7 @@ import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import sip.SipURI;
+import sip.FullSipURI;
 
 // Screensharing, only view + 1
 // Add Jaeger
@@ -177,7 +177,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 	@Override
 	public Flux<Participant> getParticipantsFromPerspectiveOf(
 			@SpanAttribute("conferenceId") String conferenceId,
-			@SpanAttribute("sipURI") SipURI referenceURI
+			@SpanAttribute("sipURI") FullSipURI referenceURI
 	) {
 		var conference = mediaPipelineByConferenceId.get(conferenceId);
 		if (conference == null) {
@@ -205,7 +205,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 
 	@WithSpan
 	@Override
-	public Mono<Void> processAnswersReactive(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerByParticipantKey) {
+	public Mono<Void> processAnswersReactive(String conferenceId, FullSipURI referenceURI, Map<String, String> sdpAnswerByParticipantKey) {
 		return Mono.fromCallable(() -> {
 			LOGGER.info("Processing answer reactive...");
 			var conference = getConference(conferenceId);
@@ -225,7 +225,7 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 
 	@WithSpan
 	@Override
-	public void processAnswers(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerByParticipantKey) {
+	public void processAnswers(String conferenceId, FullSipURI referenceURI, Map<String, String> sdpAnswerByParticipantKey) {
 		var conference = getConference(conferenceId);
 		var userMediaContext = conference.webRtcEndpointMap().get(referenceURI.getURIAsString());
 		for (var entry : sdpAnswerByParticipantKey.entrySet()) {

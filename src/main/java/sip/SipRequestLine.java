@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets;
 import tcp.server.reader.exception.ParseException;
 import util.Serializable;
 
-public record SipRequestLine(String method, SipURI requestURI, SipVersion version) implements Serializable {
+public record SipRequestLine(String method, FullSipURI requestURI, SipVersion version) implements Serializable {
 	private static final String LWS = "\\s+";
 	private static final int CRLF_LENGTH = 2;
 	private static final int SPACE_LENGTH = 1;
@@ -20,7 +20,7 @@ public record SipRequestLine(String method, SipURI requestURI, SipVersion versio
 			throw new ParseException("request-line   = method LWS request-target LWS SIP-version CRLF " + str);
 		}
 		var method = arr[0].toUpperCase();
-		var requestURI = SipURI.parse(arr[1]);
+		var requestURI = FullSipURI.parse(arr[1]);
 		var httpVersion = SipVersion.parse(arr[2]);
 		return new SipRequestLine(method, requestURI, httpVersion);
 	}

@@ -2,13 +2,13 @@ package sip.request_handling.invite;
 
 import javax.annotation.Nonnull;
 
-import sip.SipURI;
+import sip.FullSipURI;
 
 public record ConferenceJoinRequest(
 		@Nonnull
 		String conferenceId,
 		@Nonnull
-		SipURI sipURI,
+		FullSipURI sipURI,
 		@Nonnull
 		String sdpOffer,
 		@Nonnull

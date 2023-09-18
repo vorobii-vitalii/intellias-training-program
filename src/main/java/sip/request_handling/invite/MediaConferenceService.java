@@ -1,13 +1,10 @@
 package sip.request_handling.invite;
 
-import java.util.List;
 import java.util.Map;
-
-import org.reactivestreams.Publisher;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import sip.SipURI;
+import sip.FullSipURI;
 
 public interface MediaConferenceService {
 	Mono<Void> createNewConferenceReactive(String conferenceId);
@@ -15,7 +12,7 @@ public interface MediaConferenceService {
 	ConferenceJoinResponse connectToConferenceReactive(ConferenceJoinRequest conferenceJoinRequest);
 	Mono<Void> disconnectFromConference(ConferenceDisconnectRequest conferenceDisconnectRequest);
 	boolean isConference(String conferenceId);
-	Flux<Participant> getParticipantsFromPerspectiveOf(String conferenceId, SipURI referenceURI);
-	Mono<Void> processAnswersReactive(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerBySipURI);
-	void processAnswers(String conferenceId, SipURI referenceURI, Map<String, String> sdpAnswerBySipURI);
+	Flux<Participant> getParticipantsFromPerspectiveOf(String conferenceId, FullSipURI referenceURI);
+	Mono<Void> processAnswersReactive(String conferenceId, FullSipURI referenceURI, Map<String, String> sdpAnswerBySipURI);
+	void processAnswers(String conferenceId, FullSipURI referenceURI, Map<String, String> sdpAnswerBySipURI);
 }

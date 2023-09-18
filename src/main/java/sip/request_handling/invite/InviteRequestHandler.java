@@ -11,11 +11,11 @@ import net.sourceforge.jsdp.SDPException;
 import net.sourceforge.jsdp.SDPFactory;
 import net.sourceforge.jsdp.SessionDescription;
 import sip.ContactSet;
+import sip.FullSipURI;
 import sip.SipRequest;
 import sip.SipResponse;
 import sip.SipResponseLine;
 import sip.SipStatusCode;
-import sip.SipURI;
 import sip.request_handling.SDPMediaAddressProcessor;
 import sip.request_handling.SipRequestHandler;
 import sip.request_handling.Updater;
@@ -89,7 +89,7 @@ public class InviteRequestHandler implements SipRequestHandler {
 		}
 	}
 
-	private static SipURI calculateCallerContact(SipRequest sipRequest) {
+	private static FullSipURI calculateCallerContact(SipRequest sipRequest) {
 		var contactList = sipRequest.headers().getContactList();
 		if (contactList instanceof ContactSet contactSet) {
 			return contactSet.allowedAddressOfRecords()

@@ -17,7 +17,7 @@ import javax.annotation.Nonnull;
 
 import util.Serializable;
 
-public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Nonnull Map<String, String> parameters) implements Serializable {
+public record AddressOfRecord(@Nonnull String name, @Nonnull FullSipURI sipURI, @Nonnull Map<String, String> parameters) implements Serializable {
 	private static final char LAQUOT = '<';
 	private static final char RAQUOT = '>';
 	private static final int NAME_DELIMITER_LENGTH = 1;
@@ -63,14 +63,14 @@ public record AddressOfRecord(@Nonnull String name, @Nonnull SipURI sipURI, @Non
 		var laquotIndex = findFromFromBegging(str, LAQUOT);
 		// addr-spec case
 		if (laquotIndex == NOT_FOUND) {
-			return new AddressOfRecord("", SipURI.parse(str), Map.of());
+			return new AddressOfRecord("", FullSipURI.parse(str), Map.of());
 		}
 		var raquotIndex = findFromFromBegging(str, RAQUOT);
 		var displayName = Optional.ofNullable(trim(str, 0, laquotIndex - 1, CHARACTERS_TO_EXCLUDE))
 				.filter(s -> !s.isEmpty())
 				.map(s -> isQuoted(s) ? s.substring(1, s.length() - 1) : s)
 				.orElse("");
-		var sipURI = SipURI.parse(str.subSequence(laquotIndex + 1, raquotIndex).toString());
+		var sipURI = FullSipURI.parse(str.subSequence(laquotIndex + 1, raquotIndex).toString());
 		return new AddressOfRecord(displayName, sipURI,
 				parseParameters(str.subSequence(raquotIndex + 1, str.length()).toString(), PARAMETERS_DELIMITER));
 	}

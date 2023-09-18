@@ -1,6 +1,6 @@
 package sip.request_handling.invite;
 
-import sip.SipURI;
+import sip.FullSipURI;
 
-public record JoinedParticipant(SipURI sipURI, Mode mode, String disambiguator) {
+public record JoinedParticipant(FullSipURI sipURI, Mode mode, String disambiguator) {
 }

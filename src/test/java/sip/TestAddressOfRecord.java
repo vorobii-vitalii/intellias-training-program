@@ -53,14 +53,6 @@ class TestAddressOfRecord {
 								),
 								Map.of("tag", "hyh8")
 						)
-				},
-				{
-						"   \"Williams\"    </absoluteURI>  ;  tag=hyh8",
-						new AddressOfRecord(
-								"Williams",
-								new SIPAbsoluteURI("/absoluteURI"),
-								Map.of("tag", "hyh8")
-						)
 				}
 		};
 	}

@@ -2,13 +2,16 @@ package sip;
 
 import static sip.SipParseUtils.parseParameters;
 
-import java.util.HashMap;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
+
+import util.Serializable;
 
 /*
 SIP-URI          =  "sip:" [ userinfo ] hostport
@@ -72,14 +75,7 @@ public record FullSipURI(
 		@Nonnull Address address,
 		@Nonnull Map<String, String> uriParameters,
 		@Nonnull Map<String, String> queryParameters
-) implements SipURI {
-
-	/*
-		The default port value is transport and scheme dependent.
-		The default is 5060  for  sip: using UDP, TCP, or SCTP.
-		The default is 5061 for sip: using TLS over TCP and sips: over TCP.
-	 */
-	private static final Map<String, Integer> DEFAULT_PORT_BY_PROTOCOL = Map.of("sip", 5060, "sips", 5061);
+) implements Serializable {
 	private static final int PROTOCOL_INDEX = 1;
 	private static final int USERNAME_INDEX = 2;
 	private static final int PASSWORD_INDEX = 3;
@@ -94,7 +90,7 @@ public record FullSipURI(
 	public static final String URI_PARAMETERS_DELIMITER = ";";
 	public static final String QUERY_PARAMETERS_DELIMITER = "&";
 
-	public SipURI updateCredentials(Credentials credentials) {
+	public FullSipURI updateCredentials(Credentials credentials) {
 		return new FullSipURI(
 				protocol,
 				credentials,
@@ -104,25 +100,6 @@ public record FullSipURI(
 		);
 	}
 
-	@Override
-	public SipURI addParam(String paramName, String value) {
-		var newParameters = new HashMap<>(uriParameters);
-		newParameters.put(paramName, value);
-		return new FullSipURI(
-				protocol,
-				credentials,
-				address,
-				newParameters,
-				queryParameters
-		);
-	}
-
-
-	public static boolean isSipURI(CharSequence charSequence) {
-		return SIP_URL_PATTERN.matcher(charSequence).matches();
-	}
-
-	@Override
 	public String getURIAsString() {
 		return protocol + ":" + serializeCredentials() + serializeAddress() + serializeURIParameters() + serializeQueryParameters();
 	}
@@ -169,9 +146,17 @@ public record FullSipURI(
 		return new FullSipURI(protocol, credentials, new Address(host, port), uriParameters, queryParameters);
 	}
 
-	@Override
-	public SipURI toCanonicalForm() {
+	public FullSipURI toCanonicalForm() {
 		return new FullSipURI(protocol, credentials, address.toCanonicalForm(), Map.of(), Map.of());
 	}
 
+	@Override
+	public void serialize(ByteBuffer dest) {
+		dest.put(getURIAsString().getBytes(StandardCharsets.UTF_8));
+	}
+
+	@Override
+	public int getSize() {
+		return getURIAsString().getBytes(StandardCharsets.UTF_8).length;
+	}
 }

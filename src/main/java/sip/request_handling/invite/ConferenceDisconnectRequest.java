@@ -2,13 +2,13 @@ package sip.request_handling.invite;
 
 import javax.annotation.Nonnull;
 
-import sip.SipURI;
+import sip.FullSipURI;
 
 public record ConferenceDisconnectRequest(
 		@Nonnull
 		String conferenceId,
 		@Nonnull
-		SipURI sipURI,
+		FullSipURI sipURI,
 		@Nonnull
 		String disambiguator
 ) {
