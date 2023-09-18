@@ -10,7 +10,6 @@ import document_editor.netty_reactor.request_handling.ReactiveMessageHandler;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import serialization.Deserializer;
-import sip.FullSipURI;
 import sip.SipMessage;
 import sip.SipResponse;
 import sip.reactor_netty.WSOutbound;
@@ -60,4 +59,3 @@ public class ConfirmParticipantOffersSipReactiveResponseHandler implements React
 	}
 
 }
-
