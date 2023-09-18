@@ -75,7 +75,7 @@ public class WebSocketCallingServerReactive {
 						INVITE, List.of(
 								new CreateConferenceReactiveSipRequestHandler(
 										addressOfRecord -> {
-											var sipURI = (FullSipURI) addressOfRecord.sipURI();
+											var sipURI = addressOfRecord.sipURI();
 											return sipURI.credentials().username().equals(CONFERENCE_FACTORY);
 										},
 										() -> CONFERENCE_ID_PREFIX + UUID.randomUUID(),

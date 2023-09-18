@@ -173,7 +173,7 @@ public class ReactiveConferenceSubscribersContext {
 	}
 
 	private String getConferenceId(SipRequest sipRequest) {
-		var sipURI = (FullSipURI) sipRequest.requestLine().requestURI();
+		var sipURI = sipRequest.requestLine().requestURI();
 		return sipURI.credentials().username();
 	}
 

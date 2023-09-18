@@ -150,7 +150,7 @@ public class WebSocketCallingServer {
 						new RegisterSipMessageHandler(messageSerializer, bindingStorage),
 						new CreateConferenceRequestHandler(
 								addressOfRecord -> {
-									var sipURI = (FullSipURI) addressOfRecord.sipURI();
+									var sipURI = addressOfRecord.sipURI();
 									return sipURI.credentials().username().equals(CONFERENCE_FACTORY);
 								},
 								() -> "conference-" + UUID.randomUUID(),

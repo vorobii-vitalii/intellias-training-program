@@ -73,7 +73,7 @@ public class CreateConferenceReactiveSipRequestHandler implements ReactiveMessag
 		var sipResponseLine =
 				new SipResponseLine(sipRequest.requestLine().version(), new SipStatusCode(MOVED_PERMANENTLY), REDIRECT_REASON);
 		var sipResponseHeaders = sipRequest.headers().toResponseHeaders();
-		var sipURI = ((FullSipURI) originalTo.sipURI()).updateCredentials(new Credentials(conferenceId, null));
+		var sipURI = originalTo.sipURI().updateCredentials(new Credentials(conferenceId, null));
 		sipResponseHeaders.setContactList(new ContactSet(Set.of(
 				new AddressOfRecord(originalTo.name(), sipURI, Map.of(FOCUS_PARAMETER, FOCUS_PARAMETER_VALUE))
 		)));

@@ -52,7 +52,7 @@ public class ConfirmParticipantOffersSipReactiveResponseHandler implements React
 	}
 
 	private String getConferenceId(SipResponse sipResponse) {
-		var sipURI = (FullSipURI) sipResponse.headers().getFrom().sipURI();
+		var sipURI = sipResponse.headers().getFrom().sipURI();
 		return sipURI.credentials().username();
 	}
 
