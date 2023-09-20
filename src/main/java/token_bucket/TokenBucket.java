@@ -17,6 +17,10 @@ public class TokenBucket<Identifier> {
 		this.identifier = identifier;
 	}
 
+	public int getTokens() {
+		return tokens.get();
+	}
+
 	public void fill(int tokensToAdd) {
 		tokens.updateAndGet(t -> Math.min(maxTokens, t + tokensToAdd));
 	}

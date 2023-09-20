@@ -78,9 +78,9 @@ public class DocumentEditingServer {
 
 		DisposableServer server =
 				HttpServer.create()
-						.runOn(LoopResources.create("event-loo", 2, 8, true))
+						.runOn(LoopResources.create("event-loop", 2, 8, true))
 						.port(getPort())
-						.accessLog(true)
+						.accessLog(false)
 						.metrics(true, s -> s)
 						.noSSL()
 						.protocol(HttpProtocol.HTTP11)

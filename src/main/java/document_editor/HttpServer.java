@@ -61,7 +61,10 @@ import document_editor.event.handler.impl.MessageDistributeEventHandler;
 import document_editor.event.handler.impl.NewConnectionEventHandler;
 import document_editor.event.handler.impl.PingEventHandler;
 import document_editor.event.handler.impl.PongEventHandler;
-import grpc.ContextPropagationServiceDecorator;
+import document_editor.netty_reactor.ReactiveDocumentChangesPublisher;
+import document_editor.netty_reactor.request_handling.impl.ConnectReactiveRequestHandler;
+import document_editor.netty_reactor.request_handling.impl.EditDocumentReactiveRequestHandler;
+import grpc.ServiceDecorator;
 import http.domain.HTTPMethod;
 import http.domain.HTTPRequest;
 import http.handler.HTTPAcceptOperationHandler;
@@ -71,6 +74,7 @@ import http.post_processor.ProtocolChangerHTTPResponsePostProcessor;
 import http.reader.HTTPRequestMessageReader;
 import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
+import io.grpc.stub.AbstractStub;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics;
@@ -98,6 +102,7 @@ import message_passing.QueueMessageProducer;
 import http.monitoring.PrometheusMetricsHTTPRequestHandler;
 import request_handler.HashBasedLoadBalancer;
 import request_handler.NetworkRequest;
+import request_handler.ReactiveMessageHandler;
 import request_handler.RequestProcessor;
 import request_handler.RequestHandler;
 import serialization.JacksonDeserializer;
@@ -384,7 +389,12 @@ public class HttpServer {
 
 		schedulePeriodically(1000, new MessagePublishProcess<>(new QueueMessageProducer<>(eventsQueue), new SendPongsDocumentsEvent()));
 
-		var contextPropagationServiceDecorator = new ContextPropagationServiceDecorator(openTelemetry);
+		var contextPropagationServiceDecorator = new ServiceDecorator() {
+			@Override
+			public <R extends AbstractStub<R>, T extends AbstractStub<R>> R decorateService(T service) {
+				return service.withWaitForReady();
+			}
+		};
 
 		List<EventHandler<?>> eventHandlers = Stream.of(
 						new NewConnectionEventHandler(

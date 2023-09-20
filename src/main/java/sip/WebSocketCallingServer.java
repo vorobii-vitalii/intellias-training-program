@@ -83,7 +83,7 @@ import tcp.server.TimerSocketMessageReader;
 import tcp.server.handler.DelegatingReadOperationHandler;
 import tcp.server.handler.GenericReadOperationHandler;
 import tcp.server.handler.WriteOperationHandler;
-import udp.ByteBufferSource;
+import tcp.server.impl.ByteBufferSource;
 import util.Constants;
 import websocket.domain.WebSocketMessage;
 import websocket.endpoint.WebSocketEndpoint;
