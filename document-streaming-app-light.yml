@@ -54,30 +54,30 @@ services:
       - "COLLECTOR_OTLP_ENABLED=true"
 
   ## WebSocket server
-  documents-app-rsocket:
-    image: my-repo/document-editing-server-rsocket:1.0-SNAPSHOT
-    ports:
-      - "8002:8000"
-      - "8007:8005"
-      - "9012:9010"
-    restart: always
-    logging:
-      driver: gelf
-      options:
-        gelf-address: "udp://0.0.0.0:12201"
-        tag: "document-streaming-app-rsocket"
-    depends_on:
-      - mongo1
-      - document-storage-service
-      - jaeger
-    networks:
-      - net
-    environment:
-      - "MONGO_URL=mongodb://mongo1:30001/?replicaSet=my-replica-set"
-      - "DOCUMENT_STORAGE_SERVICE_URL=document-storage-service:9000"
-      - "PORT=8000"
-      - "JAEGER_ENDPOINT=http://jaeger:4317"
-      - "HOST=0.0.0.0"
+#  documents-app-rsocket:
+#    image: my-repo/document-editing-server-rsocket:1.0-SNAPSHOT
+#    ports:
+#      - "8002:8000"
+#      - "8007:8005"
+#      - "9012:9010"
+#    restart: always
+#    logging:
+#      driver: gelf
+#      options:
+#        gelf-address: "udp://0.0.0.0:12201"
+#        tag: "document-streaming-app-rsocket"
+#    depends_on:
+#      - mongo1
+#      - document-storage-service
+#      - jaeger
+#    networks:
+#      - net
+#    environment:
+#      - "MONGO_URL=mongodb://mongo1:30001/?replicaSet=my-replica-set"
+#      - "DOCUMENT_STORAGE_SERVICE_URL=document-storage-service:9000"
+#      - "PORT=8000"
+#      - "JAEGER_ENDPOINT=http://jaeger:4317"
+#      - "HOST=0.0.0.0"
 
   ## WebSocket server
   http-server:
@@ -128,6 +128,67 @@ services:
       - "MONGO_URL=mongodb://mongo1:30001/?replicaSet=my-replica-set"
       - "SERVER_PORT=9000"
       - "JAEGER_ENDPOINT=http://jaeger:4317"
+
+  db:
+    image: timescaledev/timescaledb-ha:pg12.14-ts2.10.3
+    networks:
+      - net
+    ports:
+      - 5432:5432/tcp
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+
+  promscale:
+    image: timescale/promscale:latest
+    ports:
+      - "9201:9201/tcp"
+    restart: on-failure
+    command:
+      - '-startup.upgrade-prerelease-extensions=true'
+    networks:
+      - net
+    depends_on:
+      - db
+      - prometheus
+    environment:
+      PROMSCALE_DB_CONNECT_RETRIES: 10
+      PROMSCALE_WEB_TELEMETRY_PATH: /metrics-text
+      PROMSCALE_DB_URI: postgres://postgres:password@db:5432/postgres?sslmode=allow
+
+  # Metrics
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    command:
+      - '--enable-feature=native-histograms'
+      - '--web.enable-remote-write-receiver'
+      - '--web.enable-lifecycle'
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - net
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prom_data:/prometheus
+
+  # Metrics visualisation
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - net
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=grafana
+    volumes:
+      - ./grafana:/etc/grafana/provisioning/datasources
+
 
 networks:
   net:

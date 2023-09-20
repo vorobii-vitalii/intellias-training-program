@@ -9,7 +9,5 @@ public interface Channel {
 	int write(ByteBuffer buffer) throws IOException;
 	boolean isOpen();
 	void close() throws IOException;
-	SocketAddress getLocalAddress();
-
 	SocketAddress getRemoteAddres();
 }

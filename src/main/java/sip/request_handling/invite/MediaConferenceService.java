@@ -13,6 +13,5 @@ public interface MediaConferenceService {
 	Mono<Void> disconnectFromConference(ConferenceDisconnectRequest conferenceDisconnectRequest);
 	boolean isConference(String conferenceId);
 	Flux<Participant> getParticipantsFromPerspectiveOf(String conferenceId, FullSipURI referenceURI);
-	Mono<Void> processAnswersReactive(String conferenceId, FullSipURI referenceURI, Map<String, String> sdpAnswerBySipURI);
 	void processAnswers(String conferenceId, FullSipURI referenceURI, Map<String, String> sdpAnswerBySipURI);
 }

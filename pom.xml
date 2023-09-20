@@ -430,6 +430,21 @@
                         </configuration>
                     </execution>
                     <execution>
+                        <id>custom-http-server</id>
+                        <goals>
+                            <goal>build</goal>
+                            <goal>push</goal>
+                        </goals>
+                        <configuration>
+                            <repository>my-repo/custom-http-server</repository>
+                            <dockerfile>CustomEditingDockerfile</dockerfile>
+                            <tag>${project.version}</tag>
+                            <buildArgs>
+                                <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>
+                            </buildArgs>
+                        </configuration>
+                    </execution>
+                    <execution>
                         <id>document-editing-server-rsocket</id>
                         <goals>
                             <goal>build</goal>

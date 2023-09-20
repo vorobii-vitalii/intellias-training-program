@@ -67,7 +67,7 @@ let data = new SharedArray('arr', generateData);
 
 
 export default function () {
-    const url = 'ws://127.0.0.1:10000/documents';
+    const url = 'ws://127.0.0.1:8001/documents';
 
     const params = {
         headers: {'X-Request-Time': new Date(Date.now()).getTime()},

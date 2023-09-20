@@ -16,7 +16,6 @@ import com.google.gson.Gson;
 
 import document_editor.netty_reactor.DocumentEditingServer;
 import io.netty.buffer.Unpooled;
-import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.HttpProtocol;
@@ -90,17 +89,9 @@ public class WebSocketCallingServerReactive {
 								new SubscribeToConferenceUpdatesReactiveSipRequestHandler(reactiveConferenceSubscribersContext),
 								new UnsubscribeFromConferenceUpdatesReactiveSipRequestHandler(reactiveConferenceSubscribersContext)
 						),
-						BYE, List.of(
-								new LeaveConferenceReactiveSipRequestHandler(
-										mediaConferenceService,
-										reactiveConferenceSubscribersContext
-								))
+						BYE, List.of(new LeaveConferenceReactiveSipRequestHandler(mediaConferenceService, reactiveConferenceSubscribersContext))
 				),
-				Map.of(
-						NOTIFY, List.of(
-								new ConfirmParticipantOffersSipReactiveResponseHandler(mediaConferenceService, deserializer)
-						)
-				)
+				Map.of(NOTIFY, List.of(new ConfirmParticipantOffersSipReactiveResponseHandler(mediaConferenceService, deserializer)))
 		);
 
 
@@ -108,17 +99,10 @@ public class WebSocketCallingServerReactive {
 				HttpServer.create()
 						.port(getPort())
 						.accessLog(true)
-//						.wiretap(true)
 						.noSSL()
 						.protocol(HttpProtocol.HTTP11)
 						.route(routes ->
 								routes
-										.get("/hello",
-												(request, response) -> response.sendString(Mono.just("Hello World!")))
-										.post("/echo",
-												(request, response) -> response.send(request.receive().retain()))
-										.get("/path/{param}",
-												(request, response) -> response.sendString(Mono.just(request.param("param"))))
 										.ws("/", (wsInbound, wsOutbound) -> {
 											wsInbound.receiveCloseStatus()
 													.subscribeOn(Schedulers.parallel())
@@ -154,8 +138,6 @@ public class WebSocketCallingServerReactive {
 																			byte[] bytes = new byte[byteBuffer.limit()];
 																			byteBuffer.get(bytes);
 																			return new String(bytes, StandardCharsets.UTF_8);
-
-//																			return Unpooled.wrappedBuffer(byteBuffer);
 																		}));
 													})
 													.subscribeOn(Schedulers.parallel());

@@ -36,22 +36,12 @@ public class NIOChannel implements Channel {
 	}
 
 	@Override
-	public SocketAddress getLocalAddress() {
-		try {
-			return socketChannel.getLocalAddress();
-		}
-		catch (IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
-
-	@Override
 	public SocketAddress getRemoteAddres() {
 		try {
 			return socketChannel.getRemoteAddress();
 		}
 		catch (IOException e) {
-			throw new RuntimeException(e);
+			throw new UncheckedIOException(e);
 		}
 	}
 }

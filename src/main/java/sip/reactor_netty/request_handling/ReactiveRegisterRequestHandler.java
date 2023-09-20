@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.micrometer.core.annotation.Counted;
 import request_handler.ReactiveMessageHandler;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -36,6 +37,7 @@ public class ReactiveRegisterRequestHandler implements ReactiveMessageHandler<St
 		this.reactiveBindingStorage = reactiveBindingStorage;
 	}
 
+	@Counted(value = "register.count")
 	@Override
 	public Flux<SipResponse> handleMessage(SipRequest sipRequest, WSOutbound outbound) {
 		return Mono.just(sipRequest).flatMapMany(request -> {

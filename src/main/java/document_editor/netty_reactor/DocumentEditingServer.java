@@ -18,6 +18,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import document_editor.dto.ClientRequest;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.prometheus.PrometheusConfig;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
+import reactor.netty.resources.LoopResources;
 import request_handler.ReactiveMessageHandler;
 import document_editor.netty_reactor.request_handling.impl.ConnectReactiveRequestHandler;
 import document_editor.netty_reactor.request_handling.impl.EditDocumentReactiveRequestHandler;
@@ -36,6 +41,7 @@ import serialization.JacksonDeserializer;
 import serialization.Serializer;
 
 public class DocumentEditingServer {
+	public static final String PROMETHEUS_ENDPOINT = "/prometheus";
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentEditingServer.class);
 	public static final int PONG_INTERVAL = 5000;
 	private static final Response PONG_RESPONSE = new Response(ResponseType.PONG, null);
@@ -47,6 +53,7 @@ public class DocumentEditingServer {
 
 		var serializer = (Serializer) obj -> {
 			var arrayOutputStream = new ByteArrayOutputStream();
+//			objectMapper.writeValue(arrayOutputStream, obj);
 			objectMapper.writeValue(new GZIPOutputStream(arrayOutputStream), obj);
 			return arrayOutputStream.toByteArray();
 		};
@@ -63,19 +70,26 @@ public class DocumentEditingServer {
 		var eventHandlerByEventType = Stream.of(editDocumentReactiveRequestHandler, connectRequestHandler)
 				.collect(Collectors.toMap(ReactiveMessageHandler::getHandledMessageType, e -> e));
 
+		var prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+
+		Metrics.addRegistry(prometheusRegistry);
 
 		var deserializer = new JacksonDeserializer(objectMapper);
 
 		DisposableServer server =
 				HttpServer.create()
+						.runOn(LoopResources.create("event-loo", 2, 8, true))
 						.port(getPort())
 						.accessLog(true)
+						.metrics(true, s -> s)
 						.noSSL()
 						.protocol(HttpProtocol.HTTP11)
 						.route(routes ->
 								routes
-										.get("/hello",
-												(request, response) -> response.sendString(Mono.just("Hello World!")))
+										.get(PROMETHEUS_ENDPOINT, (request, response) -> {
+											LOGGER.info("Returning metrics...");
+											return response.sendString(Mono.just(prometheusRegistry.scrape()));
+										})
 										.post("/echo",
 												(request, response) -> response.send(request.receive().retain()))
 										.get("/path/{param}",

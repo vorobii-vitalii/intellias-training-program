@@ -28,11 +28,10 @@ public class WebSocketProtocolChanger implements ProtocolChanger {
 		connection.setProtocol(Constants.Protocol.WEB_SOCKET);
 		connection.setMetadata(Constants.WebSocketMetadata.ENDPOINT, endpoint);
 
-		var protocol = request.getSupportedProtocols().stream()
+		request.getSupportedProtocols().stream()
 				.filter(supportedProtocols::contains)
 				.findFirst()
-				.orElse(null);
-		connection.setMetadata(Constants.WebSocketMetadata.SUB_PROTOCOL, protocol);
+				.ifPresent(protocol -> connection.setMetadata(Constants.WebSocketMetadata.SUB_PROTOCOL, protocol));
 		webSocketEndpointProvider.getEndpoint(endpoint).onHandshakeCompletion(connection);
 	}
 

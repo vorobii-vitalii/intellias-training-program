@@ -162,9 +162,6 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 	}
 
 	private WebRtcEndpoint createEndpointInConference(MediaPipeline mediaPipeline) {
-		//		webRtcEndpoint.setStunServerAddress("stun.l.google.com");
-//		webRtcEndpoint.setStunServerPort(19302);
-//		webRtcEndpoint.gatherCandidates();
 		return new WebRtcEndpoint.Builder(mediaPipeline).build();
 	}
 
@@ -200,26 +197,6 @@ public class KurentoMediaConferenceService implements MediaConferenceService {
 						var participantKey = e.getKey();
 						return new Participant(participantKey, sdpOffer, e.getValue().iceCandidates());
 					});
-		});
-	}
-
-	@WithSpan
-	@Override
-	public Mono<Void> processAnswersReactive(String conferenceId, FullSipURI referenceURI, Map<String, String> sdpAnswerByParticipantKey) {
-		return Mono.fromCallable(() -> {
-			LOGGER.info("Processing answer reactive...");
-			var conference = getConference(conferenceId);
-			var userMediaContext = conference.webRtcEndpointMap().get(referenceURI.getURIAsString());
-			for (var entry : sdpAnswerByParticipantKey.entrySet()) {
-				var receiveConnection = userMediaContext.receiveConnectionByParticipantKey().get(entry.getKey());
-				if (receiveConnection == null) {
-					continue;
-				}
-//				LOGGER.info("Processing answer for {}", entry.getKey());
-				receiveConnection.endpoint().processAnswer(entry.getValue());
-//				LOGGER.info("Process answer result = {}", processAnswer);
-			}
-			return null;
 		});
 	}
 
