@@ -16,11 +16,11 @@ import document_editor.dto.ClientRequest;
 import document_editor.dto.RequestType;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import request_handler.ReactiveMessageHandler;
 import io.reactivex.Single;
 import reactor.adapter.rxjava.RxJava2Adapter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import request_handler.ReactiveMessageHandler;
 
 public class EditDocumentReactiveRequestHandler implements ReactiveMessageHandler<RequestType, ClientRequest, Response, Object> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(EditDocumentReactiveRequestHandler.class);

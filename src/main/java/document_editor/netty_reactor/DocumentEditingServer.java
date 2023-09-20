@@ -18,16 +18,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import document_editor.dto.ClientRequest;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Metrics;
-import io.micrometer.prometheus.PrometheusConfig;
-import io.micrometer.prometheus.PrometheusMeterRegistry;
-import reactor.netty.resources.LoopResources;
-import request_handler.ReactiveMessageHandler;
 import document_editor.netty_reactor.request_handling.impl.ConnectReactiveRequestHandler;
 import document_editor.netty_reactor.request_handling.impl.EditDocumentReactiveRequestHandler;
 import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.prometheus.PrometheusConfig;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
 import reactor.core.publisher.BaseSubscriber;
@@ -37,6 +35,9 @@ import reactor.core.scheduler.Schedulers;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
+import reactor.netty.resources.LoopResources;
+import request_handler.ReactiveMessageHandler;
+import request_handler.impl.CountingReactiveMessageHandler;
 import serialization.JacksonDeserializer;
 import serialization.Serializer;
 
@@ -63,14 +64,23 @@ public class DocumentEditingServer {
 		var documentStorageService = RxDocumentStorageServiceGrpc.newRxStub(
 				Grpc.newChannelBuilder(System.getenv("DOCUMENT_STORAGE_SERVICE_URL"), InsecureChannelCredentials.create()).build());
 
-		var editDocumentReactiveRequestHandler = new EditDocumentReactiveRequestHandler(() -> documentStorageService);
-		var connectRequestHandler = new ConnectReactiveRequestHandler(connectionId::getAndIncrement, () -> documentStorageService,
-				new ReactiveDocumentChangesPublisher(() -> documentStorageService));
+		var prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+
+		var editDocumentReactiveRequestHandler = new CountingReactiveMessageHandler<>(
+				new EditDocumentReactiveRequestHandler(() -> documentStorageService),
+				Counter.builder("document.edit.count").register(prometheusRegistry)
+		);
+		var connectRequestHandler = new CountingReactiveMessageHandler<>(
+				new ConnectReactiveRequestHandler(
+						connectionId::getAndIncrement,
+						() -> documentStorageService,
+						new ReactiveDocumentChangesPublisher(() -> documentStorageService)
+				),
+				Counter.builder("document.connected.count").register(prometheusRegistry)
+		);
 
 		var eventHandlerByEventType = Stream.of(editDocumentReactiveRequestHandler, connectRequestHandler)
 				.collect(Collectors.toMap(ReactiveMessageHandler::getHandledMessageType, e -> e));
-
-		var prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
 
 		Metrics.addRegistry(prometheusRegistry);
 

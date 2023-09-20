@@ -117,7 +117,7 @@ public class WebSocketCallingServer {
 		startSipServer();
 	}
 
-	private static void startSipServer() throws IOException {
+	private static void startSipServer() {
 		var httpRequestsQueue = new ArrayBlockingQueue<NetworkRequest<HTTPRequest>>(REQUEST_QUEUE_CAPACITY);
 		var webSocketRequestsQueue = new ArrayBlockingQueue<NetworkRequest<WebSocketMessage>>(REQUEST_QUEUE_CAPACITY);
 		var requestQueue = new ArrayBlockingQueue<NetworkRequest<SipMessage>>(REQUEST_QUEUE_CAPACITY);

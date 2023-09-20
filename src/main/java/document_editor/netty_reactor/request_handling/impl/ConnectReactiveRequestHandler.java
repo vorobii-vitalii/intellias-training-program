@@ -17,10 +17,12 @@ import document_editor.dto.RequestType;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
 import document_editor.netty_reactor.ReactiveDocumentChangesPublisher;
-import request_handler.ReactiveMessageHandler;
+import io.micrometer.core.instrument.Metrics;
 import reactor.adapter.rxjava.RxJava2Adapter;
+import reactor.core.observability.micrometer.Micrometer;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import request_handler.ReactiveMessageHandler;
 
 public class ConnectReactiveRequestHandler implements ReactiveMessageHandler<RequestType, ClientRequest, Response, Object> {
 	private final Supplier<Integer> connectionIdProvider;
@@ -39,16 +41,18 @@ public class ConnectReactiveRequestHandler implements ReactiveMessageHandler<Req
 
 	@Override
 	public Flux<Response> handleMessage(ClientRequest clientRequest, Object context) {
-		return Mono.just(clientRequest).flatMapMany(request -> Flux.concat(
-				Mono.just(new Response(
+		return Mono.just(clientRequest).name("connect.request.process")
+				.flatMapMany(request -> Flux.concat(
+						Mono.just(new Response(
 						ResponseType.ON_CONNECT,
-						new ConnectDocumentReply(connectionIdProvider.get())
-				)),
+						new ConnectDocumentReply(connectionIdProvider.get()))),
 				(streamOfDocument(request).concatWith(Mono.just(
 						new Response(ResponseType.CHANGES, new Changes(List.of(), true, "snapshot"))
 				))).mergeWith(
 						reactiveDocumentChangesPublisher
 								.listenForChanges(HttpServer.DOCUMENT_ID)
+								.name("event.changes")
+								.tap(Micrometer.metrics(Metrics.globalRegistry))
 								.map(change -> new Response(ResponseType.CHANGES, new Changes(List.of(change), false, "event"))))
 		));
 	}
@@ -59,10 +63,9 @@ public class ConnectReactiveRequestHandler implements ReactiveMessageHandler<Req
 				.setBatchSize(clientRequest.batchSize())
 				.build();
 		return RxJava2Adapter.flowableToFlux(documentStorageServiceProvider.get().fetchDocumentContent(fetchDocumentContentRequest))
-				.map(v -> new Response(
-						ResponseType.CHANGES,
-						new Changes(computeChanges(v), false, "snapshot")
-				));
+				.name("snapshot.changes")
+				.tap(Micrometer.metrics(Metrics.globalRegistry))
+				.map(v -> new Response(ResponseType.CHANGES, new Changes(computeChanges(v), false, "snapshot")));
 	}
 
 	private List<Change> computeChanges(DocumentElements documentElements) {
