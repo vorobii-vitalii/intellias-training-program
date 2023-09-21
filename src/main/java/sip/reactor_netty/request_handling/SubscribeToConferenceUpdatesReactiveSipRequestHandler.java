@@ -10,7 +10,8 @@ import sip.SipRequest;
 import sip.reactor_netty.WSOutbound;
 import sip.reactor_netty.service.impl.ReactiveConferenceSubscribersContext;
 
-public class SubscribeToConferenceUpdatesReactiveSipRequestHandler implements ReactiveMessageHandler<String, SipRequest, SipMessage, WSOutbound> {
+public class SubscribeToConferenceUpdatesReactiveSipRequestHandler
+		implements ReactiveMessageHandler<String, SipRequest, SipMessage, WSOutbound> {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SubscribeToConferenceUpdatesReactiveSipRequestHandler.class);
 	private static final String SUBSCRIBE = "SUBSCRIBE";
 
@@ -25,9 +26,7 @@ public class SubscribeToConferenceUpdatesReactiveSipRequestHandler implements Re
 	@Override
 	public Flux<? extends SipMessage> handleMessage(SipRequest request, WSOutbound context) {
 		return reactiveConferenceSubscribersContext.subscribeToConferenceUpdates(request)
-				.doOnComplete(() -> {
-					LOGGER.info("Consumer wont receive updates for conference any more...");
-				});
+				.doOnComplete(() -> LOGGER.info("Consumer wont receive updates for conference any more..."));
 	}
 
 	@Override

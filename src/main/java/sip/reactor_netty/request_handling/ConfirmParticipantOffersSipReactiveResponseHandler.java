@@ -13,6 +13,7 @@ import serialization.Deserializer;
 import sip.SipMessage;
 import sip.SipResponse;
 import sip.reactor_netty.WSOutbound;
+import sip.reactor_netty.dto.OnNotifyResponse;
 import sip.request_handling.invite.MediaConferenceService;
 
 public class ConfirmParticipantOffersSipReactiveResponseHandler implements ReactiveMessageHandler<String, SipResponse, SipMessage, WSOutbound> {
@@ -53,9 +54,6 @@ public class ConfirmParticipantOffersSipReactiveResponseHandler implements React
 	private String getConferenceId(SipResponse sipResponse) {
 		var sipURI = sipResponse.headers().getFrom().sipURI();
 		return sipURI.credentials().username();
-	}
-
-	private record OnNotifyResponse(Map<String, String> sdpAnswerBySipURI) {
 	}
 
 }

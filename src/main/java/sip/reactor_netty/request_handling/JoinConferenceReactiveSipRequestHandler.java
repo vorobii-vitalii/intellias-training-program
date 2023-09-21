@@ -48,7 +48,7 @@ public class JoinConferenceReactiveSipRequestHandler implements ReactiveMessageH
 
 	@WithSpan
 	@Override
-	public Flux<? extends SipMessage> handleMessage(SipRequest sipRequest, WSOutbound context) {
+	public Flux<SipMessage> handleMessage(SipRequest sipRequest, WSOutbound context) {
 		LOGGER.info("Received request to join conference {}", sipRequest);
 		var conferenceId = getConferenceId(sipRequest);
 		var callId = sipRequest.headers().getCallId();
