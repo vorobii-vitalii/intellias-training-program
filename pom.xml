@@ -31,6 +31,7 @@
         <os-maven-plugin.version>1.6.0</os-maven-plugin.version>
         <rsocket.version>1.1.4</rsocket.version>
         <aspectjweaver.version>1.9.20.1</aspectjweaver.version>
+        <dagger.version>2.48</dagger.version>
     </properties>
 
     <dependencyManagement>
@@ -53,6 +54,20 @@
     </dependencyManagement>
 
     <dependencies>
+
+        <!-- Dependency injection -->
+        <dependency>
+            <groupId>com.google.dagger</groupId>
+            <artifactId>dagger</artifactId>
+            <version>${dagger.version}</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/com.google.dagger/dagger-compiler -->
+        <dependency>
+            <groupId>com.google.dagger</groupId>
+            <artifactId>dagger-compiler</artifactId>
+            <version>2.48</version>
+        </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.aspectj/aspectjweaver -->
         <dependency>

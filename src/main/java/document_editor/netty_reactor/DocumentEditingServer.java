@@ -1,31 +1,20 @@
 package document_editor.netty_reactor;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import java.util.zip.GZIPOutputStream;
 
-import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.example.document.storage.RxDocumentStorageServiceGrpc;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import document_editor.dto.ClientRequest;
 import document_editor.dto.Response;
 import document_editor.dto.ResponseType;
-import document_editor.netty_reactor.request_handling.impl.ConnectReactiveRequestHandler;
-import document_editor.netty_reactor.request_handling.impl.EditDocumentReactiveRequestHandler;
-import io.grpc.Grpc;
-import io.grpc.InsecureChannelCredentials;
-import io.micrometer.core.instrument.Counter;
+import document_editor.netty_reactor.dependency_injection.components.DaggerDeserializerComponent;
+import document_editor.netty_reactor.dependency_injection.components.DaggerMessageHandlerComponent;
+import document_editor.netty_reactor.dependency_injection.components.DaggerMetricsComponent;
+import document_editor.netty_reactor.dependency_injection.components.DaggerSerializerComponent;
 import io.micrometer.core.instrument.Metrics;
-import io.micrometer.prometheus.PrometheusConfig;
-import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
 import reactor.core.publisher.BaseSubscriber;
@@ -37,54 +26,27 @@ import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 import reactor.netty.resources.LoopResources;
 import request_handler.ReactiveMessageHandler;
-import request_handler.impl.CountingReactiveMessageHandler;
-import serialization.JacksonDeserializer;
-import serialization.Serializer;
 
 public class DocumentEditingServer {
-	public static final String PROMETHEUS_ENDPOINT = "/prometheus";
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentEditingServer.class);
+	public static final String PROMETHEUS_ENDPOINT = "/prometheus";
 	public static final int PONG_INTERVAL = 5000;
 	private static final Response PONG_RESPONSE = new Response(ResponseType.PONG, null);
+	public static final String DOCUMENTS_ENDPOINT = "/documents";
 
 	public static void main(String[] args) {
 		var pongPublisher = new PeriodicalPublisherCreator<>(PONG_INTERVAL, () -> PONG_RESPONSE).create();
 
-		var objectMapper = new ObjectMapper(new MessagePackFactory());
+		var serializer = DaggerSerializerComponent.create().createSerializer();
+		var deserializer = DaggerDeserializerComponent.create().createDeserializer();
+		var messageHandlers = DaggerMessageHandlerComponent.builder()
+				.withDocumentStorageServiceURI(getDocumentStorageServiceUrl()).build()
+				.getMessageHandlers();
+		var registry = DaggerMetricsComponent.create().getMeterRegistry();
 
-		var serializer = (Serializer) obj -> {
-			var arrayOutputStream = new ByteArrayOutputStream();
-//			objectMapper.writeValue(arrayOutputStream, obj);
-			objectMapper.writeValue(new GZIPOutputStream(arrayOutputStream), obj);
-			return arrayOutputStream.toByteArray();
-		};
-
-		var connectionId = new AtomicInteger(1);
-
-		var documentStorageService = RxDocumentStorageServiceGrpc.newRxStub(
-				Grpc.newChannelBuilder(System.getenv("DOCUMENT_STORAGE_SERVICE_URL"), InsecureChannelCredentials.create()).build());
-
-		var prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
-
-		var editDocumentReactiveRequestHandler = new CountingReactiveMessageHandler<>(
-				new EditDocumentReactiveRequestHandler(() -> documentStorageService),
-				Counter.builder("document.edit.count").register(prometheusRegistry)
-		);
-		var connectRequestHandler = new CountingReactiveMessageHandler<>(
-				new ConnectReactiveRequestHandler(
-						connectionId::getAndIncrement,
-						() -> documentStorageService,
-						new ReactiveDocumentChangesPublisher(() -> documentStorageService)
-				),
-				Counter.builder("document.connected.count").register(prometheusRegistry)
-		);
-
-		var eventHandlerByEventType = Stream.of(editDocumentReactiveRequestHandler, connectRequestHandler)
+		var eventHandlerByEventType = messageHandlers.stream()
 				.collect(Collectors.toMap(ReactiveMessageHandler::getHandledMessageType, e -> e));
-
-		Metrics.addRegistry(prometheusRegistry);
-
-		var deserializer = new JacksonDeserializer(objectMapper);
+		Metrics.addRegistry(registry);
 
 		DisposableServer server =
 				HttpServer.create()
@@ -98,13 +60,9 @@ public class DocumentEditingServer {
 								routes
 										.get(PROMETHEUS_ENDPOINT, (request, response) -> {
 											LOGGER.info("Returning metrics...");
-											return response.sendString(Mono.just(prometheusRegistry.scrape()));
+											return response.sendString(Mono.just(registry.scrape()));
 										})
-										.post("/echo",
-												(request, response) -> response.send(request.receive().retain()))
-										.get("/path/{param}",
-												(request, response) -> response.sendString(Mono.just(request.param("param"))))
-										.ws("/documents", (wsInbound, wsOutbound) -> {
+										.ws(DOCUMENTS_ENDPOINT, (wsInbound, wsOutbound) -> {
 											var pongSubscription = pongPublisher
 													.subscribeOn(Schedulers.parallel())
 													.subscribe(v -> {
@@ -171,6 +129,10 @@ public class DocumentEditingServer {
 						.bindNow();
 
 		server.onDispose().block();
+	}
+
+	private static String getDocumentStorageServiceUrl() {
+		return System.getenv("DOCUMENT_STORAGE_SERVICE_URL");
 	}
 
 	private static int getPort() {
