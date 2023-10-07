@@ -4,7 +4,7 @@ import javax.inject.Singleton;
 
 import dagger.Module;
 import dagger.Provides;
-import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Metrics;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 
@@ -14,7 +14,9 @@ public class MetricsModule {
 	@Provides
 	@Singleton
 	PrometheusMeterRegistry meterRegistry() {
-		return new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+		var prometheusMeterRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+		Metrics.addRegistry(prometheusMeterRegistry);
+		return prometheusMeterRegistry;
 	}
 
 }
