@@ -37,3 +37,10 @@ https://datatracker.ietf.org/doc/html/rfc7118
 Kurento media server start: docker run -d --network host     kurento/kurento-media-server:7.0.0
 
 UI: file:///home/vitaliivorobii/workspace/sipjs-examples/demo-phone/index.html
+
+IMPORTANT NOTE:
+When you first run the application exec into MongoDB docker container and execute this list of commands:
+```shell
+mongosh --port=30001
+rs.initiate()
+```

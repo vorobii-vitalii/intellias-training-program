@@ -14,7 +14,6 @@ import document_editor.netty_reactor.dependency_injection.components.DaggerDeser
 import document_editor.netty_reactor.dependency_injection.components.DaggerMessageHandlerComponent;
 import document_editor.netty_reactor.dependency_injection.components.DaggerMetricsComponent;
 import document_editor.netty_reactor.dependency_injection.components.DaggerSerializerComponent;
-import io.micrometer.core.instrument.Metrics;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
 import reactor.core.publisher.BaseSubscriber;
@@ -29,10 +28,13 @@ import request_handler.ReactiveMessageHandler;
 
 public class DocumentEditingServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DocumentEditingServer.class);
-	public static final String PROMETHEUS_ENDPOINT = "/prometheus";
-	public static final int PONG_INTERVAL = 5000;
+	private static final String PROMETHEUS_ENDPOINT = "/prometheus";
+	private static final int PONG_INTERVAL = 5000;
 	private static final Response PONG_RESPONSE = new Response(ResponseType.PONG, null);
-	public static final String DOCUMENTS_ENDPOINT = "/documents";
+	private static final String DOCUMENTS_ENDPOINT = "/documents";
+	private static final int IO_THREADS = 2;
+	private static final int WORKER_THREADS = 8;
+	private static final String EVENT_LOOP_PREFIX = "event-loop";
 
 	public static void main(String[] args) {
 		var pongPublisher = new PeriodicalPublisherCreator<>(PONG_INTERVAL, () -> PONG_RESPONSE).create();
@@ -46,11 +48,10 @@ public class DocumentEditingServer {
 
 		var eventHandlerByEventType = messageHandlers.stream()
 				.collect(Collectors.toMap(ReactiveMessageHandler::getHandledMessageType, e -> e));
-		Metrics.addRegistry(registry);
 
 		DisposableServer server =
 				HttpServer.create()
-						.runOn(LoopResources.create("event-loop", 2, 8, true))
+						.runOn(LoopResources.create(EVENT_LOOP_PREFIX, IO_THREADS, WORKER_THREADS, true))
 						.port(getPort())
 						.accessLog(false)
 						.metrics(true, s -> s)
